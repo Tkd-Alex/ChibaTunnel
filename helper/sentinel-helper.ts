@@ -250,8 +250,10 @@ function waitForInterface(
       try {
         if (PLATFORM === 'win32') {
           execSync(`netsh interface show interface name="${ifName}"`, { stdio: 'pipe' })
-        } else {
+        } else if (PLATFORM === 'linux') {
           execSync(`test -d /sys/class/net/${ifName}`, { stdio: 'pipe' })
+        } else if (PLATFORM === 'darwin') {
+          execSync(`ifconfig ${ifName}`, { stdio: 'pipe' })
         }
         log('INFO', `Interface "${ifName}" is now available.`)
         resolve(true)
