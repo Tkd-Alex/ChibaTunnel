@@ -142,6 +142,8 @@
     "connect_btn": "Connect Wallet",
     "setup_footer": "Wallet credentials are encrypted with OS native storage and only persist on this machine.",
     "mnemonic_error": "Mnemonic must be at least 12 words.",
+    "generate_btn": "Generate",
+    "mnemonic_loss_warning": "I am aware that if I forget the mnemonic I could lose the contents of the wallet",
     "forget": "Forget Wallet",
     "forget_confirm_title": "Forget All Wallets?",
     "forget_confirm_msg": "This will delete ALL stored mnemonics and addresses from this device. This action cannot be undone.",

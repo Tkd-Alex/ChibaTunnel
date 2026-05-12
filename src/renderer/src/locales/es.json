@@ -142,6 +142,8 @@
     "connect_btn": "Conectar Billetera",
     "setup_footer": "Las credenciales de la billetera están cifradas y solo persisten en este dispositivo.",
     "mnemonic_error": "La frase debe tener al menos 12 palabras.",
+    "generate_btn": "Generar",
+    "mnemonic_loss_warning": "Soy consciente de que se si olvido la frase mnemonic podría perder el contenido del monedero",
     "forget": "Olvidar billetera",
     "forget_confirm_title": "¿Olvidar todas las billeteras?",
     "forget_confirm_msg": "Esto eliminará todas las frases y direcciones guardadas. Esta acción no se puede deshacer.",

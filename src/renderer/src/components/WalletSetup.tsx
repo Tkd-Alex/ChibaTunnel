@@ -10,9 +10,26 @@ export default function WalletSetup({ onSuccess }: Props) {
   const [mnemonic, setMnemonic] = useState('')
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
+  const [understood, setUnderstood] = useState(false)
+
+  async function handleGenerate() {
+    setError('')
+    setLoading(true)
+    try {
+      const res = await window.api.generateMnemonic()
+      if (res.success) {
+        setMnemonic(res.mnemonic!)
+      } else {
+        setError(res.error || 'Failed to generate')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!understood) return
     setError('')
     if (mnemonic.trim().split(/\s+/).length < 12) {
       setError(t('wallet.mnemonic_error'))
@@ -42,7 +59,12 @@ export default function WalletSetup({ onSuccess }: Props) {
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label className="form-label">{t('wallet.mnemonic_label')}</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <label className="form-label" style={{ marginBottom: 0 }}>{t('wallet.mnemonic_label')}</label>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={handleGenerate} disabled={loading}>
+                {loading ? '...' : `✨ ${t('wallet.generate_btn')}`}
+              </button>
+            </div>
             <textarea
               className="form-input textarea"
               placeholder={t('wallet.mnemonic_placeholder')}
@@ -58,6 +80,18 @@ export default function WalletSetup({ onSuccess }: Props) {
             </div>
           </div>
 
+          <div className="form-group" style={{ marginTop: 16 }}>
+            <label className="checkbox-container" style={{ fontSize: 11, color: 'var(--text-2)', display: 'flex', gap: 10, cursor: 'pointer', alignItems: 'flex-start' }}>
+              <input 
+                type="checkbox" 
+                checked={understood} 
+                onChange={e => setUnderstood(e.target.checked)} 
+                style={{ marginTop: 2 }}
+              />
+              <span>{t('wallet.mnemonic_loss_warning')}</span>
+            </label>
+          </div>
+
           {error && (
             <div className="error-box">
               <div className="error-label">{t('common.error')}</div>
@@ -68,7 +102,7 @@ export default function WalletSetup({ onSuccess }: Props) {
           <button
             type="submit"
             className="btn btn-primary btn-full"
-            disabled={loading || !mnemonic.trim()}
+            disabled={loading || !mnemonic.trim() || !understood}
           >
             {loading
               ? <><div className="spinner" style={{ width: 16, height: 16 }} /> {t('common.loading')}</>

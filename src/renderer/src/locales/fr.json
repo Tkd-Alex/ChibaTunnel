@@ -142,6 +142,8 @@
     "connect_btn": "Connecter le Portefeuille",
     "setup_footer": "Les identifiants sont chiffrés et restent uniquement sur cet appareil.",
     "mnemonic_error": "La phrase doit comporter au moins 12 mots.",
+    "generate_btn": "Générer",
+    "mnemonic_loss_warning": "Je suis conscient que si j'oublie la mnémonique, je pourrais perdre le contenu du portefeuille",
     "forget": "Oublier le portefeuille",
     "forget_confirm_title": "Oublier tous les portefeuilles ?",
     "forget_confirm_msg": "Cela supprimera toutes les phrases et adresses. Cette action est irréversible.",

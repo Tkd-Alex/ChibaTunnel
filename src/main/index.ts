@@ -338,6 +338,14 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('wallet:hasMnemonic', () => getWalletList().length > 0)
+  ipcMain.handle('wallet:generateMnemonic', async () => {
+    try {
+      const wallet = await DirectSecp256k1HdWallet.generate(24)
+      return { success: true, mnemonic: wallet.mnemonic }
+    } catch (err: unknown) {
+      return { success: false, error: String(err) }
+    }
+  })
   ipcMain.handle('wallet:setup', async (_e, mnemonic: string, label?: string) => {
     const rpc = (store.get(STORE_KEY_RPC) as string | undefined) ?? DEFAULT_RPC
     const result = await setupWallet(mnemonic, label || 'Default', rpc)
