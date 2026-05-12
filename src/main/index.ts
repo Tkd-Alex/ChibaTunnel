@@ -839,13 +839,25 @@ async function getTrafficStats(): Promise<{ rx: number; tx: number; source: stri
     } catch { }
   }
 
-  // 2. tun2socks Stats (Linux TUN fallback)
-  if (activeTunInterface && process.platform === 'linux') {
-    try {
-      const rx = parseInt(fs.readFileSync(`/sys/class/net/${activeTunInterface}/statistics/rx_bytes`, 'utf8').trim()) || 0
-      const tx = parseInt(fs.readFileSync(`/sys/class/net/${activeTunInterface}/statistics/tx_bytes`, 'utf8').trim()) || 0
-      if (rx > 0 || tx > 0) return { rx, tx, source: 'tun2socks' }
-    } catch { }
+  // 2. tun2socks Stats (TUN fallback)
+  if (activeTunInterface) {
+    if (process.platform === 'linux') {
+      try {
+        const rx = parseInt(fs.readFileSync(`/sys/class/net/${activeTunInterface}/statistics/rx_bytes`, 'utf8').trim()) || 0
+        const tx = parseInt(fs.readFileSync(`/sys/class/net/${activeTunInterface}/statistics/tx_bytes`, 'utf8').trim()) || 0
+        if (rx > 0 || tx > 0) return { rx, tx, source: 'tun2socks' }
+      } catch { }
+    } else if (process.platform === 'darwin') {
+      try {
+        // netstat -ibI <iface> returns a table. We want the 7th (IBytes) and 10th (OBytes) columns.
+        const output = execSync(`netstat -ibI ${activeTunInterface}`, { stdio: 'pipe' }).toString().trim()
+        const lines = output.split('\n')
+        if (lines.length > 1) {
+          const stats = lines[1].split(/\s+/)
+          return { rx: parseInt(stats[6]) || 0, tx: parseInt(stats[9]) || 0, source: 'tun2socks' }
+        }
+      } catch { }
+    }
   }
 
   // 3. V2Ray API Stats
