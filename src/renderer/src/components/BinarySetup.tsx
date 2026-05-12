@@ -115,7 +115,13 @@ export default function BinarySetup({ status, onDismiss, onRecheck, embedded = f
   }
 
   async function handleBrowse(id: string) {
-    const name = id === 'wireguard' ? 'wireguard.exe' : id === 'v2ray' ? 'v2ray.exe' : 'tun2socks.exe'
+    const isWin = current.platform === 'win32'
+    const name = id === 'wireguard' 
+      ? (isWin ? 'wireguard.exe' : 'wg-quick')
+      : id === 'v2ray' 
+        ? (isWin ? 'v2ray.exe' : 'v2ray')
+        : (isWin ? 'tun2socks.exe' : 'tun2socks')
+    
     const res = await (window.api as any).browseBinary(name)
     if (res.success) {
       handleRecheck()

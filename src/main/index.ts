@@ -251,9 +251,10 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('binary:check', () => checkBinaries())
   ipcMain.handle('binary:browse', async (_e, name: string) => {
+    const isWin = process.platform === 'win32'
     const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow!, {
       title: `Select ${name} executable`,
-      filters: [{ name: 'Executables', extensions: ['exe', 'app', 'bin', '*'] }],
+      filters: isWin ? [{ name: 'Executables', extensions: ['exe'] }] : [],
       properties: ['openFile']
     })
     if (canceled || filePaths.length === 0) return { success: false }
@@ -596,15 +597,20 @@ function registerIpcHandlers(): void {
 }
 
 function getNextTunInterface(): string {
+  const plat = process.platform
   for (let i = 0; i < 10; i++) {
-    const ifName = `sentinel-tun${i}`
+    const ifName = plat === 'darwin' ? `utun${i}` : `sentinel-tun${i}`
     try {
-      execSync(`ip link show ${ifName}`, { stdio: 'ignore' })
+      if (plat === 'darwin') {
+        execSync(`ifconfig ${ifName}`, { stdio: 'ignore' })
+      } else {
+        execSync(`ip link show ${ifName}`, { stdio: 'ignore' })
+      }
     } catch {
       return ifName
     }
   }
-  return 'sentinel-tun9'
+  return plat === 'darwin' ? 'utun9' : 'sentinel-tun9'
 }
 
 async function setupTransparentV2Ray(v2ray: V2Ray): Promise<{ success: boolean; error?: string }> {
@@ -636,7 +642,9 @@ async function setupTransparentV2Ray(v2ray: V2Ray): Promise<{ success: boolean; 
 
     if (helperResponse.status === "ok") {
       activeTun2Socks = helperResponse.pid as number
-      activeTunInterface = process.platform === 'win32' ? "sentinel-tun" : "sentun0"
+      if (process.platform === 'win32') activeTunInterface = 'sentinel-tun'
+      else if (process.platform === 'darwin') activeTunInterface = 'utun9'
+      else activeTunInterface = 'sentun0'
     }
     return { success: helperResponse.status === "ok" }
   } catch (err: any) { return { success: false, error: `Transparent setup failed: ${err.message}` } }
@@ -1048,7 +1056,8 @@ function checkBinaries() {
   const find = (n: string) => {
     // Check custom path with and without .exe
     const nameWithoutExe = n.replace(/\.exe$/i, '')
-    const targetPath = custom[n] || custom[nameWithoutExe]
+    const nameWithExe    = nameWithoutExe + '.exe'
+    const targetPath = custom[n] || custom[nameWithoutExe] || custom[nameWithExe]
 
     if (targetPath && fs.existsSync(targetPath)) {
       console.log(`[BinaryCheck] Using custom path for ${n}: ${targetPath}`)
