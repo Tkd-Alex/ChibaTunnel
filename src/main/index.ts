@@ -271,7 +271,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('wallet:list', async () => {
     const wallets = getWalletList()
     const active  = (store.get(STORE_KEY_ACTIVE_W) as number | undefined) ?? 0
-    
+
     const list = await Promise.all(wallets.map(async (w, i) => {
       if (addressCache[w.encrypted]) {
         return { index: i, label: w.label, active: i === active, address: addressCache[w.encrypted] }
@@ -486,7 +486,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('node:connectSession', async (_e, args: { nodeAddress: string; sessionId: number }) => {
     if (!walletState.client || !walletState.address || !walletState.privkey) return { success: false, error: 'Wallet not initialized' }
-    activeSessionId = args.sessionId.toString(); activeNodeAddress = args.nodeAddress; 
+    activeSessionId = args.sessionId.toString(); activeNodeAddress = args.nodeAddress;
     reconnectAttempts = 0; wasConnected = false;
     return doHandshake(args.nodeAddress, Long.fromNumber(args.sessionId, true))
   })
@@ -541,9 +541,9 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('network:getPublicIp', async () => {
     const fetchIp = async () => {
-      const res = await fetch('https://ipapi.co/json/', { 
+      const res = await fetch('https://ipapi.co/json/', {
         headers: { 'User-Agent': 'sentinel-dvpn-client' },
-        signal: AbortSignal.timeout(5000) 
+        signal: AbortSignal.timeout(5000)
       })
       return await res.json() as any
     }
@@ -583,14 +583,14 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('vpn:status', () => ({
-    v2rayActive: !!activeV2Ray, 
+    v2rayActive: !!activeV2Ray,
     v2rayPid: activeV2Ray?.child?.pid,
-    wgActive: !!activeWgConfigFile, 
+    wgActive: !!activeWgConfigFile,
     wgInterface: activeWgConfigFile ? path.basename(activeWgConfigFile, '.conf') : null,
     tunActive: activeTun2Socks !== null,
     tunPid: activeTun2Socks,
     tunInterface: activeTunInterface,
-    sessionId: activeSessionId, 
+    sessionId: activeSessionId,
     nodeAddress: activeNodeAddress
   }))
 }
@@ -886,64 +886,108 @@ function patchConfigFileForDns(configFile: string): void {
   } catch (_) {}
 }
 
+/**
+ * Brings up a WireGuard tunnel by delegating to the sentinel-helper service.
+ * On Windows the helper runs wireguard.exe /installtunnelservice (SYSTEM privilege).
+ * On Linux/macOS the helper runs wg-quick up (root privilege).
+ *
+ * If the first attempt fails due to a DNS error on Linux/macOS, the user is
+ * asked whether to retry without DNS injection. If approved, the config file
+ * is patched and the command is retried once.
+ *
+ * @param configFile  Absolute path to the WireGuard .conf file.
+ * @returns           { success: true } on success, { success: false, error } on failure.
+ */
 async function wgQuickUp(configFile: string): Promise<{ success: boolean; error?: string }> {
-  const plat = process.platform
-  const isDnsError = (stderr: string) => 
-    stderr.includes('resolvconf') || stderr.includes('resolve1') || stderr.includes('Failed to set DNS') || stderr.includes('DNS')
+  const info   = checkBinaries()
+  const wgPath = info.wgPath ?? undefined
 
-  const run = async () => {
-    if (plat === 'win32') {
-      const info = checkBinaries()
-      const exe = info.wgPath || 'wireguard.exe'
-      // Use & "path" to handle spaces and quotes correctly in PowerShell
-      const res = await execPrivileged([`& "${exe}" /installtunnelservice "${configFile}"`])
-      return { code: res.code, stderr: res.stderr }
-    }
-    return await execPrivileged([`wg-quick up "${configFile}"`])
-  }
+  // Helper timeout for wg-up: 30 s is enough for wireguard.exe installtunnelservice
+  // and wg-quick up. These are one-shot commands, not daemons.
+  const TIMEOUT = 30_000
 
-  let r1 = await run()
-  if (r1.code === 0) {
-    // const settings = getSettings()
-    // if (settings.killSwitch) applyKillSwitch(true).catch(() => {})
+  const attemptUp = () => sendToHelper({ command: 'wg-up', configFile, wgPath }, TIMEOUT)
+
+  // First attempt.
+  let res = await attemptUp()
+
+  if (res.status === 'ok') {
     startTrafficPolling()
     return { success: true }
   }
 
-  if (isDnsError(r1.stderr)) {
+  // DNS retry path — Linux / macOS only.
+  if (res.isDnsError === true) {
+    // Tell the renderer to show the DNS retry dialog.
     mainWindow?.webContents.send('vpn:dns-retry-ask')
-    await new Promise((res) => { ipcMain.once('vpn:dns-retry-approved', () => res(true)) })
+
+    // Wait for the user to approve or cancel.
+    const approved = await new Promise<boolean>((resolve) => {
+      // Resolve true when the user approves.
+      ipcMain.once('vpn:dns-retry-approved', () => resolve(true))
+      // Resolve false if the window is closed or a timeout elapses (60 s).
+      const guard = setTimeout(() => resolve(false), 60_000)
+      ipcMain.once('vpn:dns-retry-approved', () => clearTimeout(guard))
+    })
+
+    if (!approved) {
+      return { success: false, error: res.error ?? 'DNS error — user cancelled retry.' }
+    }
+
+    // Patch the config file in place — removes DNS = lines from [Interface].
+    // patchConfigFileForDns() is a plain fs.writeFileSync call, no privileges needed.
     patchConfigFileForDns(configFile)
-    let r2 = await run()
-    if (r2.code === 0) {
+
+    // Second attempt with the patched config (same path, new content).
+    res = await attemptUp()
+
+    if (res.status === 'ok') {
       startTrafficPolling()
       mainWindow?.webContents.send('vpn:warning', { message: 'Connected without DNS injection.' })
       return { success: true }
     }
-    return { success: false, error: r2.stderr }
+
+    return { success: false, error: res.error ?? 'wg-quick up failed after DNS patch.' }
   }
-  return { success: false, error: r1.stderr }
+
+  // Any other error.
+  return { success: false, error: res.error ?? 'wg-up failed.' }
 }
 
+/**
+ * Tears down a WireGuard tunnel by delegating to the sentinel-helper service.
+ * On Windows the helper runs wireguard.exe /uninstalltunnelservice.
+ * On Linux/macOS the helper runs wg-quick down.
+ *
+ * After the helper confirms teardown, the temporary config directory is removed
+ * by Electron (plain fs.rmSync — no privileges needed for the temp directory).
+ *
+ * This function never throws — failures are logged as warnings so that the
+ * rest of the killActiveConnections() teardown sequence is not interrupted.
+ *
+ * @param configFile  Absolute path to the WireGuard .conf file.
+ */
 async function wgQuickDown(configFile: string): Promise<void> {
-  const plat = process.platform
-  const ifName = path.basename(configFile, '.conf')
-  // Note: traffic polling stop is handled by the global state management in App.tsx usually,
-  // but we should ensure we don't call non-existent functions.
+  const info   = checkBinaries()
+  const wgPath = info.wgPath ?? undefined
 
   try {
-    if (plat === 'win32') {
-      const info = checkBinaries()
-      const exe = info.wgPath || 'wireguard.exe'
-      // Use execPrivileged for uninstall to trigger UAC
-      await execPrivileged([`& "${exe}" /uninstalltunnelservice "${ifName}"`]).catch(() => {})
-    } else {
-      try { execSync(`ip link show ${ifName}`, { stdio: 'ignore' }) } catch { return }
-      await execPrivileged([`wg-quick down "${configFile}"`]).catch(() => {})
+    const res = await sendToHelper({ command: 'wg-down', configFile, wgPath }, 15_000)
+    if (res.status !== 'ok') {
+      console.warn('[wgQuickDown] Helper returned error:', res.error)
     }
-  } catch (e) { console.warn('wgQuickDown failed', e) }
+  } catch (err) {
+    console.warn('[wgQuickDown] sendToHelper failed:', err)
+  }
 
-  try { fs.rmSync(path.dirname(configFile), { recursive: true, force: true }) } catch (_) {}
+  // Remove the temporary config directory regardless of the helper result.
+  // The config file contains private keys — clean it up even if the tunnel
+  // teardown itself failed.
+  try {
+    fs.rmSync(path.dirname(configFile), { recursive: true, force: true })
+  } catch (err) {
+    console.warn('[wgQuickDown] Failed to remove config directory:', err)
+  }
 }
 
 function scheduleReconnect() {
@@ -966,18 +1010,18 @@ function scheduleReconnect() {
 function getSettings(): AppSettings { return { ...DEFAULT_SETTINGS, ...((store.get(STORE_KEY_SETTINGS) as Partial<AppSettings>) ?? {}) } }
 function longToNum(v: any): number { if (v == null) return 0; if (typeof v === 'number') return v; if (typeof v === 'string') return parseInt(v, 10) || 0; return v.toNumber ? v.toNumber() : 0 }
 function getWalletList(): Array<{ label: string; encrypted: string }> { return (store.get(STORE_KEY_WALLETS) as any) ?? [] }
-function encryptMnemonic(mnemonic: string): string | null { 
+function encryptMnemonic(mnemonic: string): string | null {
   if (!safeStorage.isEncryptionAvailable()) {
     console.error('CRITICAL: safeStorage is NOT available. Insecure fallback blocked.')
     return null
   }
   return safeStorage.encryptString(mnemonic).toString('base64')
 }
-function decryptMnemonic(encrypted: string): string | null { 
-  try { 
+function decryptMnemonic(encrypted: string): string | null {
+  try {
     if (!safeStorage.isEncryptionAvailable()) return null
-    return safeStorage.decryptString(Buffer.from(encrypted, 'base64')) 
-  } catch { return null } 
+    return safeStorage.decryptString(Buffer.from(encrypted, 'base64'))
+  } catch { return null }
 }
 function getActiveMnemonic(): string | null { const wallets = getWalletList(); if (!wallets.length) return null; const idx = (store.get(STORE_KEY_ACTIVE_W) as number) ?? 0; return decryptMnemonic(wallets[Math.min(idx, wallets.length - 1)].encrypted) }
 
@@ -988,10 +1032,10 @@ async function setupWallet(mnemonic: string, label: string, rpc: string) {
     const client = await withTimeout(SigningSentinelClient.connectWithSigner(rpc, wallet, { gasPrice: makeGasPrice('0.2udvpn') as any }), RPC_TIMEOUT_MS, 'RPC timeout')
     const readonlyClient = await withTimeout(SentinelClient.connect(rpc), RPC_TIMEOUT_MS, 'RPC timeout')
     walletState = { address: acct.address, label, privkey, client, readonlyClient, rpc }
-    
+
     // Notify UI immediately
     mainWindow?.webContents.send('wallet-changed', { address: acct.address, label })
-    
+
     return { success: true, address: acct.address, label, rpc }
   } catch (err: unknown) { return { success: false, error: String(err) } }
 }
@@ -1001,11 +1045,11 @@ function withTimeout<T>(promise: Promise<T> | undefined, ms: number, msg: string
 function checkBinaries() {
   const custom = (store.get(STORE_KEY_BINARIES) as Record<string, string>) ?? {}
   const getHash = (p: string) => { try { const data = fs.readFileSync(p); return crypto.createHash('sha256').update(data).digest('hex') } catch { return null } }
-  const find = (n: string) => { 
+  const find = (n: string) => {
     // Check custom path with and without .exe
     const nameWithoutExe = n.replace(/\.exe$/i, '')
     const targetPath = custom[n] || custom[nameWithoutExe]
-    
+
     if (targetPath && fs.existsSync(targetPath)) {
       console.log(`[BinaryCheck] Using custom path for ${n}: ${targetPath}`)
       // Robust fix: Add the directory of the custom binary to the PATH
@@ -1016,12 +1060,12 @@ function checkBinaries() {
       }
       return targetPath
     }
-    try { 
-      const cmd = process.platform === 'win32' ? `where ${n}` : `which ${n}`; 
+    try {
+      const cmd = process.platform === 'win32' ? `where ${n}` : `which ${n}`;
       const found = execSync(cmd, { stdio: 'pipe' }).toString().trim().split('\n')[0]
       console.log(`[BinaryCheck] Found ${n} in PATH: ${found}`)
       return found
-    } catch { 
+    } catch {
       if (process.platform === 'win32') {
         if (n === 'wireguard.exe') {
           const standardPath = 'C:\\Program Files\\WireGuard\\wireguard.exe'
@@ -1035,26 +1079,26 @@ function checkBinaries() {
         }
       }
       console.warn(`[BinaryCheck] ${n} NOT FOUND`)
-      return null 
-    } 
+      return null
+    }
   }
   const getDistro = () => { if (process.platform !== 'linux') return process.platform; try { const content = fs.readFileSync('/etc/os-release', 'utf8').toLowerCase(); if (content.includes('id=arch') || content.includes('id_like=arch')) return 'arch'; if (content.includes('id=ubuntu') || content.includes('id=debian') || content.includes('id_like=debian')) return 'debian'; if (content.includes('id=fedora') || content.includes('id=rhel') || content.includes('id_like=fedora')) return 'fedora'; if (content.includes('id=suse') || content.includes('id_like=suse')) return 'suse' } catch { } return 'linux' }
-  const wgName = process.platform === 'win32' ? 'wireguard.exe' : 'wg-quick'; 
+  const wgName = process.platform === 'win32' ? 'wireguard.exe' : 'wg-quick';
   const v2Name = process.platform === 'win32' ? 'v2ray.exe' : 'v2ray';
   const t2sName = process.platform === 'win32' ? 'tun2socks.exe' : 'tun2socks';
-  
+
   const v2Path = find(v2Name); const wgPath = find(wgName); const t2sPath = find(t2sName)
-  
+
   let wintunFound = true
   if (process.platform === 'win32' && t2sPath) {
     wintunFound = fs.existsSync(path.join(path.dirname(t2sPath), 'wintun.dll'))
   }
 
-  return { 
-    wireguard: !!wgPath, wgPath, wgHash: wgPath ? getHash(wgPath) : null, 
-    v2ray: !!v2Path, v2rayPath: v2Path, v2rayHash: v2Path ? getHash(v2Path) : null, 
-    tun2socks: !!t2sPath && wintunFound, tun2socksPath: t2sPath, tun2socksHash: t2sPath ? getHash(t2sPath) : null, 
-    platform: process.platform, distro: getDistro() 
+  return {
+    wireguard: !!wgPath, wgPath, wgHash: wgPath ? getHash(wgPath) : null,
+    v2ray: !!v2Path, v2rayPath: v2Path, v2rayHash: v2Path ? getHash(v2Path) : null,
+    tun2socks: !!t2sPath && wintunFound, tun2socksPath: t2sPath, tun2socksHash: t2sPath ? getHash(t2sPath) : null,
+    platform: process.platform, distro: getDistro()
   }
 }
 
