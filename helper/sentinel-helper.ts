@@ -1097,15 +1097,17 @@ function handleWgDown(socket: net.Socket, payload: WgDownPayload): void {
 
     } else if (PLATFORM === 'linux' || PLATFORM === 'darwin') {
       const exe = wgPath || 'wg-quick'
+      const wgBin = wgPath ? path.join(path.dirname(wgPath), 'wg') : 'wg'
 
       // Check whether the interface is still up before calling wg-quick down.
-      // On Linux 'ip link' is native; on macOS wg-quick creates a socket file.
+      // On Linux 'ip link' is native; on macOS 'wg show' handles logical naming.
       try {
         if (PLATFORM === 'linux') {
           execSync(`ip link show ${ifName}`, { stdio: 'pipe' })
         } else {
-          // Darwin check: wg-quick control socket existence
-          execSync(`test -S "/var/run/wireguard/${ifName}.sock"`, { stdio: 'pipe' })
+          // Darwin check: use 'wg' command to verify if the logical interface exists.
+          // This is more robust than checking for a specific socket file path.
+          execSync(`"${wgBin}" show ${ifName}`, { stdio: 'pipe' })
         }
       } catch {
         log('INFO', `wg-down: interface ${ifName} already absent — nothing to do.`)
