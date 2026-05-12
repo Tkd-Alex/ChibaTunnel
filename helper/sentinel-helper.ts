@@ -63,6 +63,10 @@ const WIN_TUN_DNS     = '1.1.1.1'
 const LIN_TUN_NAME    = 'sentun0'
 const LIN_TUN_CIDR    = '10.0.0.1/24'
 
+// Darwin TUN constants (utun device created by tun2socks)
+const DAR_TUN_NAME    = 'utun9'
+const DAR_TUN_ADDRESS = '10.0.0.1'
+
 const TUN_WAIT_TIMEOUT_MS  = 20_000
 const TUN_POLL_INTERVAL_MS = 500
 
@@ -78,6 +82,9 @@ const KS_RULE_NAMES  = [
 
 // Linux iptables kill switch chain name.
 const KS_CHAIN = 'SENTINEL_KS'
+
+// Darwin PF (Packet Filter) anchor name for kill switch.
+const KS_PF_ANCHOR = 'com.sentinel.ks'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -377,6 +384,42 @@ function removeRoutesLinux(serverIp: string, tunName: string): void {
 }
 
 // ---------------------------------------------------------------------------
+// Darwin network helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Reads the default gateway IP on macOS using `route -n get default`.
+ *
+ * @returns Gateway IP string, or null if not found.
+ */
+function detectGatewayDarwin(): string | null {
+  try {
+    const output = execSync('route -n get default', { encoding: 'utf8', stdio: 'pipe' })
+    const match = output.match(/gateway:\s+(\d+\.\d+\.\d+\.\d+)/)
+    return match ? match[1] : null
+  } catch (err) {
+    log('WARN', 'Failed to detect default gateway on Darwin.', err)
+    return null
+  }
+}
+
+/**
+ * Removes routing entries added during start-transparent on Darwin.
+ *
+ * @param serverIp  V2Ray server IP whose bypass route must be deleted.
+ */
+function removeRoutesDarwin(serverIp: string): void {
+  for (const cmd of [
+    `route delete ${serverIp}`,
+    `route delete 0.0.0.0/1`,
+    `route delete 128.0.0.0/1`,
+  ]) {
+    try { runCmd(cmd) }
+    catch (err) { log('WARN', `Darwin route removal failed: ${cmd}`, err) }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Windows kill switch
 // ---------------------------------------------------------------------------
 
@@ -494,6 +537,60 @@ function disableKillSwitchLinux(): void {
 }
 
 // ---------------------------------------------------------------------------
+// Darwin kill switch (PF)
+// ---------------------------------------------------------------------------
+
+/**
+ * Enables the Darwin kill switch using PF (Packet Filter).
+ * Creates a dedicated anchor that blocks all outbound traffic except:
+ *   - Traffic to the V2Ray server IP
+ *   - Traffic leaving via the utun interface
+ *   - Loopback
+ *
+ * PF is the native firewall on macOS. We use an anchor to keep our rules
+ * isolated from the system's main pf.conf.
+ *
+ * @param serverIp  IPv4 address of the V2Ray server to exempt.
+ * @param tunName   TUN interface name to exempt (e.g., utun9).
+ */
+function enableKillSwitchDarwin(serverIp: string, tunName: string): void {
+  if (killSwitchActive) return
+
+  log('INFO', `Enabling Darwin kill switch (PF). Server: ${serverIp}, TUN: ${tunName}`)
+
+  const pfRules = [
+    `set skip on lo0`,
+    `block out all`,
+    `pass out quick to ${serverIp}`,
+    `pass out quick on ${tunName}`,
+  ].join('\n')
+
+  try {
+    // Load rules into our anchor and enable PF if not already active.
+    execSync(`printf "${pfRules}" | pfctl -a ${KS_PF_ANCHOR} -f -`, { stdio: 'pipe' })
+    runCmd('pfctl -e')
+    killSwitchActive = true
+    log('INFO', 'Darwin kill switch enabled.')
+  } catch (err) {
+    log('ERROR', 'Failed to enable PF kill switch.', err)
+    throw err
+  }
+}
+
+/**
+ * Disables the Darwin kill switch by flushing our PF anchor.
+ */
+function disableKillSwitchDarwin(): void {
+  log('INFO', 'Disabling Darwin kill switch.')
+  try {
+    runCmd(`pfctl -a ${KS_PF_ANCHOR} -F all`)
+  } catch (err) {
+    log('WARN', `Could not flush PF anchor ${KS_PF_ANCHOR}.`, err)
+  }
+  killSwitchActive = false
+}
+
+// ---------------------------------------------------------------------------
 // Platform-agnostic kill switch dispatch
 // ---------------------------------------------------------------------------
 
@@ -507,6 +604,7 @@ function disableKillSwitchLinux(): void {
 function enableKillSwitch(serverIp: string, tunName: string): void {
   if (PLATFORM === 'win32') enableKillSwitchWindows(serverIp)
   else if (PLATFORM === 'linux') enableKillSwitchLinux(serverIp, tunName)
+  else if (PLATFORM === 'darwin') enableKillSwitchDarwin(serverIp, tunName)
   else log('WARN', `Kill switch not implemented for platform: ${PLATFORM}`)
 }
 
@@ -516,6 +614,7 @@ function enableKillSwitch(serverIp: string, tunName: string): void {
 function disableKillSwitch(): void {
   if (PLATFORM === 'win32') disableKillSwitchWindows()
   else if (PLATFORM === 'linux') disableKillSwitchLinux()
+  else if (PLATFORM === 'darwin') disableKillSwitchDarwin()
   else log('WARN', `Kill switch teardown not implemented for platform: ${PLATFORM}`)
 }
 
@@ -728,6 +827,92 @@ function stopTransparentLinux(socket: net.Socket): void {
 }
 
 // ---------------------------------------------------------------------------
+// Platform handlers — Darwin
+// ---------------------------------------------------------------------------
+
+/**
+ * Darwin (macOS) implementation of start-transparent.
+ *
+ * @param socket   Connected client socket.
+ * @param payload  Validated StartTransparentPayload.
+ */
+async function startTransparentDarwin(
+  socket:  net.Socket,
+  payload: StartTransparentPayload,
+): Promise<void> {
+  const { tun2socksPath, socksPort, serverIp, killSwitch = false } = payload
+  const tunName = DAR_TUN_NAME
+  let bypassRouteAdded = false
+
+  try {
+    const gateway = detectGatewayDarwin()
+    if (!gateway) throw new Error('Could not detect the default gateway on macOS.')
+    log('INFO', `Gateway: ${gateway}`)
+
+    // Bypass route for V2Ray server.
+    runCmd(`route add ${serverIp} ${gateway}`)
+    bypassRouteAdded = true
+
+    // tun2socks on macOS using utun.
+    const child = spawn(
+      tun2socksPath,
+      ['-device', `${tunName}`, '-proxy', `socks5://127.0.0.1:${socksPort}`],
+      { stdio: 'ignore', detached: false },
+    )
+
+    await new Promise<void>((resolve, reject) => {
+      const w = setTimeout(resolve, 500)
+      child.once('error', (e) => { clearTimeout(w); reject(new Error(`tun2socks failed: ${e.message}`)) })
+      child.once('exit',  (c) => { clearTimeout(w); reject(new Error(`tun2socks exited immediate (code ${c}).`)) })
+    })
+
+    activeTun2Socks = child
+    log('INFO', `tun2socks PID ${child.pid} on ${tunName}`)
+
+    const ready = await waitForInterface(tunName)
+    if (!ready) throw new Error(`utun interface "${tunName}" did not appear.`)
+
+    // Configure the utun interface.
+    runCmd(`ifconfig ${tunName} ${DAR_TUN_ADDRESS} ${DAR_TUN_ADDRESS} netmask 255.255.255.0 up`)
+
+    // Redirect all traffic.
+    runCmd(`route add 0.0.0.0/1 -interface ${tunName}`)
+    runCmd(`route add 128.0.0.0/1 -interface ${tunName}`)
+
+    activeServerIp = serverIp
+    if (killSwitch) enableKillSwitch(serverIp, tunName)
+
+    sendResponse(socket, { status: 'ok', pid: child.pid })
+
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    log('ERROR', 'Darwin start-transparent failed. Rolling back.', { message })
+    if (killSwitchActive) disableKillSwitch()
+    if (activeTun2Socks) { try { activeTun2Socks.kill() } catch { /* best effort */ }; activeTun2Socks = null }
+    if (bypassRouteAdded) removeRoutesDarwin(serverIp)
+    activeServerIp = null
+    sendResponse(socket, { status: 'error', error: message })
+  }
+}
+
+/**
+ * Darwin implementation of stop-transparent.
+ *
+ * @param socket  Connected client socket.
+ */
+function stopTransparentDarwin(socket: net.Socket): void {
+  if (killSwitchActive) disableKillSwitch()
+
+  if (activeTun2Socks) {
+    try { activeTun2Socks.kill(); log('INFO', 'tun2socks killed.') }
+    catch (err) { log('WARN', 'Failed to kill tun2socks.', err) }
+    activeTun2Socks = null
+  }
+
+  if (activeServerIp) { removeRoutesDarwin(activeServerIp); activeServerIp = null }
+}
+
+// ---------------------------------------------------------------------------
 // Command handlers (platform-agnostic entry points)
 // ---------------------------------------------------------------------------
 
@@ -755,6 +940,7 @@ async function handleStartTransparent(
 
   if (PLATFORM === 'win32')        await startTransparentWindows(socket, payload)
   else if (PLATFORM === 'linux')   await startTransparentLinux(socket, payload)
+  else if (PLATFORM === 'darwin')  await startTransparentDarwin(socket, payload)
   else sendResponse(socket, { status: 'error', error: `start-transparent not implemented for platform: ${PLATFORM}` })
 }
 
@@ -775,6 +961,7 @@ function handleStopTransparent(socket: net.Socket): void {
 
   if (PLATFORM === 'win32')       stopTransparentWindows(socket)
   else if (PLATFORM === 'linux')  stopTransparentLinux(socket)
+  else if (PLATFORM === 'darwin') stopTransparentDarwin(socket)
   else { sendResponse(socket, { status: 'error', error: `stop-transparent not implemented for: ${PLATFORM}` }); return }
 
   log('INFO', 'Transparent mode stopped.')
@@ -796,7 +983,11 @@ function handleSetKillSwitch(socket: net.Socket, payload: SetKillSwitchPayload):
       return
     }
     try {
-      const tunName = PLATFORM === 'win32' ? WIN_TUN_NAME : LIN_TUN_NAME
+      let tunName = ''
+      if (PLATFORM === 'win32')       tunName = WIN_TUN_NAME
+      else if (PLATFORM === 'linux')  tunName = LIN_TUN_NAME
+      else if (PLATFORM === 'darwin') tunName = DAR_TUN_NAME
+
       enableKillSwitch(activeServerIp, tunName)
       sendResponse(socket, { status: 'ok' })
     } catch (err: unknown) {
@@ -1173,6 +1364,7 @@ function shutdown(server: net.Server, reason: string): void {
   if (activeServerIp) {
     if (PLATFORM === 'win32') removeRoutesWindows(activeServerIp)
     else if (PLATFORM === 'linux') removeRoutesLinux(activeServerIp, LIN_TUN_NAME)
+    else if (PLATFORM === 'darwin') removeRoutesDarwin(activeServerIp)
     activeServerIp = null
   }
 
