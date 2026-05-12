@@ -156,7 +156,10 @@ app.whenReady().then(async () => {
   registerIpcHandlers()
 
   const alive = await pingHelper()
-  if (!alive && process.platform === 'linux') await installLinuxHelper()
+  if (!alive) {
+    if (process.platform === 'linux') await installLinuxHelper()
+    else if (process.platform === 'darwin') await installDarwinHelper()
+  }
 
   createWindow()
 })
@@ -165,6 +168,57 @@ app.on('window-all-closed', async () => {
   await killActiveConnections(true)
   if (process.platform !== 'darwin') app.quit()
 })
+
+async function installDarwinHelper(): Promise<void> {
+  const resourcesPath = app.isPackaged
+    ? process.resourcesPath
+    : path.join(__dirname, '..', '..', 'dist-helper')
+
+  const helperSrc  = path.join(resourcesPath, 'sentinel-helper')
+  const installDir = '/usr/local/lib/sentinel'
+  const helperDest = `${installDir}/sentinel-helper`
+  const plistPath  = '/Library/LaunchDaemons/com.sentinel.helper.plist'
+
+  const tmpPath = `/tmp/sentinel-helper-setup-${Date.now()}`
+  fs.copyFileSync(helperSrc, tmpPath)
+  fs.chmodSync(tmpPath, 0o755)
+
+  const plistContent = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
+    '<plist version="1.0">',
+    '<dict>',
+    '    <key>Label</key>',
+    '    <string>com.sentinel.helper</string>',
+    '    <key>ProgramArguments</key>',
+    '    <array>',
+    `        <string>${helperDest}</string>`,
+    '        <string>--service</string>',
+    '    </array>',
+    '    <key>RunAtLoad</key>',
+    '    <true/>',
+    '    <key>KeepAlive</key>',
+    '    <true/>',
+    '</dict>',
+    '</plist>'
+  ].join('\\n')
+
+  const result = await execPrivileged([
+    `mkdir -p ${installDir}`,
+    `cp ${tmpPath} ${helperDest}`,
+    `chmod 755 ${helperDest}`,
+    `rm -f ${tmpPath}`,
+    `printf '${plistContent}' > ${plistPath}`,
+    `chmod 644 ${plistPath}`,
+    `chown root:wheel ${plistPath}`,
+    `launchctl load -w ${plistPath} || true`,
+    `launchctl start com.sentinel.helper`,
+  ])
+
+  if (result.code !== 0) {
+    throw new Error(`macOS Helper installation failed: ${result.stderr}`)
+  }
+}
 
 async function installLinuxHelper(): Promise<void> {
   const resourcesPath = app.isPackaged
