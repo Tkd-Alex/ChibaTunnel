@@ -816,6 +816,15 @@ async function execPrivileged(cmds: string[]): Promise<{ code: number; stdout: s
 
   if (plat === 'darwin') {
     const fullCmd = cmds.join(' && ')
+    // Homebrew should NOT be run with sudo/administrator privileges.
+    // If the command is a brew command, run it directly without osascript elevation.
+    if (fullCmd.trim().startsWith('brew ')) {
+      return new Promise((res) => {
+        exec(fullCmd, (error: any, stdout: string, stderr: string) => {
+          res({ code: error ? (error.code || 1) : 0, stdout, stderr })
+        })
+      })
+    }
     const osaCmd = `osascript -e 'do shell script "${fullCmd.replace(/"/g, '\\"')}" with administrator privileges'`
     return new Promise((res) => {
       exec(osaCmd, (error: any, stdout: string, stderr: string) => {
