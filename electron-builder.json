@@ -15,7 +15,10 @@
   "mac": {
     "target": ["dmg"],
     "category": "public.app-category.utilities",
-    "icon": "build/icon.png"
+    "icon": "build/icon.png",
+    "extraResources": [
+      {"from": "dist-helper/sentinel-helper", "to": "sentinel-helper"}
+    ]
   },
   "win": {
     "target": ["nsis"],
