@@ -63,6 +63,10 @@ const WIN_TUN_DNS     = '1.1.1.1'
 const LIN_TUN_NAME    = 'sentun0'
 const LIN_TUN_CIDR    = '10.0.0.1/24'
 
+// Darwin TUN constants (utun device created by tun2socks)
+const DAR_TUN_NAME    = 'utun9'
+const DAR_TUN_ADDRESS = '10.0.0.1'
+
 const TUN_WAIT_TIMEOUT_MS  = 20_000
 const TUN_POLL_INTERVAL_MS = 500
 
@@ -78,6 +82,9 @@ const KS_RULE_NAMES  = [
 
 // Linux iptables kill switch chain name.
 const KS_CHAIN = 'SENTINEL_KS'
+
+// Darwin PF (Packet Filter) anchor name for kill switch.
+const KS_PF_ANCHOR = 'com.sentinel.ks'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -107,6 +114,33 @@ interface StartTransparentPayload {
 
 interface SetKillSwitchPayload {
   enabled: boolean
+}
+
+/**
+ * Payload for the 'wg-up' command. Instructs the helper to bring up a
+ * WireGuard tunnel by installing it as a service (Windows) or running
+ * wg-quick (Linux/macOS).
+ */
+interface WgUpPayload {
+  /** Absolute path to the WireGuard config file (.conf). */
+  configFile: string
+  /**
+   * Absolute path to wireguard.exe. Required on Windows because the binary
+   * location is user-configured (checkBinaries in Electron resolves it).
+   * Ignored on Linux/macOS.
+   */
+  wgPath?: string
+}
+
+/**
+ * Payload for the 'wg-down' command. Instructs the helper to tear down
+ * a WireGuard tunnel.
+ */
+interface WgDownPayload {
+  /** Absolute path to the WireGuard config file (.conf). */
+  configFile: string
+  /** Same as WgUpPayload.wgPath — required on Windows only. */
+  wgPath?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -161,6 +195,25 @@ function sendResponse(socket: net.Socket, response: HelperResponse): void {
 // ---------------------------------------------------------------------------
 
 /**
+ * Determines whether a stderr string from wg-quick indicates a DNS
+ * configuration failure. wg-quick on Linux fails with DNS errors when
+ * resolvconf is not installed or when systemd-resolved is not available.
+ * In that case Electron will ask the user whether to retry without DNS
+ * injection (using a patched config file).
+ *
+ * @param stderr  The stderr output from the wg-quick invocation.
+ * @returns       True if the error is DNS-related.
+ */
+function isWgDnsError(stderr: string): boolean {
+  return (
+    stderr.includes('resolvconf') ||
+    stderr.includes('resolve1') ||
+    stderr.includes('Failed to set DNS') ||
+    stderr.includes('DNS')
+  )
+}
+
+/**
  * Runs a command synchronously and returns its trimmed stdout. stdio is always
  * 'pipe' so that no handles are inherited by child processes — inheriting handles
  * would cause Electron's TCP connection to block indefinitely (the original bug).
@@ -197,8 +250,10 @@ function waitForInterface(
       try {
         if (PLATFORM === 'win32') {
           execSync(`netsh interface show interface name="${ifName}"`, { stdio: 'pipe' })
-        } else {
+        } else if (PLATFORM === 'linux') {
           execSync(`test -d /sys/class/net/${ifName}`, { stdio: 'pipe' })
+        } else if (PLATFORM === 'darwin') {
+          execSync(`ifconfig ${ifName}`, { stdio: 'pipe' })
         }
         log('INFO', `Interface "${ifName}" is now available.`)
         resolve(true)
@@ -331,6 +386,42 @@ function removeRoutesLinux(serverIp: string, tunName: string): void {
 }
 
 // ---------------------------------------------------------------------------
+// Darwin network helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Reads the default gateway IP on macOS using `route -n get default`.
+ *
+ * @returns Gateway IP string, or null if not found.
+ */
+function detectGatewayDarwin(): string | null {
+  try {
+    const output = execSync('route -n get default', { encoding: 'utf8', stdio: 'pipe' })
+    const match = output.match(/gateway:\s+(\d+\.\d+\.\d+\.\d+)/)
+    return match ? match[1] : null
+  } catch (err) {
+    log('WARN', 'Failed to detect default gateway on Darwin.', err)
+    return null
+  }
+}
+
+/**
+ * Removes routing entries added during start-transparent on Darwin.
+ *
+ * @param serverIp  V2Ray server IP whose bypass route must be deleted.
+ */
+function removeRoutesDarwin(serverIp: string): void {
+  for (const cmd of [
+    `route delete ${serverIp}`,
+    `route delete 0.0.0.0/1`,
+    `route delete 128.0.0.0/1`,
+  ]) {
+    try { runCmd(cmd) }
+    catch (err) { log('WARN', `Darwin route removal failed: ${cmd}`, err) }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Windows kill switch
 // ---------------------------------------------------------------------------
 
@@ -448,6 +539,72 @@ function disableKillSwitchLinux(): void {
 }
 
 // ---------------------------------------------------------------------------
+// Darwin kill switch (PF)
+// ---------------------------------------------------------------------------
+
+/**
+ * Enables the Darwin kill switch using PF (Packet Filter).
+ * Creates a dedicated anchor that blocks all outbound traffic except:
+ *   - Traffic to the V2Ray server IP
+ *   - Traffic leaving via the utun interface
+ *   - Loopback
+ *
+ * PF is the native firewall on macOS. We use an anchor to keep our rules
+ * isolated from the system's main pf.conf.
+ *
+ * @param serverIp  IPv4 address of the V2Ray server to exempt.
+ * @param tunName   TUN interface name to exempt (e.g., utun9).
+ */
+function enableKillSwitchDarwin(serverIp: string, tunName: string): void {
+  if (killSwitchActive) return
+
+  log('INFO', `Enabling Darwin kill switch (PF). Server: ${serverIp}, TUN: ${tunName}`)
+
+  const pfRules = [
+    `set skip on lo0`,
+    `block out all`,
+    `pass out quick to ${serverIp}`,
+    `pass out quick on ${tunName}`,
+  ].join('\\n')
+
+  try {
+    // 1. Register our anchor in the main ruleset.
+    // Without this step, PF will never evaluate the rules inside the anchor.
+    execSync(`echo 'anchor "${KS_PF_ANCHOR}"' | pfctl -f -`, { stdio: 'pipe' })
+
+    // 2. Load the actual blocking rules into the anchor.
+    execSync(`printf "${pfRules}" | pfctl -a ${KS_PF_ANCHOR} -f -`, { stdio: 'pipe' })
+
+    // 3. Enable PF. If already enabled, pfctl -e might return 1, so we handle it.
+    try { runCmd('pfctl -e') } catch (e) { log('INFO', 'PF already enabled or started.') }
+
+    killSwitchActive = true
+    log('INFO', 'Darwin kill switch enabled.')
+  } catch (err) {
+    log('ERROR', 'Failed to enable PF kill switch.', err)
+    throw err
+  }
+}
+
+/**
+ * Disables the Darwin kill switch by flushing our PF anchor and
+ * reloading the default system ruleset to remove our anchor reference.
+ */
+function disableKillSwitchDarwin(): void {
+  log('INFO', 'Disabling Darwin kill switch.')
+  try {
+    // Flush the rules in our anchor.
+    runCmd(`pfctl -a ${KS_PF_ANCHOR} -F all`)
+    // Restore the default system ruleset (usually /etc/pf.conf) to
+    // remove the 'anchor com.sentinel.ks' reference from the main ruleset.
+    runCmd('pfctl -f /etc/pf.conf')
+  } catch (err) {
+    log('WARN', `Could not teardown PF cleanly: ${err}`)
+  }
+  killSwitchActive = false
+}
+
+// ---------------------------------------------------------------------------
 // Platform-agnostic kill switch dispatch
 // ---------------------------------------------------------------------------
 
@@ -461,6 +618,7 @@ function disableKillSwitchLinux(): void {
 function enableKillSwitch(serverIp: string, tunName: string): void {
   if (PLATFORM === 'win32') enableKillSwitchWindows(serverIp)
   else if (PLATFORM === 'linux') enableKillSwitchLinux(serverIp, tunName)
+  else if (PLATFORM === 'darwin') enableKillSwitchDarwin(serverIp, tunName)
   else log('WARN', `Kill switch not implemented for platform: ${PLATFORM}`)
 }
 
@@ -470,6 +628,7 @@ function enableKillSwitch(serverIp: string, tunName: string): void {
 function disableKillSwitch(): void {
   if (PLATFORM === 'win32') disableKillSwitchWindows()
   else if (PLATFORM === 'linux') disableKillSwitchLinux()
+  else if (PLATFORM === 'darwin') disableKillSwitchDarwin()
   else log('WARN', `Kill switch teardown not implemented for platform: ${PLATFORM}`)
 }
 
@@ -682,6 +841,92 @@ function stopTransparentLinux(socket: net.Socket): void {
 }
 
 // ---------------------------------------------------------------------------
+// Platform handlers — Darwin
+// ---------------------------------------------------------------------------
+
+/**
+ * Darwin (macOS) implementation of start-transparent.
+ *
+ * @param socket   Connected client socket.
+ * @param payload  Validated StartTransparentPayload.
+ */
+async function startTransparentDarwin(
+  socket:  net.Socket,
+  payload: StartTransparentPayload,
+): Promise<void> {
+  const { tun2socksPath, socksPort, serverIp, killSwitch = false } = payload
+  const tunName = DAR_TUN_NAME
+  let bypassRouteAdded = false
+
+  try {
+    const gateway = detectGatewayDarwin()
+    if (!gateway) throw new Error('Could not detect the default gateway on macOS.')
+    log('INFO', `Gateway: ${gateway}`)
+
+    // Bypass route for V2Ray server.
+    runCmd(`route add ${serverIp} ${gateway}`)
+    bypassRouteAdded = true
+
+    // tun2socks on macOS using utun.
+    const child = spawn(
+      tun2socksPath,
+      ['-device', `${tunName}`, '-proxy', `socks5://127.0.0.1:${socksPort}`],
+      { stdio: 'ignore', detached: false },
+    )
+
+    await new Promise<void>((resolve, reject) => {
+      const w = setTimeout(resolve, 500)
+      child.once('error', (e) => { clearTimeout(w); reject(new Error(`tun2socks failed: ${e.message}`)) })
+      child.once('exit',  (c) => { clearTimeout(w); reject(new Error(`tun2socks exited immediate (code ${c}).`)) })
+    })
+
+    activeTun2Socks = child
+    log('INFO', `tun2socks PID ${child.pid} on ${tunName}`)
+
+    const ready = await waitForInterface(tunName)
+    if (!ready) throw new Error(`utun interface "${tunName}" did not appear.`)
+
+    // Configure the utun interface.
+    runCmd(`ifconfig ${tunName} ${DAR_TUN_ADDRESS} ${DAR_TUN_ADDRESS} netmask 255.255.255.0 up`)
+
+    // Redirect all traffic.
+    runCmd(`route add 0.0.0.0/1 -interface ${tunName}`)
+    runCmd(`route add 128.0.0.0/1 -interface ${tunName}`)
+
+    activeServerIp = serverIp
+    if (killSwitch) enableKillSwitch(serverIp, tunName)
+
+    sendResponse(socket, { status: 'ok', pid: child.pid })
+
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    log('ERROR', 'Darwin start-transparent failed. Rolling back.', { message })
+    if (killSwitchActive) disableKillSwitch()
+    if (activeTun2Socks) { try { activeTun2Socks.kill() } catch { /* best effort */ }; activeTun2Socks = null }
+    if (bypassRouteAdded) removeRoutesDarwin(serverIp)
+    activeServerIp = null
+    sendResponse(socket, { status: 'error', error: message })
+  }
+}
+
+/**
+ * Darwin implementation of stop-transparent.
+ *
+ * @param socket  Connected client socket.
+ */
+function stopTransparentDarwin(socket: net.Socket): void {
+  if (killSwitchActive) disableKillSwitch()
+
+  if (activeTun2Socks) {
+    try { activeTun2Socks.kill(); log('INFO', 'tun2socks killed.') }
+    catch (err) { log('WARN', 'Failed to kill tun2socks.', err) }
+    activeTun2Socks = null
+  }
+
+  if (activeServerIp) { removeRoutesDarwin(activeServerIp); activeServerIp = null }
+}
+
+// ---------------------------------------------------------------------------
 // Command handlers (platform-agnostic entry points)
 // ---------------------------------------------------------------------------
 
@@ -709,6 +954,7 @@ async function handleStartTransparent(
 
   if (PLATFORM === 'win32')        await startTransparentWindows(socket, payload)
   else if (PLATFORM === 'linux')   await startTransparentLinux(socket, payload)
+  else if (PLATFORM === 'darwin')  await startTransparentDarwin(socket, payload)
   else sendResponse(socket, { status: 'error', error: `start-transparent not implemented for platform: ${PLATFORM}` })
 }
 
@@ -729,6 +975,7 @@ function handleStopTransparent(socket: net.Socket): void {
 
   if (PLATFORM === 'win32')       stopTransparentWindows(socket)
   else if (PLATFORM === 'linux')  stopTransparentLinux(socket)
+  else if (PLATFORM === 'darwin') stopTransparentDarwin(socket)
   else { sendResponse(socket, { status: 'error', error: `stop-transparent not implemented for: ${PLATFORM}` }); return }
 
   log('INFO', 'Transparent mode stopped.')
@@ -750,7 +997,11 @@ function handleSetKillSwitch(socket: net.Socket, payload: SetKillSwitchPayload):
       return
     }
     try {
-      const tunName = PLATFORM === 'win32' ? WIN_TUN_NAME : LIN_TUN_NAME
+      let tunName = ''
+      if (PLATFORM === 'win32')       tunName = WIN_TUN_NAME
+      else if (PLATFORM === 'linux')  tunName = LIN_TUN_NAME
+      else if (PLATFORM === 'darwin') tunName = DAR_TUN_NAME
+
       enableKillSwitch(activeServerIp, tunName)
       sendResponse(socket, { status: 'ok' })
     } catch (err: unknown) {
@@ -761,6 +1012,138 @@ function handleSetKillSwitch(socket: net.Socket, payload: SetKillSwitchPayload):
   } else {
     disableKillSwitch()
     sendResponse(socket, { status: 'ok' })
+  }
+}
+
+/**
+ * Handles the 'wg-up' command. Brings up a WireGuard tunnel with elevated
+ * privileges. The implementation differs by platform:
+ *
+ *   Windows: runs `wireguard.exe /installtunnelservice <configFile>`.
+ *            wireguard.exe installs the tunnel as a Windows service under its
+ *            own service manager — no UAC prompt needed because this helper
+ *            already runs as SYSTEM via Task Scheduler.
+ *
+ *   Linux:   runs `wg-quick up <configFile>` as root.
+ *            If the command fails with a DNS-related error, the response
+ *            includes { isDnsError: true } so Electron can offer the user
+ *            the option to retry with a patched config (DNS injection removed).
+ *
+ * The helper does NOT handle the DNS retry logic — that involves a UI dialog
+ * and config file patching that belong in Electron. The helper simply reports
+ * the error type and waits for Electron to call wg-up again with a fixed config.
+ *
+ * @param socket   Connected client socket for sending the response.
+ * @param payload  Validated WgUpPayload.
+ */
+function handleWgUp(socket: net.Socket, payload: WgUpPayload): void {
+  const { configFile, wgPath } = payload
+
+  try {
+    if (PLATFORM === 'win32') {
+      const exe = wgPath || 'wireguard.exe'
+      // /installtunnelservice takes the full config file path.
+      // wireguard.exe derives the tunnel/service name from the filename.
+      runCmd(`"${exe}" /installtunnelservice "${configFile}"`)
+      sendResponse(socket, { status: 'ok' })
+
+    } else if (PLATFORM === 'linux' || PLATFORM === 'darwin') {
+      const exe = wgPath || 'wg-quick'
+      try {
+        runCmd(`"${exe}" up "${configFile}"`)
+        sendResponse(socket, { status: 'ok' })
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err)
+        const dnsError = isWgDnsError(message)
+        log(dnsError ? 'WARN' : 'ERROR', 'wg-quick up failed.', { message, dnsError })
+        sendResponse(socket, {
+          status: 'error',
+          error: message,
+          // Signals Electron to show the DNS retry dialog.
+          isDnsError: dnsError,
+        })
+      }
+
+    } else {
+      sendResponse(socket, { status: 'error', error: `wg-up not implemented for platform: ${PLATFORM}` })
+    }
+
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    log('ERROR', 'handleWgUp failed.', { message })
+    sendResponse(socket, { status: 'error', error: message })
+  }
+}
+
+/**
+ * Handles the 'wg-down' command. Tears down a WireGuard tunnel.
+ *
+ *   Windows: runs `wireguard.exe /uninstalltunnelservice <ifName>`.
+ *            ifName is derived from the config file basename (without .conf).
+ *
+ *   Linux/macOS: first checks whether the interface exists.
+ *            On Linux uses 'ip link show'. On macOS (Darwin) checks for the
+ *            existence of the wg-quick control socket in /var/run/wireguard/.
+ *            If the interface is already gone, returns ok immediately.
+ *            Otherwise runs `wg-quick down <configFile>`.
+ *
+ * @param socket   Connected client socket for sending the response.
+ * @param payload  Validated WgDownPayload.
+ */
+function handleWgDown(socket: net.Socket, payload: WgDownPayload): void {
+  const { configFile, wgPath } = payload
+  // Derive the interface / tunnel name from the config filename.
+  const ifName = path.basename(configFile, '.conf')
+
+  try {
+    if (PLATFORM === 'win32') {
+      const exe = wgPath || 'wireguard.exe'
+      try {
+        runCmd(`"${exe}" /uninstalltunnelservice "${ifName}"`)
+      } catch (err) {
+        // If the tunnel service is already gone (e.g. previous crash), treat
+        // it as success — wgDown is always idempotent from Electron's view.
+        log('WARN', 'wg uninstalltunnelservice failed (may already be gone).', err)
+      }
+      sendResponse(socket, { status: 'ok' })
+
+    } else if (PLATFORM === 'linux' || PLATFORM === 'darwin') {
+      const exe = wgPath || 'wg-quick'
+      const wgBin = wgPath ? path.join(path.dirname(wgPath), 'wg') : 'wg'
+
+      // Check whether the interface is still up before calling wg-quick down.
+      // On Linux 'ip link' is native; on macOS 'wg show' handles logical naming.
+      try {
+        if (PLATFORM === 'linux') {
+          execSync(`ip link show ${ifName}`, { stdio: 'pipe' })
+        } else {
+          // Darwin check: use 'wg' command to verify if the logical interface exists.
+          // This is more robust than checking for a specific socket file path.
+          execSync(`"${wgBin}" show ${ifName}`, { stdio: 'pipe' })
+        }
+      } catch {
+        log('INFO', `wg-down: interface ${ifName} already absent — nothing to do.`)
+        sendResponse(socket, { status: 'ok' })
+        return
+      }
+
+      try {
+        runCmd(`"${exe}" down "${configFile}"`)
+      } catch (err) {
+        log('WARN', 'wg-quick down failed.', err)
+        // Still return ok — the interface check above confirmed it is gone
+        // or wg-quick cleaned it up partially. Do not leave Electron hanging.
+      }
+      sendResponse(socket, { status: 'ok' })
+
+    } else {
+      sendResponse(socket, { status: 'error', error: `wg-down not implemented for platform: ${PLATFORM}` })
+    }
+
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    log('ERROR', 'handleWgDown failed.', { message })
+    sendResponse(socket, { status: 'error', error: message })
   }
 }
 
@@ -801,6 +1184,38 @@ function parseSetKillSwitchPayload(command: HelperCommand): SetKillSwitchPayload
   return { enabled }
 }
 
+/**
+ * Validates a WgUpPayload from a raw HelperCommand.
+ *
+ * @param command  Raw HelperCommand from Electron.
+ * @returns        Validated WgUpPayload.
+ * @throws         Descriptive Error on validation failure.
+ */
+function parseWgUpPayload(command: HelperCommand): WgUpPayload {
+  const { configFile, wgPath } = command as Record<string, unknown>
+  if (typeof configFile !== 'string' || !configFile.trim())
+    throw new Error('wg-up: "configFile" must be a non-empty string.')
+  if (wgPath !== undefined && typeof wgPath !== 'string')
+    throw new Error('wg-up: optional "wgPath" must be a string.')
+  return { configFile: configFile.trim(), wgPath: wgPath as string | undefined }
+}
+
+/**
+ * Validates a WgDownPayload from a raw HelperCommand.
+ *
+ * @param command  Raw HelperCommand from Electron.
+ * @returns        Validated WgDownPayload.
+ * @throws         Descriptive Error on validation failure.
+ */
+function parseWgDownPayload(command: HelperCommand): WgDownPayload {
+  const { configFile, wgPath } = command as Record<string, unknown>
+  if (typeof configFile !== 'string' || !configFile.trim())
+    throw new Error('wg-down: "configFile" must be a non-empty string.')
+  if (wgPath !== undefined && typeof wgPath !== 'string')
+    throw new Error('wg-down: optional "wgPath" must be a string.')
+  return { configFile: configFile.trim(), wgPath: wgPath as string | undefined }
+}
+
 // ---------------------------------------------------------------------------
 // Command dispatcher
 // ---------------------------------------------------------------------------
@@ -837,6 +1252,22 @@ function processCommand(socket: net.Socket, command: HelperCommand): void {
       try { payload = parseSetKillSwitchPayload(command) }
       catch (err: unknown) { sendResponse(socket, { status: 'error', error: (err as Error).message }); return }
       handleSetKillSwitch(socket, payload)
+      break
+    }
+
+    case 'wg-up': {
+      let payload: WgUpPayload
+      try { payload = parseWgUpPayload(command) }
+      catch (err: unknown) { sendResponse(socket, { status: 'error', error: (err as Error).message }); return }
+      handleWgUp(socket, payload)
+      break
+    }
+
+    case 'wg-down': {
+      let payload: WgDownPayload
+      try { payload = parseWgDownPayload(command) }
+      catch (err: unknown) { sendResponse(socket, { status: 'error', error: (err as Error).message }); return }
+      handleWgDown(socket, payload)
       break
     }
 
@@ -949,6 +1380,7 @@ function shutdown(server: net.Server, reason: string): void {
   if (activeServerIp) {
     if (PLATFORM === 'win32') removeRoutesWindows(activeServerIp)
     else if (PLATFORM === 'linux') removeRoutesLinux(activeServerIp, LIN_TUN_NAME)
+    else if (PLATFORM === 'darwin') removeRoutesDarwin(activeServerIp)
     activeServerIp = null
   }
 

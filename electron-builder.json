@@ -2,26 +2,35 @@
   "appId": "co.sentinel.dvpn-client",
   "productName": "Sentinel dVPN",
   "copyright": "Copyright © 2026 Sentinel",
-  "directories": { "buildResources": "build" },
+  "directories": {
+    "buildResources": "build",
+    "output": "dist"
+  },
   "files": ["out/**/*"],
   "icon": "build/icon.png",
   "linux": {
     "target": ["deb", "AppImage", "pacman", "rpm"],
     "icon": "build/icon.png",
     "extraResources": [
-      {"from": "dist-helper/sentinel-helper","to": "sentinel-helper"}
+      {"from": "dist-helper/sentinel-helper", "to": "sentinel-helper"},
+      {"from": "build/bins/linux/", "to": "bin/" }
     ]
   },
   "mac": {
     "target": ["dmg"],
     "category": "public.app-category.utilities",
-    "icon": "build/icon.png"
+    "icon": "build/icon.png",
+    "extraResources": [
+      {"from": "dist-helper/sentinel-helper-mac", "to": "sentinel-helper-mac"},
+      {"from": "build/bins/mac/", "to": "bin/" }
+    ]
   },
   "win": {
     "target": ["nsis"],
     "icon": "build/icon.ico",
     "extraResources": [
-      {"from": "dist-helper/sentinel-helper.exe", "to": "sentinel-helper.exe"}
+      {"from": "dist-helper/sentinel-helper.exe", "to": "sentinel-helper.exe"},
+      {"from": "build/bins/win/", "to": "bin/" }
     ]
   },
   "nsis": {
@@ -32,14 +41,17 @@
   },
   "deb": {
     "afterInstall": "build/linux/postinst.sh",
-    "afterRemove":  "build/linux/postrm.sh"
+    "afterRemove":  "build/linux/postrm.sh",
+    "depends": ["wireguard-tools"]
   },
   "rpm": {
     "afterInstall": "build/linux/postinst.sh",
-    "afterRemove":  "build/linux/postrm.sh"
+    "afterRemove":  "build/linux/postrm.sh",
+    "depends": ["wireguard-tools"]
   },
   "pacman": {
     "afterInstall": "build/linux/postinst.sh",
-    "afterRemove":  "build/linux/postrm.sh"
+    "afterRemove":  "build/linux/postrm.sh",
+    "depends": ["wireguard-tools"]
   }
 }

@@ -142,6 +142,8 @@
     "connect_btn": "连接钱包",
     "setup_footer": "钱包凭据已加密并仅保存在此设备上。",
     "mnemonic_error": "助记词必须至少为 12 个单词。",
+    "generate_btn": "生成",
+    "mnemonic_loss_warning": "我意识到，如果我忘记了助记词，我可能会丢失钱包里的内容",
     "forget": "遗忘钱包",
     "forget_confirm_title": "遗忘所有钱包？",
     "forget_confirm_msg": "这将删除此设备上所有存储的助记词和地址。此操作无法撤销。",

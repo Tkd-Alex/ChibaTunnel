@@ -26,6 +26,7 @@ const api = {
   removeWallet:  (index: number) => ipcRenderer.invoke('wallet:remove', index),
   renameWallet:  (index: number, label: string) => ipcRenderer.invoke('wallet:rename', index, label),
   hasMnemonic:      () => ipcRenderer.invoke('wallet:hasMnemonic'),
+  generateMnemonic: () => ipcRenderer.invoke('wallet:generateMnemonic'),
   setupWallet:      (mnemonic: string, label?: string) => ipcRenderer.invoke('wallet:setup', mnemonic, label),
   loadStoredWallet: () => ipcRenderer.invoke('wallet:loadStored'),
   forgetWallet:     () => ipcRenderer.invoke('wallet:forget'),

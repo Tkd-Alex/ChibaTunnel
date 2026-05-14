@@ -142,6 +142,8 @@
     "connect_btn": "Wallet verbinden",
     "setup_footer": "Wallet-Zugangsdaten sind verschlüsselt und verbleiben nur auf diesem Gerät.",
     "mnemonic_error": "Die Phrase muss mindestens 12 Wörter enthalten.",
+    "generate_btn": "Generieren",
+    "mnemonic_loss_warning": "Ich bin mir bewusst, dass ich den Inhalt der Wallet verlieren könnte, wenn ich die Mnemonic vergesse",
     "forget": "Wallet vergessen",
     "forget_confirm_title": "Alle Wallets vergessen?",
     "forget_confirm_msg": "Dies löscht alle gespeicherten Phrasen und Adressen von diesem Gerät. Dies kann nicht rückgängig gemacht werden.",

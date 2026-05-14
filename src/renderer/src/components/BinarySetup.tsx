@@ -115,7 +115,13 @@ export default function BinarySetup({ status, onDismiss, onRecheck, embedded = f
   }
 
   async function handleBrowse(id: string) {
-    const name = id === 'wireguard' ? 'wireguard.exe' : id === 'v2ray' ? 'v2ray.exe' : 'tun2socks.exe'
+    const isWin = current.platform === 'win32'
+    const name = id === 'wireguard' 
+      ? (isWin ? 'wireguard.exe' : 'wg-quick')
+      : id === 'v2ray' 
+        ? (isWin ? 'v2ray.exe' : 'v2ray')
+        : (isWin ? 'tun2socks.exe' : 'tun2socks')
+    
     const res = await (window.api as any).browseBinary(name)
     if (res.success) {
       handleRecheck()
@@ -182,7 +188,7 @@ export default function BinarySetup({ status, onDismiss, onRecheck, embedded = f
               </div>
               
               {/* Embedded mode browse button (compact) */}
-              {embedded && g.found && current.platform === 'win32' && (
+              {embedded && g.found && (current.platform === 'win32' || current.platform === 'darwin') && (
                  <button className="btn btn-secondary btn-xs" onClick={() => handleBrowse(g.id)}>
                    {t('common.browse')}
                  </button>
@@ -208,28 +214,37 @@ export default function BinarySetup({ status, onDismiss, onRecheck, embedded = f
                         </div>
                       )}
                     </div>
-                    {current.platform === 'win32' ? (
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {/* Platform-specific Actions (Download/Browse) */}
                       <div style={{ display: 'flex', gap: 8 }}>
-                        <a href={g.windows} target="_blank" rel="noreferrer" className="btn btn-primary btn-xs" style={{ flex: 1, textDecoration: 'none' }}>
-                          {t('binary.download_windows')}
-                        </a>
-                        <button className="btn btn-secondary btn-xs" style={{ flex: 1 }} onClick={() => handleBrowse(g.id)}>
-                          📂 {t('common.browse')}
-                        </button>
+                        {current.platform === 'win32' && (
+                          <a href={g.windows} target="_blank" rel="noreferrer" className="btn btn-primary btn-xs" style={{ flex: 1, textDecoration: 'none' }}>
+                            {t('binary.download_windows')}
+                          </a>
+                        )}
+                        {(current.platform === 'win32' || current.platform === 'darwin') && (
+                          <button className="btn btn-secondary btn-xs" style={{ flex: 1 }} onClick={() => handleBrowse(g.id)}>
+                            📂 {t('common.browse')}
+                          </button>
+                        )}
                       </div>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {getFilteredSteps(g).map((step, i) => (
-                          <div key={i} style={{ background: 'var(--bg-0)', padding: 8, borderRadius: 4, border: '1px solid var(--border)' }}>
-                            <div style={{ fontSize: 8, color: 'var(--text-3)', marginBottom: 4, textTransform: 'uppercase' }}>{step.label}</div>
-                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                              <code style={{ flex: 1, fontSize: 9, color: 'var(--cyan)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{step.code}</code>
-                              <ActionBtn code={step.code} onExec={handleExec} />
+
+                      {/* Manual Terminal Commands */}
+                      {current.platform !== 'win32' && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+                          {getFilteredSteps(g).map((step, i) => (
+                            <div key={i} style={{ background: 'var(--bg-0)', padding: 8, borderRadius: 4, border: '1px solid var(--border)' }}>
+                              <div style={{ fontSize: 8, color: 'var(--text-3)', marginBottom: 4, textTransform: 'uppercase' }}>{step.label}</div>
+                              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                <code style={{ flex: 1, fontSize: 9, color: 'var(--cyan)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{step.code}</code>
+                                <ActionBtn code={step.code} onExec={handleExec} />
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

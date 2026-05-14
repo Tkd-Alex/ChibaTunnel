@@ -142,6 +142,8 @@
     "connect_btn": "Connetti Wallet",
     "setup_footer": "Le credenziali del wallet sono cifrate nativamente e persistono solo su questa macchina.",
     "mnemonic_error": "Il Mnemonic deve contenere almeno 12 parole.",
+    "generate_btn": "Genera",
+    "mnemonic_loss_warning": "Sono consapevole che se dimentico la mnemonic potrei perdere il contenuto del wallet",
     "forget": "Dimentica Wallet",
     "forget_confirm_title": "Dimenticare tutti i wallet?",
     "forget_confirm_msg": "Questo eliminerà TUTTI i mnemonic e gli indirizzi salvati su questo dispositivo. L'azione non può essere annullata.",

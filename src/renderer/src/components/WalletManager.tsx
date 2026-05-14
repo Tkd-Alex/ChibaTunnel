@@ -21,6 +21,7 @@ export default function WalletManager({ onSwitched }: Props) {
   const [editIdx,  setEditIdx]  = useState<number | null>(null)
   const [editLabel, setEditLabel] = useState('')
   const [removeIdx, setRemoveIdx] = useState<number | null>(null)
+  const [understood, setUnderstood] = useState(false)
 
   const load = useCallback(async () => {
     setError(null)
@@ -43,8 +44,24 @@ export default function WalletManager({ onSwitched }: Props) {
 
   useEffect(() => { load() }, [load])
 
+  async function handleGenerate() {
+    setError(null)
+    setBusy(-1)
+    try {
+      const res = await window.api.generateMnemonic()
+      if (res.success) {
+        setMnemonic(res.mnemonic!)
+      } else {
+        setError(res.error || 'Failed to generate')
+      }
+    } finally {
+      setBusy(null)
+    }
+  }
+
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
+    if (!understood) return
     setError(null)
     if (mnemonic.trim().split(/\s+/).length < 12) { setError(t('wallet.mnemonic_error')); return }
     setBusy(-1)
@@ -111,10 +128,26 @@ export default function WalletManager({ onSwitched }: Props) {
             <input className="form-input" placeholder={t('wallet.label_placeholder')} value={label} onChange={e => setLabel(e.target.value)} />
           </div>
           <div className="form-group">
-            <label className="form-label">{t('wallet.mnemonic_label')}</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <label className="form-label" style={{ marginBottom: 0 }}>{t('wallet.mnemonic_label')}</label>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={handleGenerate} disabled={busy === -1}>
+                {busy === -1 ? '...' : `✨ ${t('wallet.generate_btn')}`}
+              </button>
+            </div>
             <textarea className="form-input textarea" placeholder={t('wallet.mnemonic_placeholder')} value={mnemonic} onChange={e => setMnemonic(e.target.value)} spellCheck={false} />
           </div>
-          <button type="submit" className="btn btn-primary btn-full" disabled={busy === -1}>
+          <div className="form-group" style={{ marginBottom: 16 }}>
+            <label className="checkbox-container" style={{ fontSize: 11, color: 'var(--text-2)', display: 'flex', gap: 10, cursor: 'pointer', alignItems: 'flex-start' }}>
+              <input 
+                type="checkbox" 
+                checked={understood} 
+                onChange={e => setUnderstood(e.target.checked)} 
+                style={{ marginTop: 2 }}
+              />
+              <span>{t('wallet.mnemonic_loss_warning')}</span>
+            </label>
+          </div>
+          <button type="submit" className="btn btn-primary btn-full" disabled={busy === -1 || !mnemonic.trim() || !understood}>
             {busy === -1 ? <><div className="spinner" style={{ width: 13, height: 13 }} /> {t('common.adding')}</> : `⚡ ${t('wallet.add_switch')}`}
           </button>
         </form>
