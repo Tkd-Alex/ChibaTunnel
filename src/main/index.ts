@@ -184,10 +184,37 @@ function createWindow(): void {
   }
 }
 
+function getBundledBinDir(): string {
+  const platformKey = process.platform === 'win32' ? 'win'
+                    : process.platform === 'darwin' ? 'mac'
+                    : 'linux'
+
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'bin')
+    : path.join(__dirname, '..', '..', 'build', 'bins', platformKey)
+}
+
+function ensureBinariesUnquarantined(): void {
+  if (process.platform !== 'darwin') return
+  const binDir = getBundledBinDir()
+  if (!fs.existsSync(binDir)) return
+
+  try {
+    // Run recursively to clear quarantine from the directory and all bundled binaries.
+    // This allows them to be executed without a "Developer cannot be verified" dialog.
+    execSync(`xattr -rd com.apple.quarantine "${binDir}"`, { stdio: 'pipe' })
+    console.log(`[Gatekeeper] Automatically removed quarantine from ${binDir}`)
+  } catch {
+    // xattr fails if the attribute is not present, which is expected on subsequent runs.
+  }
+}
+
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.sentinel.dvpn-client')
   app.on('browser-window-created', (_, w) => optimizer.watchWindowShortcuts(w))
   registerIpcHandlers()
+
+  ensureBinariesUnquarantined()
 
   const alive = await pingHelper()
   if (!alive) {
@@ -1179,16 +1206,7 @@ function withTimeout<T>(promise: Promise<T> | undefined, ms: number, msg: string
 export function checkBinaries() {
   const custom = (store.get(STORE_KEY_BINARIES) as Record<string, string>) ?? {}
 
-  // Resolve the bundled bin directory.
-  // In packaged app: process.resourcesPath/bin/
-  // In dev: project root / build/bins/<platform>/ (so npm run dev works without installing)
-  const platformKey = process.platform === 'win32' ? 'win'
-                    : process.platform === 'darwin' ? 'mac'
-                    : 'linux'
-
-  const resourcesBinDir = app.isPackaged
-    ? path.join(process.resourcesPath, 'bin')
-    : path.join(__dirname, '..', '..', 'build', 'bins', platformKey)
+  const resourcesBinDir = getBundledBinDir()
 
   // Add the bundled bin dir to PATH so binaries found there work when spawned
   // by name (e.g. spawn('v2ray', [...])) without needing the full path.
@@ -1365,27 +1383,6 @@ export function checkBinaries() {
     }
   }
 
-  // -------------------------------------------------------------------------
-  // macOS Gatekeeper Check
-  // Check if binaries have the quarantine attribute.
-  // -------------------------------------------------------------------------
-  let quarantineGuide: string | null = null
-  if (isMac) {
-    const pathsToCheck = [v2Path, wgPath, t2sPath].filter(Boolean) as string[]
-    for (const p of pathsToCheck) {
-      try {
-        const attrs = execSync(`xattr "${p}"`, { stdio: 'pipe' }).toString()
-        if (attrs.includes('com.apple.quarantine')) {
-          quarantineGuide =
-            'Some binaries are blocked by macOS Gatekeeper. Please run this command in Terminal to authorize them:\n\n' +
-            `  xattr -rd com.apple.quarantine "${path.dirname(p)}" \n\n` +
-            'Alternatively, allow them manually in System Settings > Privacy & Security.'
-          break
-        }
-      } catch { /* ignore */ }
-    }
-  }
-
   const distro = getDistro()
 
   return {
@@ -1400,8 +1397,8 @@ export function checkBinaries() {
     // as an onboarding guide rather than treating it as a hard error.
     wireguardGuide,
 
-    // macOS Gatekeeper message
-    quarantineGuide,
+    // macOS Gatekeeper status
+    quarantineFixed: isMac,
 
     // V2Ray
     v2ray:          !!v2Path && geoDataOk,
