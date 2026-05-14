@@ -565,12 +565,19 @@ function enableKillSwitchDarwin(serverIp: string, tunName: string): void {
     `block out all`,
     `pass out quick to ${serverIp}`,
     `pass out quick on ${tunName}`,
-  ].join('\n')
+  ].join('\\n')
 
   try {
-    // Load rules into our anchor and enable PF if not already active.
+    // 1. Register our anchor in the main ruleset.
+    // Without this step, PF will never evaluate the rules inside the anchor.
+    execSync(`echo 'anchor "${KS_PF_ANCHOR}"' | pfctl -f -`, { stdio: 'pipe' })
+
+    // 2. Load the actual blocking rules into the anchor.
     execSync(`printf "${pfRules}" | pfctl -a ${KS_PF_ANCHOR} -f -`, { stdio: 'pipe' })
-    runCmd('pfctl -e')
+
+    // 3. Enable PF. If already enabled, pfctl -e might return 1, so we handle it.
+    try { runCmd('pfctl -e') } catch (e) { log('INFO', 'PF already enabled or started.') }
+
     killSwitchActive = true
     log('INFO', 'Darwin kill switch enabled.')
   } catch (err) {
@@ -580,14 +587,19 @@ function enableKillSwitchDarwin(serverIp: string, tunName: string): void {
 }
 
 /**
- * Disables the Darwin kill switch by flushing our PF anchor.
+ * Disables the Darwin kill switch by flushing our PF anchor and
+ * reloading the default system ruleset to remove our anchor reference.
  */
 function disableKillSwitchDarwin(): void {
   log('INFO', 'Disabling Darwin kill switch.')
   try {
+    // Flush the rules in our anchor.
     runCmd(`pfctl -a ${KS_PF_ANCHOR} -F all`)
+    // Restore the default system ruleset (usually /etc/pf.conf) to
+    // remove the 'anchor com.sentinel.ks' reference from the main ruleset.
+    runCmd('pfctl -f /etc/pf.conf')
   } catch (err) {
-    log('WARN', `Could not flush PF anchor ${KS_PF_ANCHOR}.`, err)
+    log('WARN', `Could not teardown PF cleanly: ${err}`)
   }
   killSwitchActive = false
 }
