@@ -1365,6 +1365,27 @@ export function checkBinaries() {
     }
   }
 
+  // -------------------------------------------------------------------------
+  // macOS Gatekeeper Check
+  // Check if binaries have the quarantine attribute.
+  // -------------------------------------------------------------------------
+  let quarantineGuide: string | null = null
+  if (isMac) {
+    const pathsToCheck = [v2Path, wgPath, t2sPath].filter(Boolean) as string[]
+    for (const p of pathsToCheck) {
+      try {
+        const attrs = execSync(`xattr "${p}"`, { stdio: 'pipe' }).toString()
+        if (attrs.includes('com.apple.quarantine')) {
+          quarantineGuide =
+            'Some binaries are blocked by macOS Gatekeeper. Please run this command in Terminal to authorize them:\n\n' +
+            `  xattr -rd com.apple.quarantine "${path.dirname(p)}" \n\n` +
+            'Alternatively, allow them manually in System Settings > Privacy & Security.'
+          break
+        }
+      } catch { /* ignore */ }
+    }
+  }
+
   const distro = getDistro()
 
   return {
@@ -1378,6 +1399,9 @@ export function checkBinaries() {
     // Non-null when wireguard-tools is missing — the UI shows this string
     // as an onboarding guide rather than treating it as a hard error.
     wireguardGuide,
+
+    // macOS Gatekeeper message
+    quarantineGuide,
 
     // V2Ray
     v2ray:          !!v2Path && geoDataOk,
