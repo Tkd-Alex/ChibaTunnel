@@ -41,6 +41,40 @@ function makeGasPrice(str: string): unknown {
   return GasPrice.fromString(str)
 }
 
+const STORE_KEY_BINARIES = 'binaryPaths'
+
+// ---------------------------------------------------------------------------
+// Install guide messages shown in the UI when wireguard-tools is not found.
+// Keeps the guide strings centralised here so the UI just reads the result.
+// ---------------------------------------------------------------------------
+const WIREGUARD_GUIDES: Record<string, string> = {
+  win32:
+    'WireGuard for Windows is required. Download and install it from ' +
+    'https://www.wireguard.com/install/ — then restart Sentinel.',
+
+  darwin:
+    'wireguard-tools is required. Install it with:\n' +
+    '  brew install wireguard-tools\n' +
+    'Then restart Sentinel.',
+
+  // Linux AppImage — package manager not available, show manual command.
+  linux_appimage:
+    'wireguard-tools is required. Install it with your package manager:\n' +
+    '  Ubuntu/Debian:  sudo apt install wireguard-tools\n' +
+    '  Fedora/RHEL:    sudo dnf install wireguard-tools\n' +
+    '  Arch:           sudo pacman -S wireguard-tools\n' +
+    'Then restart Sentinel.',
+
+  // Linux deb/rpm/pacman — wireguard-tools is declared as a dependency so
+  // it should be installed automatically. This is a fallback message for
+  // edge cases where it was manually removed after install.
+  linux_package:
+    'wireguard-tools was removed from your system. Reinstall it:\n' +
+    '  Ubuntu/Debian:  sudo apt install wireguard-tools\n' +
+    '  Fedora/RHEL:    sudo dnf install wireguard-tools\n' +
+    '  Arch:           sudo pacman -S wireguard-tools',
+}
+
 // ── RPC list ─────────────────────────────────────────────────────────────────
 export const RPC_LIST = [
   { label: 'Sentinel Official',            url: 'https://rpc.sentinel.co:443',           region: 'Global' },
@@ -78,7 +112,7 @@ const STORE_KEY_RPC      = 'selected_rpc'
 const STORE_KEY_WALLETS  = 'wallets'
 const STORE_KEY_ACTIVE_W = 'active_wallet'
 const STORE_KEY_SETTINGS = 'settings'
-const STORE_KEY_BINARIES = 'custom_binaries'
+// const STORE_KEY_BINARIES = 'custom_binaries'
 const NODES_API          = 'https://api.sentnodes.com/v2/nodes'
 const RPC_TIMEOUT_MS     = 10_000
 
@@ -174,9 +208,9 @@ async function installDarwinHelper(): Promise<void> {
     ? process.resourcesPath
     : path.join(__dirname, '..', '..', 'dist-helper')
 
-  const helperSrc  = path.join(resourcesPath, 'sentinel-helper')
+  const helperSrc  = path.join(resourcesPath, 'sentinel-helper-mac')
   const installDir = '/usr/local/lib/sentinel'
-  const helperDest = `${installDir}/sentinel-helper`
+  const helperDest = `${installDir}/sentinel-helper-mac`
   const plistPath  = '/Library/LaunchDaemons/com.sentinel.helper.plist'
 
   const tmpPath = `/tmp/sentinel-helper-setup-${Date.now()}`
@@ -1116,65 +1150,280 @@ async function setupWallet(mnemonic: string, label: string, rpc: string) {
 
 function withTimeout<T>(promise: Promise<T> | undefined, ms: number, msg: string): Promise<T> { if (!promise) return Promise.reject(new Error(msg)); return Promise.race([promise, new Promise<never>((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]) }
 
-function checkBinaries() {
+/*
+ * Drop-in replacement for checkBinaries() in the Electron main process.
+ *
+ * Binary resolution priority (same for all binaries):
+ *   1. User-configured custom path (saved in electron-store)
+ *   2. System PATH  (distro-installed packages, Homebrew, etc.)
+ *   3. resources/bin/  (bundled by electron-builder via extraResources)
+ *   4. Executable directory  (legacy fallback, kept for compatibility)
+ *
+ * WireGuard special handling:
+ *   wireguard-tools is NOT bundled. If missing, the app returns a structured
+ *   result with `wireguardGuide` containing platform-specific install instructions
+ *   that the UI renders as an onboarding step, NOT a hard error.
+ *
+ * Geodata (geoip.dat + geosite.dat):
+ *   These files are bundled alongside v2ray in resources/bin/.
+ *   If v2ray was found in PATH (system install), this function copies the
+ *   bundled geo files next to it so v2ray can find them at startup.
+ *   v2ray looks for geo files in its own directory by default.
+ *
+ * wintun.dll (Windows only):
+ *   tun2socks.exe requires wintun.dll in the same directory.
+ *   This function ensures the DLL is copied next to tun2socks.exe
+ *   if they ended up in different directories.
+ */
+
+export function checkBinaries() {
   const custom = (store.get(STORE_KEY_BINARIES) as Record<string, string>) ?? {}
-  const getHash = (p: string) => { try { const data = fs.readFileSync(p); return crypto.createHash('sha256').update(data).digest('hex') } catch { return null } }
-  const find = (n: string) => {
-    // Check custom path with and without .exe
-    const nameWithoutExe = n.replace(/\.exe$/i, '')
-    const nameWithExe    = nameWithoutExe + '.exe'
-    const targetPath = custom[n] || custom[nameWithoutExe] || custom[nameWithExe]
 
-    if (targetPath && fs.existsSync(targetPath)) {
-      console.log(`[BinaryCheck] Using custom path for ${n}: ${targetPath}`)
-      // Robust fix: Add the directory of the custom binary to the PATH
-      const binDir = path.dirname(targetPath)
-      if (process.platform === 'win32' && !process.env.PATH?.includes(binDir)) {
-        process.env.PATH = `${binDir};${process.env.PATH}`
-        console.log(`[BinaryCheck] Added to PATH: ${binDir}`)
-      }
-      return targetPath
+  // Resolve the bundled bin directory.
+  // In packaged app: process.resourcesPath/bin/
+  // In dev: project root / build/bins/<platform>/ (so npm run dev works without installing)
+  const platformKey = process.platform === 'win32' ? 'win'
+                    : process.platform === 'darwin' ? 'mac'
+                    : 'linux'
+
+  const resourcesBinDir = app.isPackaged
+    ? path.join(process.resourcesPath, 'bin')
+    : path.join(__dirname, '..', '..', 'build', 'bins', platformKey)
+
+  // Add the bundled bin dir to PATH so binaries found there work when spawned
+  // by name (e.g. spawn('v2ray', [...])) without needing the full path.
+  if (fs.existsSync(resourcesBinDir)) {
+    const sep = process.platform === 'win32' ? ';' : ':'
+    if (!process.env.PATH?.includes(resourcesBinDir)) {
+      process.env.PATH = `${resourcesBinDir}${sep}${process.env.PATH}`
+      console.log(`[BinaryCheck] Added to PATH: ${resourcesBinDir}`)
     }
+  }
+
+  /**
+   * Returns the SHA-256 hex digest of a file, or null on error.
+   * Used for optional integrity display in the settings UI.
+   */
+  const getHash = (p: string): string | null => {
     try {
-      const cmd = process.platform === 'win32' ? `where ${n}` : `which ${n}`;
+      return crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex')
+    } catch { return null }
+  }
+
+  /**
+   * Resolves the absolute path of a binary following the priority order.
+   * Adds its parent directory to PATH when found so peer files are reachable.
+   *
+   * @param name  Binary filename (with .exe on Windows, without on Linux/macOS).
+   * @returns     Absolute path string, or null if not found anywhere.
+   */
+  const find = (name: string): string | null => {
+    const nameNoExt = name.replace(/\.exe$/i, '')
+
+    // 1. User-configured custom path
+    const customPath = custom[name] || custom[nameNoExt]
+    if (customPath && fs.existsSync(customPath)) {
+      console.log(`[BinaryCheck] Custom: ${name} → ${customPath}`)
+      const dir = path.dirname(customPath)
+      const sep = process.platform === 'win32' ? ';' : ':'
+      if (!process.env.PATH?.includes(dir)) process.env.PATH = `${dir}${sep}${process.env.PATH}`
+      return customPath
+    }
+
+    // 2. System PATH
+    try {
+      const cmd   = process.platform === 'win32' ? `where ${name}` : `which ${name}`
       const found = execSync(cmd, { stdio: 'pipe' }).toString().trim().split('\n')[0]
-      console.log(`[BinaryCheck] Found ${n} in PATH: ${found}`)
-      return found
-    } catch {
-      if (process.platform === 'win32') {
-        if (n === 'wireguard.exe') {
-          const standardPath = 'C:\\Program Files\\WireGuard\\wireguard.exe'
-          if (fs.existsSync(standardPath)) return standardPath
-        }
-        // Fallback for v2ray and tun2socks if they are in the same folder as the app
-        const localPath = path.join(path.dirname(app.getPath('exe')), n)
-        if (fs.existsSync(localPath)) {
-          console.log(`[BinaryCheck] Found ${n} in local app folder: ${localPath}`)
-          return localPath
-        }
+      if (found) { console.log(`[BinaryCheck] PATH: ${name} → ${found}`); return found }
+    } catch { /* not in PATH */ }
+
+    // 3. Bundled resources/bin/
+    const bundled = path.join(resourcesBinDir, name)
+    if (fs.existsSync(bundled)) {
+      console.log(`[BinaryCheck] Bundled: ${name} → ${bundled}`)
+      return bundled
+    }
+
+    // 4. Legacy: executable directory (Windows only)
+    if (process.platform === 'win32') {
+      if (name === 'wireguard.exe') {
+        const std = 'C:\\Program Files\\WireGuard\\wireguard.exe'
+        if (fs.existsSync(std)) return std
       }
-      console.warn(`[BinaryCheck] ${n} NOT FOUND`)
-      return null
+      const exeDir = path.join(path.dirname(app.getPath('exe')), name)
+      if (fs.existsSync(exeDir)) { console.log(`[BinaryCheck] ExeDir: ${name} → ${exeDir}`); return exeDir }
+    }
+
+    console.warn(`[BinaryCheck] NOT FOUND: ${name}`)
+    return null
+  }
+
+  const getDistro = (): string => {
+    if (process.platform !== 'linux') return process.platform
+    try {
+      const c = fs.readFileSync('/etc/os-release', 'utf8').toLowerCase()
+      if (c.includes('id=arch')   || c.includes('id_like=arch'))               return 'arch'
+      if (c.includes('id=ubuntu') || c.includes('id=debian') || c.includes('id_like=debian')) return 'debian'
+      if (c.includes('id=fedora') || c.includes('id=rhel')   || c.includes('id_like=fedora')) return 'fedora'
+      if (c.includes('id=suse')   || c.includes('id_like=suse'))               return 'suse'
+    } catch { }
+    return 'linux'
+  }
+
+  // Detect whether the Linux app was installed from a package (deb/rpm/pacman)
+  // or run as AppImage. Package installs have wireguard-tools as a declared
+  // dependency, so it should be present. AppImage has no such guarantee.
+  const isAppImage = !!process.env.APPIMAGE
+
+  const isWin     = process.platform === 'win32'
+  const isMac     = process.platform === 'darwin'
+  const isLinux   = process.platform === 'linux'
+
+  // -------------------------------------------------------------------------
+  // Resolve each binary
+  // -------------------------------------------------------------------------
+
+  const wgName  = isWin ? 'wireguard.exe' : 'wg-quick'
+  const v2Name  = isWin ? 'v2ray.exe'     : 'v2ray'
+  const t2sName = isWin ? 'tun2socks.exe' : 'tun2socks'
+
+  const wgPath  = find(wgName)
+  const v2Path  = find(v2Name)
+  const t2sPath = find(t2sName)
+
+  // -------------------------------------------------------------------------
+  // wintun.dll — Windows only
+  // Must sit in the same directory as tun2socks.exe at runtime.
+  // If bundled in resources/bin/ but tun2socks was found elsewhere, copy it.
+  // -------------------------------------------------------------------------
+  let wintunFound = !isWin  // always true on non-Windows
+
+  if (isWin && t2sPath) {
+    const wintunNextToT2s  = path.join(path.dirname(t2sPath), 'wintun.dll')
+    const wintunInBundled  = path.join(resourcesBinDir, 'wintun.dll')
+
+    if (fs.existsSync(wintunNextToT2s)) {
+      wintunFound = true
+    } else if (fs.existsSync(wintunInBundled)) {
+      // Copy wintun.dll next to tun2socks.exe so it loads correctly.
+      try {
+        fs.copyFileSync(wintunInBundled, wintunNextToT2s)
+        console.log('[BinaryCheck] Copied wintun.dll alongside tun2socks.exe')
+        wintunFound = true
+      } catch (e) {
+        console.warn('[BinaryCheck] Could not copy wintun.dll:', e)
+      }
     }
   }
-  const getDistro = () => { if (process.platform !== 'linux') return process.platform; try { const content = fs.readFileSync('/etc/os-release', 'utf8').toLowerCase(); if (content.includes('id=arch') || content.includes('id_like=arch')) return 'arch'; if (content.includes('id=ubuntu') || content.includes('id=debian') || content.includes('id_like=debian')) return 'debian'; if (content.includes('id=fedora') || content.includes('id=rhel') || content.includes('id_like=fedora')) return 'fedora'; if (content.includes('id=suse') || content.includes('id_like=suse')) return 'suse' } catch { } return 'linux' }
-  const wgName = process.platform === 'win32' ? 'wireguard.exe' : 'wg-quick';
-  const v2Name = process.platform === 'win32' ? 'v2ray.exe' : 'v2ray';
-  const t2sName = process.platform === 'win32' ? 'tun2socks.exe' : 'tun2socks';
 
-  const v2Path = find(v2Name); const wgPath = find(wgName); const t2sPath = find(t2sName)
+  // -------------------------------------------------------------------------
+  // Geo data files — geoip.dat and geosite.dat
+  // v2ray looks for these in its own directory. If v2ray was found in PATH
+  // (system install) rather than in resources/bin/, copy the bundled geo
+  // files next to it. If neither exists, v2ray works but geo routing fails.
+  // -------------------------------------------------------------------------
+  let geoDataOk = false
 
-  let wintunFound = true
-  if (process.platform === 'win32' && t2sPath) {
-    wintunFound = fs.existsSync(path.join(path.dirname(t2sPath), 'wintun.dll'))
+  if (v2Path) {
+    const v2Dir        = path.dirname(v2Path)
+    const geoipDest    = path.join(v2Dir, 'geoip.dat')
+    const geositeDest  = path.join(v2Dir, 'geosite.dat')
+
+    if (fs.existsSync(geoipDest) && fs.existsSync(geositeDest)) {
+      geoDataOk = true
+    } else {
+      // Try copying from resources/bin/
+      const geoipSrc   = path.join(resourcesBinDir, 'geoip.dat')
+      const geositeSrc = path.join(resourcesBinDir, 'geosite.dat')
+
+      if (fs.existsSync(geoipSrc) && fs.existsSync(geositeSrc)) {
+        try {
+          fs.copyFileSync(geoipSrc,   geoipDest)
+          fs.copyFileSync(geositeSrc, geositeDest)
+          console.log('[BinaryCheck] Copied geo data files alongside v2ray')
+          geoDataOk = true
+        } catch (e) {
+          console.warn('[BinaryCheck] Could not copy geo data files:', e)
+        }
+      }
+    }
   }
+
+  // -------------------------------------------------------------------------
+  // WireGuard install guide — structured message for the UI
+  // Only populated when wg-quick is missing.
+  // -------------------------------------------------------------------------
+  let wireguardGuide: string | null = null
+
+  if (!wgPath) {
+    if (isWin)       wireguardGuide = WIREGUARD_GUIDES.win32
+    else if (isMac)  wireguardGuide = WIREGUARD_GUIDES.darwin
+    else if (isLinux) {
+      wireguardGuide = isAppImage
+        ? WIREGUARD_GUIDES.linux_appimage
+        : WIREGUARD_GUIDES.linux_package
+    }
+  }
+
+  const distro = getDistro()
 
   return {
-    wireguard: !!wgPath, wgPath, wgHash: wgPath ? getHash(wgPath) : null,
-    v2ray: !!v2Path, v2rayPath: v2Path, v2rayHash: v2Path ? getHash(v2Path) : null,
-    tun2socks: !!t2sPath && wintunFound, tun2socksPath: t2sPath, tun2socksHash: t2sPath ? getHash(t2sPath) : null,
-    platform: process.platform, distro: getDistro()
+    platform: process.platform,
+    distro,
+
+    // WireGuard
+    wireguard:      !!wgPath,
+    wgPath,
+    wgHash:         wgPath ? getHash(wgPath) : null,
+    // Non-null when wireguard-tools is missing — the UI shows this string
+    // as an onboarding guide rather than treating it as a hard error.
+    wireguardGuide,
+
+    // V2Ray
+    v2ray:          !!v2Path && geoDataOk,
+    v2rayPath:      v2Path,
+    v2rayHash:      v2Path ? getHash(v2Path) : null,
+    // Whether geoip.dat and geosite.dat were found/copied next to v2ray.
+    // false means geo-based routing rules won't work, but basic proxy will.
+    geoDataOk,
+
+    // tun2socks
+    tun2socks:      !!t2sPath && (isWin ? wintunFound : true),
+    tun2socksPath:  t2sPath,
+    tun2socksHash:  t2sPath ? getHash(t2sPath) : null,
+    // Windows only — false if wintun.dll could not be resolved
+    wintunFound:    isWin ? wintunFound : null,
   }
+}
+
+// ---------------------------------------------------------------------------
+// Convenience: check if all dependencies for a given VPN type are met.
+// Use these in the UI to decide whether to show the connect button or a guide.
+// ---------------------------------------------------------------------------
+
+export type BinaryCheckResult = ReturnType<typeof checkBinaries>
+
+/**
+ * Returns true if all binaries needed for WireGuard mode are present.
+ * If false, show `result.wireguardGuide` in the UI.
+ */
+export function canUseWireGuard(result: BinaryCheckResult): boolean {
+  return result.wireguard
+}
+
+/**
+ * Returns true if all binaries needed for V2Ray transparent mode are present.
+ */
+export function canUseV2RayTransparent(result: BinaryCheckResult): boolean {
+  return result.v2ray && result.tun2socks
+}
+
+/**
+ * Returns true if V2Ray can be used in standard (non-transparent) mode.
+ * Does not require tun2socks.
+ */
+export function canUseV2RayStandard(result: BinaryCheckResult): boolean {
+  return result.v2ray
 }
 
 async function killActiveConnections(sendEndSession = true) {
