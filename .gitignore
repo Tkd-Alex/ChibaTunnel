@@ -143,5 +143,6 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 
-# Custom
+# Bundled third-party binaries
+build/bins/
 dist-helper/
