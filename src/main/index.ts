@@ -1454,19 +1454,30 @@ async function killActiveConnections(sendEndSession = true) {
   if (trafficInterval) { clearInterval(trafficInterval); trafficInterval = null }
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
 
-  // Disable Kill Switch immediately to restore local connectivity during teardown
-  // try { await applyKillSwitch(false) } catch (e) { console.warn('[Teardown] Failed to disable Kill Switch', e) }
-
-  if (sendEndSession && activeSessionId && walletState.client && walletState.address) {
-    try { await walletState.client.signAndBroadcast(walletState.address, [sessionCancel({ from: walletState.address, id: Long.fromString(activeSessionId, true) })], 'auto', 'sentinel-dvpn-client') } catch { }
-  }
+  // Clean up local tunnel processes and interfaces immediately
   if (activeTun2Socks !== null) {
     const helperResponse = await sendToHelper({ command: 'stop-transparent' })
     if(helperResponse.status === "ok"){ activeTun2Socks = null; activeTunInterface = null; activeV2RayServerIp = null}
   }
   if (activeV2Ray) { try { activeV2Ray.disconnect() } catch { }; activeV2Ray = null }
   if (activeWgConfigFile) { await wgQuickDown(activeWgConfigFile); activeWgConfigFile = null; activeWgInstance = null }
-  activeSessionId = null; activeNodeAddress = null; lastConnectArgs = null
+
+  // Only clear blockchain session state if explicitly requested (intentional disconnect or session end)
+  if (sendEndSession) {
+    if (activeSessionId && walletState.client && walletState.address) {
+      try {
+        await walletState.client.signAndBroadcast(
+          walletState.address,
+          [sessionCancel({ from: walletState.address, id: Long.fromString(activeSessionId, true) })],
+          'auto',
+          'sentinel-dvpn-client'
+        )
+      } catch (err) {
+        console.warn('[killActiveConnections] Failed to cancel session on-chain:', err)
+      }
+    }
+    activeSessionId = null; activeNodeAddress = null; lastConnectArgs = null
+  }
 }
 
 const _origConnect = V2Ray.prototype.connect
