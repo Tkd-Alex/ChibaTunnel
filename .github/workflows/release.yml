@@ -13,22 +13,24 @@ concurrency:
   cancel-in-progress: true
 
 # ---------------------------------------------------------------------------
-# Third-party binary versions.
-# Bump these to upgrade bundled dependencies across all platforms.
+# Third-party binary versions — bump to upgrade bundled dependencies.
 #
 # Bundled on all platforms:
-#   - tun2socks  (xjasonlyu/tun2socks)
-#   - v2ray      (v2fly/v2ray-core) + geoip.dat + geosite.dat
-#   - wintun.dll (Windows only — required by tun2socks)
+#   tun2socks, v2ray (+ geoip.dat + geosite.dat)
 #
-# NOT bundled — handled by platform-specific mechanisms:
-#   - wireguard-tools: package manager dependency on Linux (deb/rpm/pacman)
-#                      guided installation on Windows and macOS
+# Bundled on Windows only:
+#   wintun.dll   (required by tun2socks)
+#   wireguard.exe + wg.exe (extracted from official WireGuard MSI)
+#
+# NOT bundled — handled by platform mechanisms:
+#   wireguard-tools on Linux: package manager dependency (deb/rpm/pacman)
+#   wireguard-tools on macOS: user installs via `brew install wireguard-tools`
 # ---------------------------------------------------------------------------
 env:
   TUN2SOCKS_VERSION: 'v2.6.0'
   V2RAY_VERSION:     'v5.16.1'
   WINTUN_VERSION:    '0.14.1'
+  WIREGUARD_VERSION: '0.5.3'   # WireGuard for Windows MSI version
 
 jobs:
   build-and-release:
@@ -39,14 +41,17 @@ jobs:
           - os: ubuntu-latest
             platform: linux
             pkg_target: node18-linux-x64
+            helper_output: dist-helper/sentinel-helper
 
           - os: windows-latest
             platform: win
             pkg_target: node18-win-x64
+            helper_output: dist-helper/sentinel-helper.exe
 
           - os: macos-latest
             platform: mac
             pkg_target: node18-macos-x64
+            helper_output: dist-helper/sentinel-helper-mac
 
     runs-on: ${{ matrix.os }}
 
@@ -81,12 +86,21 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build/bins
-          key: bins-${{ matrix.platform }}-t2s${{ env.TUN2SOCKS_VERSION }}-v2r${{ env.V2RAY_VERSION }}-wt${{ env.WINTUN_VERSION }}
+          key: bins-${{ matrix.platform }}-t2s${{ env.TUN2SOCKS_VERSION }}-v2r${{ env.V2RAY_VERSION }}-wt${{ env.WINTUN_VERSION }}-wg${{ env.WIREGUARD_VERSION }}
 
       # -----------------------------------------------------------------------
-      # Windows — bundle: tun2socks.exe, wintun.dll, v2ray.exe, geo data
-      # wireguard: NOT bundled. The app guides the user to install
-      # WireGuard for Windows from wireguard.com if wg-quick is missing.
+      # Windows binaries:
+      #   tun2socks.exe   — transparent proxy daemon
+      #   wintun.dll      — TUN driver required by tun2socks
+      #   v2ray.exe       — V2Ray proxy engine
+      #   geoip.dat       — V2Ray geo routing database (IP ranges by country)
+      #   geosite.dat     — V2Ray geo routing database (domains by category)
+      #   wireguard.exe   — WireGuard tunnel manager (/installtunnelservice)
+      #   wg.exe          — WireGuard CLI tool (show, set, etc.)
+      #
+      # wireguard.exe and wg.exe are extracted from the official WireGuard MSI
+      # using msiexec /a (administrative install — extracts files without
+      # installing anything on the runner system).
       # -----------------------------------------------------------------------
       - name: Download binaries (Windows)
         if: matrix.platform == 'win' && steps.cache-bins.outputs.cache-hit != 'true'
@@ -94,7 +108,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path build/bins/win | Out-Null
 
-          # tun2socks
+          # --- tun2socks ---
           Write-Host "Downloading tun2socks $env:TUN2SOCKS_VERSION..."
           Invoke-WebRequest `
             -Uri "https://github.com/xjasonlyu/tun2socks/releases/download/$env:TUN2SOCKS_VERSION/tun2socks-windows-amd64.zip" `
@@ -102,10 +116,8 @@ jobs:
           Expand-Archive tun2socks.zip -DestinationPath tun2socks-tmp -Force
           $exe = Get-ChildItem -Recurse tun2socks-tmp -Filter "tun2socks*.exe" | Select-Object -First 1
           Copy-Item $exe.FullName build/bins/win/tun2socks.exe
-          Write-Host "tun2socks: $($exe.Name)"
 
-          # wintun.dll — tun2socks requires this DLL in its own directory on Windows.
-          # Downloaded from the official wintun.net distribution.
+          # --- wintun.dll ---
           Write-Host "Downloading wintun $env:WINTUN_VERSION..."
           Invoke-WebRequest `
             -Uri "https://www.wintun.net/builds/wintun-$env:WINTUN_VERSION.zip" `
@@ -115,9 +127,8 @@ jobs:
                  Where-Object { $_.FullName -like "*amd64*" } |
                  Select-Object -First 1
           Copy-Item $dll.FullName build/bins/win/wintun.dll
-          Write-Host "wintun.dll: $($dll.FullName)"
 
-          # v2ray + geo data
+          # --- v2ray + geo data ---
           Write-Host "Downloading v2ray $env:V2RAY_VERSION..."
           Invoke-WebRequest `
             -Uri "https://github.com/v2fly/v2ray-core/releases/download/$env:V2RAY_VERSION/v2ray-windows-64.zip" `
@@ -127,15 +138,58 @@ jobs:
           Copy-Item v2ray-tmp/geoip.dat   build/bins/win/geoip.dat
           Copy-Item v2ray-tmp/geosite.dat build/bins/win/geosite.dat
 
-          Remove-Item -Recurse -Force tun2socks.zip, tun2socks-tmp, wintun.zip, wintun-tmp, v2ray.zip, v2ray-tmp
+          # --- wireguard.exe + wg.exe (extracted from official MSI) ---
+          # We use msiexec /a (administrative install mode) which extracts all
+          # payload files to TARGETDIR without registering anything on the system.
+          # The MSI layout places binaries under:
+          #   <TARGETDIR>\PFiles64\WireGuard\wireguard.exe
+          #   <TARGETDIR>\PFiles64\WireGuard\wg.exe
+          Write-Host "Downloading WireGuard MSI $env:WIREGUARD_VERSION..."
+          Invoke-WebRequest `
+            -Uri "https://download.wireguard.com/windows-client/wireguard-amd64-$env:WIREGUARD_VERSION.msi" `
+            -OutFile wireguard.msi
 
-          Write-Host "Windows bundled binaries:"
+          $extractDir = "$PWD\wg-extracted"
+          Write-Host "Extracting wireguard MSI to $extractDir ..."
+          Start-Process msiexec.exe `
+            -ArgumentList "/a wireguard.msi /qn TARGETDIR=`"$extractDir`"" `
+            -NoNewWindow -Wait
+
+          # Search recursively in case the MSI layout changes between versions.
+          $wgExe = Get-ChildItem -Recurse $extractDir -Filter "wireguard.exe" |
+                   Select-Object -First 1
+          $wgCli = Get-ChildItem -Recurse $extractDir -Filter "wg.exe" |
+                   Select-Object -First 1
+
+          if ($wgExe) {
+            Copy-Item $wgExe.FullName build/bins/win/wireguard.exe
+            Write-Host "wireguard.exe extracted from: $($wgExe.FullName)"
+          } else {
+            Write-Error "wireguard.exe not found in MSI extraction!"
+            exit 1
+          }
+
+          if ($wgCli) {
+            Copy-Item $wgCli.FullName build/bins/win/wg.exe
+            Write-Host "wg.exe extracted from: $($wgCli.FullName)"
+          } else {
+            # wg.exe may not always be in the MSI — log a warning, not a hard error.
+            Write-Warning "wg.exe not found in MSI extraction. Skipping."
+          }
+
+          # Cleanup
+          Remove-Item -Recurse -Force `
+            tun2socks.zip, tun2socks-tmp, `
+            wintun.zip,    wintun-tmp, `
+            v2ray.zip,     v2ray-tmp, `
+            wireguard.msi, wg-extracted
+
+          Write-Host "`nWindows bundled binaries:"
           Get-ChildItem build/bins/win | Format-Table Name, Length
 
       # -----------------------------------------------------------------------
-      # Linux — bundle: tun2socks, v2ray, geo data
-      # wireguard-tools: declared as package dependency in electron-builder.json
-      # for deb/rpm/pacman. AppImage users see a guide in the app if it's missing.
+      # Linux binaries: tun2socks, v2ray, geo data
+      # wireguard-tools is a package dependency (see electron-builder.json).
       # -----------------------------------------------------------------------
       - name: Download binaries (Linux)
         if: matrix.platform == 'linux' && steps.cache-bins.outputs.cache-hit != 'true'
@@ -167,9 +221,8 @@ jobs:
           ls -lh build/bins/linux
 
       # -----------------------------------------------------------------------
-      # macOS — bundle: tun2socks (universal fat binary), v2ray, geo data
-      # wireguard-tools: NOT bundled. The app guides the user to install via
-      # `brew install wireguard-tools` if wg-quick is missing.
+      # macOS binaries: tun2socks (universal), v2ray, geo data
+      # wireguard-tools: user installs via `brew install wireguard-tools`
       # -----------------------------------------------------------------------
       - name: Download binaries (macOS)
         if: matrix.platform == 'mac' && steps.cache-bins.outputs.cache-hit != 'true'
@@ -183,17 +236,13 @@ jobs:
           curl -fsSL \
             "https://github.com/xjasonlyu/tun2socks/releases/download/${TUN2SOCKS_VERSION}/tun2socks-darwin-arm64.zip" \
             -o tun2socks-arm64.zip
-
           unzip -q tun2socks-amd64.zip -d t2s-amd64
           unzip -q tun2socks-arm64.zip -d t2s-arm64
-
           AMD64=$(find t2s-amd64 -maxdepth 2 -type f ! -name "*.zip" ! -name "*.md" ! -name "LICENSE" | head -1)
           ARM64=$(find t2s-arm64 -maxdepth 2 -type f ! -name "*.zip" ! -name "*.md" ! -name "LICENSE" | head -1)
-
-          # Merge into a universal binary — runs natively on Intel and Apple Silicon.
           lipo -create -output build/bins/mac/tun2socks "$AMD64" "$ARM64"
           chmod +x build/bins/mac/tun2socks
-          echo "tun2socks architectures: $(lipo -archs build/bins/mac/tun2socks)"
+          echo "tun2socks: $(lipo -archs build/bins/mac/tun2socks)"
 
           echo "Downloading v2ray ${V2RAY_VERSION}..."
           curl -fsSL \
@@ -209,6 +258,34 @@ jobs:
 
           echo "macOS bundled binaries:"
           ls -lh build/bins/mac
+
+      # -----------------------------------------------------------------------
+      # Verify all expected binaries are present before building
+      # -----------------------------------------------------------------------
+      - name: Verify bundled binaries (Windows)
+        if: matrix.platform == 'win'
+        shell: pwsh
+        run: |
+          $required = @("tun2socks.exe","wintun.dll","v2ray.exe","geoip.dat","geosite.dat","wireguard.exe")
+          $missing  = $required | Where-Object { !(Test-Path "build/bins/win/$_") }
+          if ($missing) { Write-Error "Missing: $($missing -join ', ')"; exit 1 }
+          Write-Host "All required Windows binaries present."
+
+      - name: Verify bundled binaries (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          for f in tun2socks v2ray geoip.dat geosite.dat; do
+            [ -f "build/bins/linux/$f" ] || { echo "Missing: $f"; exit 1; }
+          done
+          echo "All required Linux binaries present."
+
+      - name: Verify bundled binaries (macOS)
+        if: matrix.platform == 'mac'
+        run: |
+          for f in tun2socks v2ray geoip.dat geosite.dat; do
+            [ -f "build/bins/mac/$f" ] || { echo "Missing: $f"; exit 1; }
+          done
+          echo "All required macOS binaries present."
 
       # -----------------------------------------------------------------------
       # Build the privileged helper binary with pkg.
@@ -229,6 +306,11 @@ jobs:
       - name: Build privileged helper (macOS)
         if: matrix.platform == 'mac'
         run: npm run build:helper:mac
+
+      - name: Verify helper binary
+        shell: bash
+        run: |
+          ls -lh ${{ matrix.helper_output }} || (echo "Helper binary missing!" && exit 1)
 
       # -----------------------------------------------------------------------
       # Build the main Electron JS bundles (Vite / webpack / tsc, whatever

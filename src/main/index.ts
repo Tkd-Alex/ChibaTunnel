@@ -49,27 +49,24 @@ const STORE_KEY_BINARIES = 'binaryPaths'
 // ---------------------------------------------------------------------------
 const WIREGUARD_GUIDES: Record<string, string> = {
   win32:
-    'WireGuard for Windows is required. Download and install it from ' +
-    'https://www.wireguard.com/install/ — then restart Sentinel.',
+    'wireguard.exe is missing from the application resources. ' +
+    'Please reinstall Sentinel dVPN.',
 
   darwin:
-    'wireguard-tools is required. Install it with:\n' +
-    '  brew install wireguard-tools\n' +
+    'wireguard-tools is required for WireGuard mode. Install it with:\n\n' +
+    '  brew install wireguard-tools\n\n' +
     'Then restart Sentinel.',
 
-  // Linux AppImage — package manager not available, show manual command.
   linux_appimage:
-    'wireguard-tools is required. Install it with your package manager:\n' +
+    'wireguard-tools is required for WireGuard mode. ' +
+    'Install it with your package manager:\n\n' +
     '  Ubuntu/Debian:  sudo apt install wireguard-tools\n' +
     '  Fedora/RHEL:    sudo dnf install wireguard-tools\n' +
-    '  Arch:           sudo pacman -S wireguard-tools\n' +
+    '  Arch:           sudo pacman -S wireguard-tools\n\n' +
     'Then restart Sentinel.',
 
-  // Linux deb/rpm/pacman — wireguard-tools is declared as a dependency so
-  // it should be installed automatically. This is a fallback message for
-  // edge cases where it was manually removed after install.
   linux_package:
-    'wireguard-tools was removed from your system. Reinstall it:\n' +
+    'wireguard-tools was removed from your system. Reinstall it:\n\n' +
     '  Ubuntu/Debian:  sudo apt install wireguard-tools\n' +
     '  Fedora/RHEL:    sudo dnf install wireguard-tools\n' +
     '  Arch:           sudo pacman -S wireguard-tools',
@@ -1190,6 +1187,9 @@ function withTimeout<T>(promise: Promise<T> | undefined, ms: number, msg: string
  *   wireguard-tools is NOT bundled. If missing, the app returns a structured
  *   result with `wireguardGuide` containing platform-specific install instructions
  *   that the UI renders as an onboarding step, NOT a hard error.
+ *   wireguard.exe is now bundled in resources/bin/ on Windows.
+ *   The wireguardGuide is therefore only shown on macOS and Linux AppImage —
+ *   never on Windows, where the binary is always present after installation.
  *
  * Geodata (geoip.dat + geosite.dat):
  *   These files are bundled alongside v2ray in resources/bin/.
@@ -1367,16 +1367,21 @@ export function checkBinaries() {
     }
   }
 
-  // -------------------------------------------------------------------------
-  // WireGuard install guide — structured message for the UI
-  // Only populated when wg-quick is missing.
-  // -------------------------------------------------------------------------
+  // wireguardGuide is only populated when wg-quick / wireguard.exe is genuinely
+  // missing. On Windows this should never happen post-install since wireguard.exe
+  // is bundled. On macOS and Linux AppImage it guides the user to install via
+  // their platform's standard mechanism.
+
   let wireguardGuide: string | null = null
 
   if (!wgPath) {
-    if (isWin)       wireguardGuide = WIREGUARD_GUIDES.win32
-    else if (isMac)  wireguardGuide = WIREGUARD_GUIDES.darwin
-    else if (isLinux) {
+    if (isWin) {
+      // wireguard.exe is bundled — if it is missing something went wrong
+      // with the installation. Show a reinstall message rather than a setup guide.
+      wireguardGuide = WIREGUARD_GUIDES.win32
+    } else if (isMac) {
+      wireguardGuide = WIREGUARD_GUIDES.darwin
+    } else if (isLinux) {
       wireguardGuide = isAppImage
         ? WIREGUARD_GUIDES.linux_appimage
         : WIREGUARD_GUIDES.linux_package
@@ -1391,7 +1396,8 @@ export function checkBinaries() {
 
     // WireGuard
     wireguard:      !!wgPath,
-    wgPath,
+    wgPath:         wgPath,
+    wgCliPath:      isWin ? find('wg.exe') : null,
     wgHash:         wgPath ? getHash(wgPath) : null,
     // Non-null when wireguard-tools is missing — the UI shows this string
     // as an onboarding guide rather than treating it as a hard error.
