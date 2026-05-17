@@ -1654,7 +1654,7 @@ export async function spawnV2Ray(
  * Kills the running v2ray process and cleans up its temporary config directory.
  * Safe to call when v2ray is not running — returns immediately without error.
  *
- * Call this from killActiveConnections() instead of /* activeV2Ray.disconnect() */ killV2Ray().
+ * Call this from killActiveConnections() instead of activeV2Ray.disconnect().
  */
 export function killV2Ray(): void {
   if (activeV2RayProcess === null) {
