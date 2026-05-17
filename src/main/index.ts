@@ -237,11 +237,14 @@ async function installDarwinHelper(): Promise<void> {
   const helperDest = `${installDir}/sentinel-helper-mac`
   const plistPath  = '/Library/LaunchDaemons/com.sentinel.helper.plist'
 
-  const tmpPath = `/tmp/sentinel-helper-setup-${Date.now()}`
-  fs.copyFileSync(helperSrc, tmpPath)
-  fs.chmodSync(tmpPath, 0o755)
+  const stamp    = Date.now()
+  const tmpBin   = `/tmp/sentinel-helper-${stamp}`
+  const tmpPlist = `/tmp/sentinel-helper-${stamp}.plist`
 
-  const plistContent = [
+  fs.copyFileSync(helperSrc, tmpBin)
+  fs.chmodSync(tmpBin, 0o755)
+
+  const plistXml = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
     '<plist version="1.0">',
@@ -258,23 +261,25 @@ async function installDarwinHelper(): Promise<void> {
     '    <key>KeepAlive</key>',
     '    <true/>',
     '</dict>',
-    '</plist>'
-  ].join('\\n')
+    '</plist>',
+  ].join('\n')  // <-- newline, not '\\n'
+  fs.writeFileSync(tmpPlist, plistXml, 'utf8')
 
-  const result = await execPrivileged([
-    `mkdir -p ${installDir}`,
-    `cp ${tmpPath} ${helperDest}`,
-    `chmod 755 ${helperDest}`,
-    `rm -f ${tmpPath}`,
-    `printf '${plistContent}' > ${plistPath}`,
-    `chmod 644 ${plistPath}`,
-    `chown root:wheel ${plistPath}`,
-    `launchctl load -w ${plistPath} || true`,
-    `launchctl start com.sentinel.helper`,
-  ])
-
-  if (result.code !== 0) {
-    throw new Error(`macOS Helper installation failed: ${result.stderr}`)
+  try {
+    const result = await execPrivileged([
+      `mkdir -p ${installDir}`,
+      `cp ${tmpBin} ${helperDest}`,
+      `chmod 755 ${helperDest}`,
+      `cp ${tmpPlist} ${plistPath}`,
+      `chmod 644 ${plistPath}`,
+      `chown root:wheel ${plistPath}`,
+      `launchctl load -w ${plistPath} || true`,
+      `launchctl start com.sentinel.helper`,
+    ])
+    if (result.code !== 0) throw new Error(`macOS Helper install failed: ${result.stderr}`)
+  } finally {
+    try { fs.unlinkSync(tmpBin)   } catch {}
+    try { fs.unlinkSync(tmpPlist) } catch {}
   }
 }
 
@@ -287,11 +292,12 @@ async function installLinuxHelper(): Promise<void> {
   const installDir = '/usr/local/lib/sentinel'
   const helperDest = `${installDir}/sentinel-helper`
 
-  // Copy to /tmp first — /tmp is readable by root even from FUSE mount.
-  // The file in /tmp is removed by the privileged script after copying.
-  const tmpPath = `/tmp/sentinel-helper-setup-${Date.now()}`
-  fs.copyFileSync(helperSrc, tmpPath)
-  fs.chmodSync(tmpPath, 0o755)
+  const stamp    = Date.now()
+  const tmpBin   = `/tmp/sentinel-helper-${stamp}`
+  const tmpUnit  = `/tmp/sentinel-helper-${stamp}.service`
+
+  fs.copyFileSync(helperSrc, tmpBin)
+  fs.chmodSync(tmpBin, 0o755)
 
   const unitContent = [
     '[Unit]',
@@ -305,21 +311,23 @@ async function installLinuxHelper(): Promise<void> {
     'User=root',
     '[Install]',
     'WantedBy=multi-user.target',
-  ].join('\\n')
+  ].join('\n')
+  fs.writeFileSync(tmpUnit, unitContent, 'utf8')
 
-  const result = await execPrivileged([
-    `mkdir -p ${installDir}`,
-    `cp ${tmpPath} ${helperDest}`,
-    `chmod 755 ${helperDest}`,
-    `rm -f ${tmpPath}`,
-    `printf '${unitContent}' > /etc/systemd/system/sentinel-helper.service`,
-    `systemctl daemon-reload`,
-    `systemctl enable sentinel-helper`,
-    `systemctl start sentinel-helper`,
-  ])
-
-  if (result.code !== 0) {
-    throw new Error(`Helper installation failed: ${result.stderr}`)
+  try {
+    const result = await execPrivileged([
+      `mkdir -p ${installDir}`,
+      `cp ${tmpBin} ${helperDest}`,
+      `chmod 755 ${helperDest}`,
+      `cp ${tmpUnit} /etc/systemd/system/sentinel-helper.service`,
+      `systemctl daemon-reload`,
+      `systemctl enable sentinel-helper`,
+      `systemctl start sentinel-helper`,
+    ])
+    if (result.code !== 0) throw new Error(`Linux Helper install failed: ${result.stderr}`)
+  } finally {
+    try { fs.unlinkSync(tmpBin)  } catch {}
+    try { fs.unlinkSync(tmpUnit) } catch {}
   }
 }
 
