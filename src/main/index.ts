@@ -621,27 +621,54 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('node:connectV2ray', async (_e, { transparent }: { transparent?: boolean } = {}) => {
     if (!activeV2Ray) return { success: false, error: 'No V2Ray session' }
+  
+    // Resolve the v2ray binary path before attempting to spawn.
+    // checkBinaries() looks in: custom store → PATH → resources/bin/ → exe dir.
+    // This is the key fix: we no longer rely on the SDK calling spawn('v2ray')
+    // which fails silently when 'v2ray' is not in PATH.
+    const binaries = checkBinaries()
+    if (!binaries.v2rayPath) {
+      return {
+        success: false,
+        error: 'v2ray binary not found. Check resources/bin/ or set a custom path in settings.',
+      }
+    }
+  
     try {
-      const pid = activeV2Ray.connect()
+      // spawnV2Ray() writes the config to a temp file (using the SDK's writeConfig)
+      // and spawns v2ray with the explicit binary path. Throws if v2ray crashes
+      // within the first 500 ms (bad config, missing geo data, port conflict, etc.)
+      const { pid } = await spawnV2Ray(activeV2Ray, binaries.v2rayPath)
+  
       if (transparent) {
         const result = await setupTransparentV2Ray(activeV2Ray)
         if (!result.success) {
-          activeV2Ray.disconnect()
+          // Kill v2ray if transparent setup fails so we don't leave a dangling process.
+          killV2Ray()
           return result
         }
       }
+  
       wasConnected = true
       startTrafficPolling()
       return { success: true, pid }
-    } catch (err: unknown) { return { success: false, error: String(err) } }
+  
+    } catch (err: unknown) {
+      // spawnV2Ray throws on immediate crash — the error message includes the
+      // exit code and a hint to check the config file. Surface this to the UI.
+      killV2Ray() // ensure cleanup even on partial startup
+      return { success: false, error: String(err) }
+    }
   })
 
   ipcMain.handle('node:retryTunnel', async (_e, { transparent }: { transparent?: boolean } = {}) => {
     if (activeWgConfigFile) return wgQuickUp(activeWgConfigFile)
     if (activeV2Ray) {
-      try { activeV2Ray.disconnect() } catch (_) {}
+      try { /* activeV2Ray.disconnect() */ killV2Ray() } catch (_) {}
       try {
-        const pid = activeV2Ray.connect()
+        const binaries = checkBinaries()
+        const { pid, configFile } = await spawnV2Ray(activeV2Ray, binaries.v2rayPath) 
+        // const pid = activeV2Ray.connect()
         if (transparent) {
           const result = await setupTransparentV2Ray(activeV2Ray)
           if (!result.success) return result
@@ -704,8 +731,8 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('vpn:status', () => ({
-    v2rayActive: !!activeV2Ray,
-    v2rayPid: activeV2Ray?.child?.pid,
+    v2rayActive: isV2RayRunning(),
+    v2rayPid: getV2RayPid(),
     wgActive: !!activeWgConfigFile,
     wgInterface: activeWgConfigFile ? path.basename(activeWgConfigFile, '.conf') : null,
     tunActive: activeTun2Socks !== null,
@@ -871,7 +898,7 @@ async function doHandshake(nodeAddress: string, sessionId: Long) {
     }
 
     if (nInfo.service_type === NodeVPNType.V2RAY) {
-      if (activeV2Ray) { try { activeV2Ray.disconnect() } catch (_) {}; activeV2Ray = null }
+      if (activeV2Ray) { try { /* activeV2Ray.disconnect() */ killV2Ray() } catch (_) {}; activeV2Ray = null }
       checkBinaries()
       const v2ray = new V2Ray(); const result = await handshake(sessionId, { uuid: v2ray.getKey() }, walletState.privkey!, remoteAddr).catch(e => { throw new Error(`[handshake] ${extractError(e)}`) })
       const hd = JSON.parse(Buffer.from(result.data, 'base64').toString('utf8')); await v2ray.parseConfig(hd, result.addrs)
@@ -1470,7 +1497,7 @@ async function killActiveConnections(sendEndSession = true) {
     const helperResponse = await sendToHelper({ command: 'stop-transparent' })
     if(helperResponse.status === "ok"){ activeTun2Socks = null; activeTunInterface = null; activeV2RayServerIp = null}
   }
-  if (activeV2Ray) { try { activeV2Ray.disconnect() } catch { }; activeV2Ray = null }
+  if (activeV2Ray) { try { /* activeV2Ray.disconnect() */ killV2Ray() } catch { }; activeV2Ray = null }
   if (activeWgConfigFile) { await wgQuickDown(activeWgConfigFile); activeWgConfigFile = null; activeWgInstance = null }
 
   // Only clear blockchain session state if explicitly requested (intentional disconnect or session end)
@@ -1491,9 +1518,177 @@ async function killActiveConnections(sendEndSession = true) {
   }
 }
 
-const _origConnect = V2Ray.prototype.connect
-V2Ray.prototype.connect = function (configFile?: string) {
-  const pid = _origConnect.call(this, configFile) as number | undefined
-  if (this.child) { (this.child as ChildProcess).on('exit', () => { if (activeV2Ray === this) { mainWindow?.webContents.send('vpn:disconnected', { reason: 'V2Ray exited' }); activeV2Ray = null; scheduleReconnect() } }) }
-  return pid
+
+
+/**
+ * Handle to the running v2ray child process.
+ * Null when v2ray is not running. Owned exclusively by this module —
+ * do not spawn or kill v2ray from anywhere else in the codebase.
+ */
+let activeV2RayProcess: ChildProcess | null = null
+
+/**
+ * Path to the temporary config file written for the current session.
+ * Kept so it can be cleaned up when the process exits or is killed.
+ */
+let activeV2RayConfigFile: string | null = null
+
+// ---------------------------------------------------------------------------
+// Spawn
+// ---------------------------------------------------------------------------
+
+/**
+ * Writes the V2Ray config to a temporary file and spawns the v2ray binary
+ * with an explicit binary path instead of relying on PATH resolution.
+ *
+ * This replaces `activeV2Ray.connect()` in the ipcMain handler. The V2Ray
+ * SDK instance is still required because we call its writeConfig() method
+ * to produce the JSON config file — we just take over the spawning step.
+ *
+ * @param v2ray       The V2Ray SDK instance after parseConfig() has been called.
+ * @param binaryPath  Absolute path to the v2ray executable, from checkBinaries().
+ * @returns           Object with { pid, configFile } on success.
+ * @throws            Error if the binary is not found, fails to start, or exits
+ *                    within the first 500 ms (indicating an immediate crash).
+ */
+export async function spawnV2Ray(
+  v2ray:      { writeConfig: (p: string) => void },
+  binaryPath: string,
+): Promise<{ pid: number; configFile: string }> {
+  if (activeV2RayProcess !== null) {
+    throw new Error('V2Ray is already running. Call killV2Ray() first.')
+  }
+
+  // Write config to a temp directory — same pattern as the SDK.
+  const tempDir    = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-v2ray-'))
+  const configFile = path.join(tempDir, `v2ray_${crypto.randomBytes(8).toString('hex')}.json`)
+  v2ray.writeConfig(configFile)
+  console.log('[V2Ray] Config written to:', configFile)
+
+  // Verify the binary exists before attempting to spawn — gives a clear error
+  // instead of a cryptic ENOENT from spawn().
+  if (!fs.existsSync(binaryPath)) {
+    throw new Error(`v2ray binary not found at: ${binaryPath}`)
+  }
+
+  const child = spawn(binaryPath, ['run', '--config', configFile], {
+    // stdio is piped so we can capture output for logging.
+    // Do NOT use 'inherit' — that would attach v2ray's stdout/stderr to
+    // Electron's process handles, causing the same "await forever" issue
+    // we solved for tun2socks.
+    stdio: ['ignore', 'pipe', 'pipe'],
+    // Detached false: v2ray stays in our process group. If Electron exits,
+    // the OS cleans up v2ray too (on Windows, detached=false is the default
+    // and ensures the child is in the parent's job object).
+    detached: false,
+  })
+
+  // Capture stdout and stderr. v2ray writes its log to stderr by default.
+  child.stdout?.on('data', (data: Buffer) => {
+    console.log('[V2Ray stdout]', data.toString().trim())
+  })
+
+  child.stderr?.on('data', (data: Buffer) => {
+    console.log('[V2Ray stderr]', data.toString().trim())
+  })
+
+  child.on('exit', (code, signal) => {
+    console.warn('[V2Ray] Process exited.', { code, signal, pid: child.pid })
+    const wasActive = (activeV2RayProcess === child)
+    activeV2RayProcess   = null
+    activeV2RayConfigFile = null
+    // Attempt cleanup of the temp config directory on exit.
+    try { fs.rmSync(tempDir, { recursive: true, force: true }) } catch {}
+
+    // Replicate the previous disconnect detection logic:
+    // If v2ray exits unexpectedly while we consider it connected, trigger reconnect.
+    if (wasActive && activeV2Ray && wasConnected) {
+      mainWindow?.webContents.send('vpn:disconnected', { reason: 'V2Ray exited' })
+      activeV2Ray = null
+      scheduleReconnect()
+    }
+  })
+
+  child.on('error', (err) => {
+    console.error('[V2Ray] Spawn error:', err.message)
+    activeV2RayProcess   = null
+    activeV2RayConfigFile = null
+  })
+
+  // Give the process a short window to surface an immediate crash (bad config,
+  // wrong architecture, missing geo data, port already in use, etc.) before
+  // declaring success. 500 ms is enough for v2ray to start or fail on startup.
+  await new Promise<void>((resolve, reject) => {
+    const earlyWindow = setTimeout(resolve, 500)
+
+    child.once('error', (err) => {
+      clearTimeout(earlyWindow)
+      reject(new Error(`v2ray failed to spawn: ${err.message}`))
+    })
+
+    child.once('exit', (code) => {
+      clearTimeout(earlyWindow)
+      reject(new Error(
+        `v2ray exited immediately (code ${code ?? '?'}). ` +
+        `Check the config file at ${configFile} and the logs above.`
+      ))
+    })
+  })
+
+  if (!child.pid) {
+    throw new Error('v2ray spawned but returned no PID.')
+  }
+
+  activeV2RayProcess    = child
+  activeV2RayConfigFile = configFile
+  console.log('[V2Ray] Spawned successfully. PID:', child.pid, '| Binary:', binaryPath)
+
+  return { pid: child.pid, configFile }
+}
+
+// ---------------------------------------------------------------------------
+// Kill
+// ---------------------------------------------------------------------------
+
+/**
+ * Kills the running v2ray process and cleans up its temporary config directory.
+ * Safe to call when v2ray is not running — returns immediately without error.
+ *
+ * Call this from killActiveConnections() instead of /* activeV2Ray.disconnect() */ killV2Ray().
+ */
+export function killV2Ray(): void {
+  if (activeV2RayProcess === null) {
+    console.log('[V2Ray] killV2Ray called but no process is running.')
+    return
+  }
+
+  const pid = activeV2RayProcess.pid
+  try {
+    activeV2RayProcess.kill()
+    console.log('[V2Ray] Killed process PID:', pid)
+  } catch (err) {
+    console.warn('[V2Ray] Failed to kill process:', err)
+  }
+
+  activeV2RayProcess    = null
+  activeV2RayConfigFile = null
+}
+
+// ---------------------------------------------------------------------------
+// Status query
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true if a v2ray process is currently running.
+ * Use this in the UI or health checks instead of checking activeV2Ray directly.
+ */
+export function isV2RayRunning(): boolean {
+  return activeV2RayProcess !== null
+}
+
+/**
+ * Returns the PID of the running v2ray process, or null if not running.
+ */
+export function getV2RayPid(): number | null {
+  return activeV2RayProcess?.pid ?? null
 }
