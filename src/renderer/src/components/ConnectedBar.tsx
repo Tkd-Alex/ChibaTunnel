@@ -2,6 +2,7 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { ConnectionState } from '../types'
 import TrafficStatsWidget from './TrafficStats'
+import { Hexagon, X } from 'lucide-react'
 
 interface Props {
   connection: ConnectionState
@@ -44,8 +45,12 @@ export default function ConnectedBar({ connection, reconnectMsg, onDisconnect, o
       <TrafficStatsWidget />
 
       <div className="connected-actions">
-        <button className="btn btn-secondary btn-sm" onClick={onManage}>⬡ {t('vpn.manage_btn')}</button>
-        <button className="btn btn-danger btn-sm" onClick={onDisconnect}>✕ {t('vpn.disconnect_btn')}</button>
+        <button className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={onManage}>
+          <Hexagon size={12} /> {t('vpn.manage_btn')}
+        </button>
+        <button className="btn btn-danger btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={onDisconnect}>
+          <X size={12} /> {t('vpn.disconnect_btn')}
+        </button>
       </div>
     </div>
   )

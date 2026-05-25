@@ -1,39 +1,39 @@
 /**
- * Convert a country name to an emoji flag.
- * Falls back to a globe emoji if not found.
+ * Convert a country name to its ISO 3166-1 alpha-2 code.
+ * Falls back to 'un' (United Nations) for unknown countries.
  */
-export function countryToFlag(country: string): string {
+export function countryToIsoCode(country: string): string {
   const map: Record<string, string> = {
-    'United States': '🇺🇸', 'United Kingdom': '🇬🇧', 'Germany': '🇩🇪', 'France': '🇫🇷',
-    'Netherlands': '🇳🇱', 'Sweden': '🇸🇪', 'Norway': '🇳🇴', 'Finland': '🇫🇮',
-    'Switzerland': '🇨🇭', 'Austria': '🇦🇹', 'Belgium': '🇧🇪', 'Spain': '🇪🇸',
-    'Italy': '🇮🇹', 'Portugal': '🇵🇹', 'Poland': '🇵🇱', 'Czech Republic': '🇨🇿',
-    'Romania': '🇷🇴', 'Hungary': '🇭🇺', 'Bulgaria': '🇧🇬', 'Ukraine': '🇺🇦',
-    'Russia': '🇷🇺', 'Turkey': '🇹🇷', 'Canada': '🇨🇦', 'Mexico': '🇲🇽',
-    'Brazil': '🇧🇷', 'Argentina': '🇦🇷', 'Chile': '🇨🇱', 'Colombia': '🇨🇴',
-    'Japan': '🇯🇵', 'South Korea': '🇰🇷', 'China': '🇨🇳', 'India': '🇮🇳',
-    'Singapore': '🇸🇬', 'Hong Kong': '🇭🇰', 'Taiwan': '🇹🇼', 'Thailand': '🇹🇭',
-    'Vietnam': '🇻🇳', 'Indonesia': '🇮🇩', 'Malaysia': '🇲🇾', 'Philippines': '🇵🇭',
-    'Australia': '🇦🇺', 'New Zealand': '🇳🇿', 'South Africa': '🇿🇦',
-    'Israel': '🇮🇱', 'United Arab Emirates': '🇦🇪', 'Saudi Arabia': '🇸🇦',
-    'Egypt': '🇪🇬', 'Nigeria': '🇳🇬', 'Kenya': '🇰🇪', 'Morocco': '🇲🇦',
-    'Denmark': '🇩🇰', 'Croatia': '🇭🇷', 'Serbia': '🇷🇸', 'Slovakia': '🇸🇰',
-    'Lithuania': '🇱🇹', 'Latvia': '🇱🇻', 'Estonia': '🇪🇪', 'Moldova': '🇲🇩',
-    'Kazakhstan': '🇰🇿', 'Georgia': '🇬🇪', 'Armenia': '🇦🇲', 'Azerbaijan': '🇦🇿',
-    'Belarus': '🇧🇾', 'Greece': '🇬🇷', 'Iceland': '🇮🇸', 'Ireland': '🇮🇪',
-    'Luxembourg': '🇱🇺', 'Malta': '🇲🇹', 'Cyprus': '🇨🇾', 'Slovenia': '🇸🇮',
-    'Ecuador': '🇪🇨', 'Peru': '🇵🇪', 'Venezuela': '🇻🇪', 'Paraguay': '🇵🇾',
-    'Uruguay': '🇺🇾', 'Bolivia': '🇧🇴', 'Cuba': '🇨🇺', 'Dominican Republic': '🇩🇴',
-    'Costa Rica': '🇨🇷', 'Guatemala': '🇬🇹', 'Panama': '🇵🇦', 'Puerto Rico': '🇵🇷',
-    'Pakistan': '🇵🇰', 'Bangladesh': '🇧🇩', 'Sri Lanka': '🇱🇰', 'Nepal': '🇳🇵',
-    'Myanmar': '🇲🇲', 'Cambodia': '🇰🇭', 'Laos': '🇱🇦', 'Mongolia': '🇲🇳',
-    'Iran': '🇮🇷', 'Iraq': '🇮🇶', 'Jordan': '🇯🇴', 'Lebanon': '🇱🇧',
-    'Kuwait': '🇰🇼', 'Qatar': '🇶🇦', 'Bahrain': '🇧🇭', 'Oman': '🇴🇲',
-    'Algeria': '🇩🇿', 'Tunisia': '🇹🇳', 'Libya': '🇱🇾', 'Sudan': '🇸🇩',
-    'Ethiopia': '🇪🇹', 'Ghana': '🇬🇭', 'Tanzania': '🇹🇿', 'Uganda': '🇺🇬',
-    'Zimbabwe': '🇿🇼', 'Cameroon': '🇨🇲', 'Senegal': '🇸🇳', 'Ivory Coast': '🇨🇮',
+    'United States': 'us', 'United Kingdom': 'gb', 'Germany': 'de', 'France': 'fr',
+    'Netherlands': 'nl', 'Sweden': 'se', 'Norway': 'no', 'Finland': 'fi',
+    'Switzerland': 'ch', 'Austria': 'at', 'Belgium': 'be', 'Spain': 'es',
+    'Italy': 'it', 'Portugal': 'pt', 'Poland': 'pl', 'Czech Republic': 'cz',
+    'Romania': 'ro', 'Hungary': 'hu', 'Bulgaria': 'bg', 'Ukraine': 'ua',
+    'Russia': 'ru', 'Turkey': 'tr', 'Canada': 'ca', 'Mexico': 'mx',
+    'Brazil': 'br', 'Argentina': 'ar', 'Chile': 'cl', 'Colombia': 'co',
+    'Japan': 'jp', 'South Korea': 'kr', 'China': 'cn', 'India': 'in',
+    'Singapore': 'sg', 'Hong Kong': 'hk', 'Taiwan': 'tw', 'Thailand': 'th',
+    'Vietnam': 'vn', 'Indonesia': 'id', 'Malaysia': 'my', 'Philippines': 'ph',
+    'Australia': 'au', 'New Zealand': 'nz', 'South Africa': 'za',
+    'Israel': 'il', 'United Arab Emirates': 'ae', 'Saudi Arabia': 'sa',
+    'Egypt': 'eg', 'Nigeria': 'ng', 'Kenya': 'ke', 'Morocco': 'ma',
+    'Denmark': 'dk', 'Croatia': 'hr', 'Serbia': 'rs', 'Slovakia': 'sk',
+    'Lithuania': 'lt', 'Latvia': 'lv', 'Estonia': 'ee', 'Moldova': 'md',
+    'Kazakhstan': 'kz', 'Georgia': 'ge', 'Armenia': 'am', 'Azerbaijan': 'az',
+    'Belarus': 'by', 'Greece': 'gr', 'Iceland': 'is', 'Ireland': 'ie',
+    'Luxembourg': 'lu', 'Malta': 'mt', 'Cyprus': 'cy', 'Slovenia': 'si',
+    'Ecuador': 'ec', 'Peru': 'pe', 'Venezuela': 've', 'Paraguay': 'py',
+    'Uruguay': 'uy', 'Bolivia': 'bo', 'Cuba': 'cu', 'Dominican Republic': 'do',
+    'Costa Rica': 'cr', 'Guatemala': 'gt', 'Panama': 'pa', 'Puerto Rico': 'pr',
+    'Pakistan': 'pk', 'Bangladesh': 'bd', 'Sri Lanka': 'lk', 'Nepal': 'np',
+    'Myanmar': 'mm', 'Cambodia': 'kh', 'Laos': 'la', 'Mongolia': 'mn',
+    'Iran': 'ir', 'Iraq': 'iq', 'Jordan': 'jo', 'Lebanon': 'lb',
+    'Kuwait': 'kw', 'Qatar': 'qa', 'Bahrain': 'bh', 'Oman': 'om',
+    'Algeria': 'dz', 'Tunisia': 'tn', 'Libya': 'ly', 'Sudan': 'sd',
+    'Ethiopia': 'et', 'Ghana': 'gh', 'Tanzania': 'tz', 'Uganda': 'ug',
+    'Zimbabwe': 'zw', 'Cameroon': 'cm', 'Senegal': 'sn', 'Ivory Coast': 'ci',
   }
-  return map[country] ?? '🌐'
+  return map[country] ?? 'un'
 }
 
 export function vpnTypeLabel(type: number): string {

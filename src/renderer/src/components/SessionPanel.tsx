@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChainSession, ApiNode } from '../types'
-import { countryToFlag } from '../utils'
+import { countryToIsoCode } from '../utils'
 import ConfirmModal from './ConfirmModal'
+
+import { Hexagon, ArrowDown, ArrowUp, X, Play } from 'lucide-react'
 
 function fmtBytes(s?: string | null): string {
   const n = parseInt(s ?? '0', 10)
@@ -50,14 +52,14 @@ function BwMini({ dl, ul }: { dl: string; ul: string }) {
   return (
     <div style={{ minWidth: 110 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
-        <span style={{ fontSize: 8, color: 'var(--purple)', width: 8 }}>↓</span>
+        <span style={{ fontSize: 8, color: 'var(--purple)', width: 8, display: 'inline-flex' }}><ArrowDown size={8} /></span>
         <div style={{ flex: 1, height: 3, background: 'var(--bg-3)', borderRadius: 2 }}>
           <div style={{ width: `${(d/max)*100}%`, height: '100%', background: 'var(--purple)', borderRadius: 2 }} />
         </div>
         <span style={{ fontSize: 8, color: 'var(--purple)', minWidth: 45, textAlign: 'right' }}>{fmtBytes(dl)}</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-        <span style={{ fontSize: 8, color: 'var(--green)', width: 8 }}>↑</span>
+        <span style={{ fontSize: 8, color: 'var(--green)', width: 8, display: 'inline-flex' }}><ArrowUp size={8} /></span>
         <div style={{ flex: 1, height: 3, background: 'var(--bg-3)', borderRadius: 2 }}>
           <div style={{ width: `${(u/max)*100}%`, height: '100%', background: 'var(--green)', borderRadius: 2 }} />
         </div>
@@ -180,7 +182,10 @@ export default function SessionPanel({ nodes = [], onConnectSession }: Props) {
           <div className="empty-state-text">{t('sessions.fetching')}</div>
         </div>
       ) : !loading && !error && sessions.length === 0 ? (
-        <div className="empty-state"><div className="empty-state-icon">⬡</div><div className="empty-state-text">{t('sessions.no_sessions')}</div></div>
+        <div className="empty-state">
+          <div className="empty-state-icon"><Hexagon size={48} opacity={0.2} /></div>
+          <div className="empty-state-text">{t('sessions.no_sessions')}</div>
+        </div>
       ) : null}
 
       {sessions.length > 0 && (
@@ -202,7 +207,7 @@ export default function SessionPanel({ nodes = [], onConnectSession }: Props) {
                     <td>
                       {node ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} title={node.moniker}>
-                          <span>{countryToFlag(node.country)}</span>
+                          <span className={`fi fi-${countryToIsoCode(node.country)}`} style={{ borderRadius: 1 }} />
                           <span style={{ fontWeight: 600, color: 'var(--text-1)', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {node.moniker}
                           </span>
@@ -221,8 +226,12 @@ export default function SessionPanel({ nodes = [], onConnectSession }: Props) {
                     <td>
                       {s.status === 1 && (
                         <div style={{ display: 'flex', gap: 6 }}>
-                          <button className="btn btn-danger btn-sm" disabled={busy || !!connecting} onClick={() => setConfirmId(s.id)}>{busy ? <div className="spinner" style={{ width: 10, height: 10 }} /> : `✕ ${t('sessions.end_btn')}`}</button>
-                          <button className="btn btn-primary btn-sm" disabled={busy || !!connecting} onClick={() => onConnectSession && onConnectSession(s.nodeAddress, s.id)}>{t('sessions.connect_btn')}</button>
+                          <button className="btn btn-danger btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} disabled={busy || !!connecting} onClick={() => setConfirmId(s.id)}>
+                            {busy ? <div className="spinner" style={{ width: 10, height: 10 }} /> : <><X size={12} /> {t('sessions.end_btn')}</>}
+                          </button>
+                          <button className="btn btn-primary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} disabled={busy || !!connecting} onClick={() => onConnectSession && onConnectSession(s.nodeAddress, s.id)}>
+                            <Play size={12} fill="currentColor" /> {t('sessions.connect_btn')}
+                          </button>
                         </div>
                       )}
                     </td>

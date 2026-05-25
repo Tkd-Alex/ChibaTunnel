@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import * as d3geo from 'd3-geo'
 import { feature } from 'topojson-client'
 import { ApiNode } from '../types'
-import { countryToFlag, vpnTypeLabel } from '../utils'
+import { countryToIsoCode, vpnTypeLabel } from '../utils'
 
 // Country name → [lon, lat]
 const COUNTRY_COORDS: Record<string, [number, number]> = {
@@ -341,7 +341,10 @@ export default function Globe({ nodes, bookmarks, onSelect }: Props) {
       {/* Tooltip */}
       {hovered && tooltip && (
         <div className="globe-tooltip" style={{ left: tooltip.x + 14, top: tooltip.y - 10 }}>
-          <div className="gt-name">{countryToFlag(hovered.country ?? '')} {hovered.moniker}</div>
+          <div className="gt-name">
+            <span className={`fi fi-${countryToIsoCode(hovered.country ?? '')}`} style={{ marginRight: 6, borderRadius: 1 }} />
+            {hovered.moniker}
+          </div>
           <div className="gt-row"><span>{t('table.type')}</span><span>{vpnTypeLabel(hovered.type)}</span></div>
           <div className="gt-row"><span>{t('ip.location')}</span><span>{hovered.city}, {hovered.country}</span></div>
           <div className="gt-row"><span>{t('table.peers')}</span><span style={{ color: 'var(--cyan)' }}>{hovered.peers}</span></div>

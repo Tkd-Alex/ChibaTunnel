@@ -2,6 +2,15 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { NodeFilters, ApiNode } from '../types'
 import { uniqueSorted } from '../utils'
+import { 
+  Search, 
+  Circle, 
+  Heart, 
+  Check, 
+  Home, 
+  Copy, 
+  Star 
+} from 'lucide-react'
 
 interface Props {
   filters: NodeFilters
@@ -20,11 +29,12 @@ export default function FiltersBar({ filters, onChange, nodes, filteredCount }: 
 
   return (
     <div className="filters-bar">
-      <div className="filter-search">
+      <div className="filter-search" style={{ position: 'relative' }}>
+        <Search size={12} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', opacity: 0.5 }} />
         <input
           className="form-input"
-          style={{ width: '100%', padding: '6px 10px', fontSize: 11 }}
-          placeholder={`🔍  ${t('filters.search_placeholder')}`}
+          style={{ width: '100%', padding: '6px 10px 6px 30px', fontSize: 11 }}
+          placeholder={t('filters.search_placeholder')}
           value={filters.search}
           onChange={e => set({ search: e.target.value })}
         />
@@ -32,7 +42,7 @@ export default function FiltersBar({ filters, onChange, nodes, filteredCount }: 
 
       <select className="filter-select" value={filters.country}
         onChange={e => set({ country: e.target.value, city: '' })}>
-        <option value="">🌐 {t('filters.all_countries')}</option>
+        <option value="">{t('filters.all_countries')}</option>
         {countries.map(c => <option key={c} value={c}>{c}</option>)}
       </select>
 
@@ -49,12 +59,12 @@ export default function FiltersBar({ filters, onChange, nodes, filteredCount }: 
         <option value="2">{t('filters.v2ray')}</option>
       </select>
 
-      <button className={`filter-toggle ${filters.onlyActive      ? 'active' : ''}`} onClick={() => set({ onlyActive:      !filters.onlyActive      })}>● {t('filters.active')}</button>
-      <button className={`filter-toggle ${filters.onlyHealthy     ? 'active' : ''}`} onClick={() => set({ onlyHealthy:     !filters.onlyHealthy     })}>♥ {t('filters.healthy_label')}</button>
-      <button className={`filter-toggle ${filters.onlyWhitelisted ? 'active' : ''}`} onClick={() => set({ onlyWhitelisted: !filters.onlyWhitelisted })}>✓ {t('filters.listed')}</button>
-      <button className={`filter-toggle ${filters.hideResidential ? 'active' : ''}`} onClick={() => set({ hideResidential: !filters.hideResidential })}>⌂ {t('filters.hide_res')}</button>
-      <button className={`filter-toggle ${filters.hideDuplicate   ? 'active' : ''}`} onClick={() => set({ hideDuplicate:   !filters.hideDuplicate   })}>⧉ {t('filters.hide_dupes')}</button>
-      <button className={`filter-toggle ${filters.bookmarksOnly   ? 'active' : ''}`} onClick={() => set({ bookmarksOnly:   !filters.bookmarksOnly   })}>★ {t('common.bookmarks')}</button>
+      <button className={`filter-toggle ${filters.onlyActive      ? 'active' : ''}`} onClick={() => set({ onlyActive:      !filters.onlyActive      })}><Circle size={8} fill="currentColor" /> {t('filters.active')}</button>
+      <button className={`filter-toggle ${filters.onlyHealthy     ? 'active' : ''}`} onClick={() => set({ onlyHealthy:     !filters.onlyHealthy     })}><Heart size={8} fill="currentColor" /> {t('filters.healthy_label')}</button>
+      <button className={`filter-toggle ${filters.onlyWhitelisted ? 'active' : ''}`} onClick={() => set({ onlyWhitelisted: !filters.onlyWhitelisted })}><Check size={10} strokeWidth={3} /> {t('filters.listed')}</button>
+      <button className={`filter-toggle ${filters.hideResidential ? 'active' : ''}`} onClick={() => set({ hideResidential: !filters.hideResidential })}><Home size={10} /> {t('filters.hide_res')}</button>
+      <button className={`filter-toggle ${filters.hideDuplicate   ? 'active' : ''}`} onClick={() => set({ hideDuplicate:   !filters.hideDuplicate   })}><Copy size={10} /> {t('filters.hide_dupes')}</button>
+      <button className={`filter-toggle ${filters.bookmarksOnly   ? 'active' : ''}`} onClick={() => set({ bookmarksOnly:   !filters.bookmarksOnly   })}><Star size={10} fill="currentColor" /> {t('common.bookmarks')}</button>
 
       <div className="filters-count">{filteredCount} / {nodes.length} {t('common.nodes')}</div>
     </div>

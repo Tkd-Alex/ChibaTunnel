@@ -14,6 +14,21 @@ import SettingsPanel      from './components/SettingsPanel'
 import WalletManager      from './components/WalletManager'
 import ConfirmModal       from './components/ConfirmModal'
 import { ApiNode, NodeFilters, ConnectionState, BinaryStatus, INITIAL_CONNECTION } from './types'
+import { 
+  Globe as GlobeIcon, 
+  Hexagon, 
+  LayoutGrid, 
+  Settings, 
+  AlertTriangle, 
+  RefreshCw, 
+  RotateCcw, 
+  X, 
+  Circle, 
+  Heart, 
+  Star, 
+  Home,
+  Play
+} from 'lucide-react'
 
 type AppScreen = 'loading' | 'setup' | 'main'
 type Tab       = 'globe' | 'nodes' | 'sessions' | 'manage'
@@ -218,11 +233,11 @@ export default function App() {
     setReuseSessionId(sid); setModalInfoOnly(false); setModalNode(target)
   }
 
-  const tabs: Array<{ id: Tab; label: string; icon: string }> = [
-    { id: 'globe',    label: t('tabs.globe'),    icon: '🌐' },
-    { id: 'nodes',    label: t('tabs.nodes'),    icon: '⬡' },
-    { id: 'sessions', label: t('tabs.sessions'), icon: '⬢' },
-    { id: 'manage',   label: t('tabs.manage'),   icon: '⚙' },
+  const tabs: Array<{ id: Tab; label: string; icon: React.ReactNode }> = [
+    { id: 'globe',    label: t('tabs.globe'),    icon: <GlobeIcon size={14} /> },
+    { id: 'nodes',    label: t('tabs.nodes'),    icon: <Hexagon size={14} /> },
+    { id: 'sessions', label: t('tabs.sessions'), icon: <LayoutGrid size={14} /> },
+    { id: 'manage',   label: t('tabs.manage'),   icon: <Settings size={14} /> },
   ]
 
   useEffect(() => {
@@ -278,13 +293,15 @@ export default function App() {
             {tabs.map(t => (
               <button key={t.id} className={`tab-btn ${activeTab === t.id ? 'active' : ''}`}
                 onClick={() => setActiveTab(t.id)}>
-                <span className="tab-icon">{t.icon}</span>{t.label}
+                <span className="tab-icon" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{t.icon}</span>{t.label}
               </button>
             ))}
             <div style={{ flex: 1 }} />
             {binaries && (!binaries.wireguard || !binaries.v2rayPath) && (
-              <button className="tab-btn" style={{ color: 'var(--yellow)' }}
-                onClick={() => setShowBinaryCheck(true)}>⚠ {t('common.missing_deps')}</button>
+              <button className="tab-btn" style={{ color: 'var(--yellow)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                onClick={() => setShowBinaryCheck(true)}>
+                <AlertTriangle size={14} /> {t('common.missing_deps')}
+              </button>
             )}
           </div>
 
@@ -299,15 +316,15 @@ export default function App() {
                     placeholder={t('common.search')} value={globeFilters.search}
                     onChange={e => setGlobeFilters(f => ({ ...f, search: e.target.value }))} />
                   {([
-                    ['onlyActive',      `● ${t('filters.only_active')}`],
-                    ['onlyHealthy',     `♥ ${t('filters.only_healthy')}`],
-                    ['bookmarksOnly',   `★ ${t('filters.bookmarks_only')}`],
-                    ['hideResidential', `⌂ ${t('filters.hide_residential')}`],
-                  ] as [keyof NodeFilters, string][]).map(([key, label]) => (
+                    ['onlyActive',      <Circle size={10} fill="currentColor" style={{ opacity: 0.8 }} />, t('filters.only_active')],
+                    ['onlyHealthy',     <Heart size={10} fill="currentColor" style={{ opacity: 0.8 }} />, t('filters.only_healthy')],
+                    ['bookmarksOnly',   <Star size={10} fill="currentColor" style={{ opacity: 0.8 }} />, t('filters.bookmarks_only')],
+                    ['hideResidential', <Home size={10} fill="currentColor" style={{ opacity: 0.8 }} />, t('filters.hide_residential')],
+                  ] as [keyof NodeFilters, React.ReactNode, string][]).map(([key, icon, label]) => (
                     <label key={key} className="globe-filter-check">
                       <input type="checkbox" checked={!!globeFilters[key]}
                         onChange={e => setGlobeFilters(f => ({ ...f, [key]: e.target.checked }))} />
-                      {label}
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>{icon} {label}</span>
                     </label>
                   ))}
                   <div style={{ marginTop: 10 }}>
@@ -320,8 +337,10 @@ export default function App() {
                       <option value="2">{t('filters.v2ray')}</option>
                     </select>
                   </div>
-                  <button className="btn btn-secondary btn-sm" style={{ marginTop: 10 }}
-                    onClick={() => setGlobeFilters(GLOBE_DEFAULTS)}>↺ {t('filters.reset')}</button>
+                  <button className="btn btn-secondary btn-sm" style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    onClick={() => setGlobeFilters(GLOBE_DEFAULTS)}>
+                    <RotateCcw size={12} /> {t('filters.reset')}
+                  </button>
                 </div>
               </div>
             )}
@@ -332,7 +351,11 @@ export default function App() {
                 {nodesLoading && nodes.length === 0
                   ? <div className="empty-state"><div className="spinner" style={{ width: 32, height: 32 }} /><div className="empty-state-text">Fetching nodes…</div></div>
                   : nodesError
-                    ? <div className="empty-state"><div className="empty-state-icon">⚠</div><div className="empty-state-text" style={{ color: 'var(--red)' }}>{nodesError}</div><button className="btn btn-secondary btn-sm" onClick={fetchNodes}>Retry</button></div>
+                    ? <div className="empty-state">
+                        <div className="empty-state-icon"><AlertTriangle size={32} color="var(--red)" /></div>
+                        <div className="empty-state-text" style={{ color: 'var(--red)' }}>{nodesError}</div>
+                        <button className="btn btn-secondary btn-sm" onClick={fetchNodes}>Retry</button>
+                      </div>
                     : <NodeTable nodes={tableNodes} onSelect={node => { 
                         const isConnected = activeConnection?.node?.address === node.address;
                         setModalInfoOnly(isConnected); 
@@ -384,7 +407,7 @@ export default function App() {
 
           <div className="bottom-bar">
             <button className="btn btn-secondary btn-sm" onClick={fetchNodes} disabled={nodesLoading}>
-              {nodesLoading ? <><div className="spinner" style={{ width: 10, height: 10 }} /> {t('common.fetching_nodes')}</> : `↻ ${t('common.refresh')}`}
+              {nodesLoading ? <><div className="spinner" style={{ width: 10, height: 10 }} /> {t('common.fetching_nodes')}</> : <><RefreshCw size={10} style={{ marginRight: 6 }} /> {t('common.refresh')}</>}
             </button>
             <span style={{ fontSize: 10, color: 'var(--text-3)' }}>{nodes.length} {t('common.nodes')}</span>
             <span style={{ flex: 1 }} />
@@ -465,7 +488,8 @@ export default function App() {
 
       {vpnWarning && (
         <div className="vpn-toast" onClick={() => setVpnWarning(null)}>
-          <span>⚠ {vpnWarning}</span><span className="vpn-toast-close">✕</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><AlertTriangle size={14} /> {vpnWarning}</span>
+          <span className="vpn-toast-close"><X size={14} /></span>
         </div>
       )}
     </div>

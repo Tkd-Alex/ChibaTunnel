@@ -3,6 +3,17 @@ import { useTranslation } from 'react-i18next'
 import { WalletEntry, WalletInfo } from '../types'
 import { formatBalance } from '../utils'
 import ConfirmModal from './ConfirmModal'
+import { 
+  Plus, 
+  X, 
+  Check, 
+  Edit2, 
+  Trash2, 
+  Sparkles, 
+  Zap, 
+  Play, 
+  Circle 
+} from 'lucide-react'
 
 interface Props {
   onSwitched: (address: string, label: string, rpc: string) => void
@@ -114,8 +125,8 @@ export default function WalletManager({ onSwitched }: Props) {
           <div className="panel-title">{t('wallet.manage_title')}</div>
           <div className="panel-sub">{t('wallet.manage_sub')}</div>
         </div>
-        <button className="btn btn-primary btn-sm" onClick={() => setAdding(v => !v)}>
-          {adding ? `✕ ${t('common.cancel')}` : `+ ${t('wallet.add_wallet')}`}
+        <button className="btn btn-primary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => setAdding(v => !v)}>
+          {adding ? <><X size={14} /> {t('common.cancel')}</> : <><Plus size={14} /> {t('wallet.add_wallet')}</>}
         </button>
       </div>
 
@@ -130,8 +141,8 @@ export default function WalletManager({ onSwitched }: Props) {
           <div className="form-group">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <label className="form-label" style={{ marginBottom: 0 }}>{t('wallet.mnemonic_label')}</label>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={handleGenerate} disabled={busy === -1}>
-                {busy === -1 ? '...' : `✨ ${t('wallet.generate_btn')}`}
+              <button type="button" className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={handleGenerate} disabled={busy === -1}>
+                {busy === -1 ? '...' : <><Sparkles size={12} /> {t('wallet.generate_btn')}</>}
               </button>
             </div>
             <textarea className="form-input textarea" placeholder={t('wallet.mnemonic_placeholder')} value={mnemonic} onChange={e => setMnemonic(e.target.value)} spellCheck={false} />
@@ -148,7 +159,7 @@ export default function WalletManager({ onSwitched }: Props) {
             </label>
           </div>
           <button type="submit" className="btn btn-primary btn-full" disabled={busy === -1 || !mnemonic.trim() || !understood}>
-            {busy === -1 ? <><div className="spinner" style={{ width: 13, height: 13 }} /> {t('common.adding')}</> : `⚡ ${t('wallet.add_switch')}`}
+            {busy === -1 ? <><div className="spinner" style={{ width: 13, height: 13 }} /> {t('common.adding')}</> : <><Zap size={14} style={{ marginRight: 6 }} /> {t('wallet.add_switch')}</>}
           </button>
         </form>
       )}
@@ -156,7 +167,9 @@ export default function WalletManager({ onSwitched }: Props) {
       <div className="wallet-list">
         {wallets.map(w => (
           <div key={w.index} className={`wallet-entry ${w.active ? 'active' : ''}`}>
-            <div className="wallet-entry-icon">{w.active ? '▶' : '◇'}</div>
+            <div className="wallet-entry-icon" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+              {w.active ? <Play size={12} fill="currentColor" /> : <Circle size={10} opacity={0.3} />}
+            </div>
             <div className="wallet-entry-body">
               {editIdx === w.index ? (
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -167,8 +180,8 @@ export default function WalletManager({ onSwitched }: Props) {
                     onKeyDown={e => { if (e.key === 'Enter') handleRename(w.index); if (e.key === 'Escape') setEditIdx(null) }}
                     autoFocus
                   />
-                  <button className="btn btn-primary btn-sm" onClick={() => handleRename(w.index)}>✓</button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => setEditIdx(null)}>✕</button>
+                  <button className="btn btn-primary btn-sm" onClick={() => handleRename(w.index)}><Check size={14} /></button>
+                  <button className="btn btn-secondary btn-sm" onClick={() => setEditIdx(null)}><X size={14} /></button>
                 </div>
               ) : (
                 <div className="wallet-entry-label">
@@ -196,9 +209,9 @@ export default function WalletManager({ onSwitched }: Props) {
                   {busy === w.index ? <div className="spinner" style={{ width: 10, height: 10 }} /> : t('common.switch')}
                 </button>
               )}
-              <button className="btn btn-secondary btn-sm" onClick={() => { setEditIdx(w.index); setEditLabel(w.label) }}>✎</button>
+              <button className="btn btn-secondary btn-sm" onClick={() => { setEditIdx(w.index); setEditLabel(w.label) }}><Edit2 size={12} /></button>
               {wallets.length > 1 && (
-                <button className="btn btn-danger btn-sm" onClick={() => handleRemove(w.index)}>🗑</button>
+                <button className="btn btn-danger btn-sm" onClick={() => handleRemove(w.index)}><Trash2 size={12} /></button>
               )}
             </div>
           </div>

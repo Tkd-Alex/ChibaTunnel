@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { RpcEndpoint } from '../types'
+import { ChevronUp, ChevronDown, Play } from 'lucide-react'
 
 interface Props {
   currentRpc: string
@@ -53,7 +54,7 @@ export default function RpcSelector({ currentRpc, onChanged }: Props) {
           ? <><div className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }} /> {t('rpc.switching')}</>
           : <><span className="rpc-dot" />RPC: {current?.label ?? currentRpc.replace('https://', '').split(':')[0]}</>
         }
-        <span style={{ marginLeft: 4, opacity: 0.5 }}>{open ? '▲' : '▼'}</span>
+        <span style={{ marginLeft: 4, opacity: 0.5, display: 'inline-flex' }}>{open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}</span>
       </button>
 
       {open && (
@@ -65,8 +66,8 @@ export default function RpcSelector({ currentRpc, onChanged }: Props) {
               className={`rpc-option ${r.url === currentRpc ? 'active' : ''}`}
               onClick={() => handleSelect(r.url)}
             >
-              <div className="rpc-option-label">
-                {r.url === currentRpc && <span style={{ color: 'var(--green)', marginRight: 6 }}>▶</span>}
+              <div className="rpc-option-label" style={{ display: 'flex', alignItems: 'center' }}>
+                {r.url === currentRpc && <Play size={10} fill="currentColor" style={{ color: 'var(--green)', marginRight: 6 }} />}
                 {r.label}
               </div>
               <div className="rpc-option-meta">
