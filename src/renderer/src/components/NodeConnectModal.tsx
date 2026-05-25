@@ -1,7 +1,24 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ApiNode, ConnectionState, INITIAL_CONNECTION, SubscriptionType, BinaryStatus } from '../types'
-import { countryToFlag, formatUdvpnPrice, vpnTypeLabel } from '../utils'
+import { countryToIsoCode, formatUdvpnPrice, vpnTypeLabel } from '../utils'
+import { 
+  Shield, 
+  Copy, 
+  Circle, 
+  Heart, 
+  X, 
+  AlertTriangle, 
+  Check, 
+  Star, 
+  Package, 
+  Hourglass, 
+  Hexagon, 
+  Play, 
+  ChevronUp, 
+  ChevronDown,
+  Info
+} from 'lucide-react'
 import TrafficStatsWidget from './TrafficStats'
 
 // ── UsageProgress helper ──────────────────────────────────────────────────
@@ -74,7 +91,7 @@ function ConnectedDetails({ conn, onDisconnect }: { conn: ConnectionState; onDis
                     <span>{t('node_modal.interface')}</span><span style={{ color: 'var(--text-1)' }}><code>{sys.tunInterface}</code></span>
                   </div>
                   <div className="cd-row">
-                    <span>{t('node_modal.mode')}</span><span className="tag tag-cyan" style={{ fontSize: 9 }}>🛡 {t('node_modal.transparent')}</span>
+                    <span>{t('node_modal.mode')}</span><span className="tag tag-cyan" style={{ fontSize: 9, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Shield size={10} /> {t('node_modal.transparent')}</span>
                   </div>
                 </>
               )}
@@ -84,13 +101,13 @@ function ConnectedDetails({ conn, onDisconnect }: { conn: ConnectionState; onDis
                   {conn.inbounds.map((ib, i) => (
                     <div key={i} className="cd-row" style={{ marginBottom: 4 }}>
                       <span style={{ fontSize: 10 }}>{ib.protocol.toUpperCase()}</span>
-                      <span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                         <code style={{ color, fontSize: 10 }}>{ib.listen}:{ib.port}</code>
                         <button
                           className="btn btn-secondary btn-sm"
-                          style={{ marginLeft: 8, padding: '2px 6px', fontSize: 8 }}
+                          style={{ padding: '2px 6px', fontSize: 8 }}
                           onClick={() => navigator.clipboard.writeText(`${ib.listen}:${ib.port}`)}
-                        >📋</button>
+                        ><Copy size={10} /></button>
                       </span>
                     </div>
                   ))}
@@ -106,8 +123,8 @@ function ConnectedDetails({ conn, onDisconnect }: { conn: ConnectionState; onDis
         <TrafficStatsWidget />
       </div>
 
-      <button className="btn btn-danger btn-full" onClick={onDisconnect} style={{ marginTop: 8 }}>
-        ✕ {t('node_modal.disconnect_close')}
+      <button className="btn btn-danger btn-full" onClick={onDisconnect} style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+        <X size={14} /> {t('node_modal.disconnect_close')}
       </button>
     </div>
   )
@@ -211,11 +228,11 @@ function LivePanel({ node, initialSessionId }: { node: ApiNode, initialSessionId
 
       <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', margin: '10px 0' }}>
         <span className={`tag ${node.isActive ? 'tag-green' : 'tag-red'}`} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {node.isActive ? `● ${t('table.active_status').toUpperCase()}` : `○ ${t('table.inactive_status').toUpperCase()}`}
+          {node.isActive ? <Circle size={8} fill="currentColor" /> : <Circle size={8} />} {node.isActive ? t('table.active_status').toUpperCase() : t('table.inactive_status').toUpperCase()}
         </span>
         <span className={`tag ${node.isHealthy ? 'tag-green' : 'tag-yellow'}`} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span style={{ filter: `drop-shadow(0 0 3px ${node.isHealthy ? 'var(--cyan)' : 'var(--red)'})` }}>
-            {node.isHealthy ? '♥' : '✗'}
+          <span style={{ filter: `drop-shadow(0 0 3px ${node.isHealthy ? 'var(--cyan)' : 'var(--red)'})`, display: 'inline-flex' }}>
+            {node.isHealthy ? <Heart size={10} fill="currentColor" /> : <X size={10} />}
           </span>
           {node.isHealthy ? t('table.healthy_status').toUpperCase() : t('table.unhealthy_status').toUpperCase()}
         </span>
@@ -236,7 +253,9 @@ function LivePanel({ node, initialSessionId }: { node: ApiNode, initialSessionId
         </div>
       )}
 
-      {error && !loading && <div style={{ fontSize: 10, color: 'var(--red)', lineHeight: 1.6, marginBottom: 8 }}>⚠ {error}</div>}
+      {error && !loading && <div style={{ fontSize: 10, color: 'var(--red)', lineHeight: 1.6, marginBottom: 8, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+        <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: 2 }} /> {error}
+      </div>}
 
       {live && (
         <>
@@ -255,8 +274,8 @@ function LivePanel({ node, initialSessionId }: { node: ApiNode, initialSessionId
           </div>
           <div className="ncm-stat-row">
             <span>{t('node_modal.dns_handshake')}</span>
-            <span style={{ color: live.handshake_dns ? 'var(--green)' : 'var(--text-3)' }}>
-              {live.handshake_dns ? `✓ ${t('common.yes')}` : `✗ ${t('common.no')}`}
+            <span style={{ color: live.handshake_dns ? 'var(--green)' : 'var(--text-3)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              {live.handshake_dns ? <Check size={12} /> : <X size={12} />} {live.handshake_dns ? t('common.yes') : t('common.no')}
             </span>
           </div>
           {live.version?.commit && (
@@ -468,15 +487,16 @@ export default function NodeConnectModal({
       <div className="ncm-shell">
         <div className="ncm-topbar">
           <div className="ncm-topbar-title">
-            <span style={{ fontSize: 16, marginRight: 6 }}>{countryToFlag(node.country ?? '')}</span>
+            <span className={`fi fi-${countryToIsoCode(node.country ?? '')}`} style={{ marginRight: 10, borderRadius: 2 }} />
             <span>{node.moniker}</span>
             <span className="ncm-topbar-sub">{node.city}, {node.country}</span>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-sm btn-secondary" style={{ color: bookmarked ? 'var(--yellow)' : undefined }} onClick={onBookmark}>
-              {bookmarked ? `★ ${t('filters.listed')}` : `☆ ${t('common.save')}`}
+            <button className="btn btn-sm btn-secondary" style={{ color: bookmarked ? 'var(--yellow)' : undefined, display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={onBookmark}>
+              {bookmarked ? <Star size={12} fill="currentColor" /> : <Star size={12} />}
+              {bookmarked ? t('filters.listed') : t('common.save')}
             </button>
-            <button className="modal-close" onClick={onClose}>✕</button>
+            <button className="modal-close" onClick={onClose}><X size={20} /></button>
           </div>
         </div>
 
@@ -576,7 +596,7 @@ export default function NodeConnectModal({
                     <div className="sub-type-row" style={{ marginBottom: 14 }}>
                       {(['gigabytes', 'hours'] as SubscriptionType[]).map(st => (
                         <div key={st} className={`sub-type-btn ${conn.subscriptionType === st ? 'selected' : ''}`} onClick={() => setConn(s => ({ ...s, subscriptionType: st }))}>
-                          <div className="sub-type-icon">{st === 'gigabytes' ? '📦' : '⏳'}</div>
+                          <div className="sub-type-icon">{st === 'gigabytes' ? <Package size={16} /> : <Hourglass size={16} />}</div>
                           <div className="sub-type-label">{st === 'gigabytes' ? t('node_modal.gigabytes') : t('node_modal.hours')}</div>
                           <div className="sub-type-price">{st === 'gigabytes' ? formatUdvpnPrice(node.gigabytePrices) + ' / GB' : formatUdvpnPrice(node.hourlyPrices) + ' / hr'}</div>
                         </div>
@@ -674,12 +694,12 @@ export default function NodeConnectModal({
 
                 {conn.step === 'wg-options' && (
                   <>
-                    <div className="session-banner">✓ {t('vpn.status')} #{conn.sessionId}</div>
+                    <div className="session-banner" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Check size={14} /> {t('vpn.status')} #{conn.sessionId}</div>
                     {conn.configStr && <div className="wg-config-block" style={{ fontSize: 9, maxHeight: 130, overflowY: 'auto' }}>{conn.configStr}</div>}
-                    <button className="btn btn-purple btn-sm" style={{ marginBottom: 10 }} onClick={() => setShowWgQr(v => !v)}>{showWgQr ? `▲ ${t('node_modal.hide_qr')}` : `▼ ${t('node_modal.show_qr')}`}</button>
+                    <button className="btn btn-purple btn-sm" style={{ marginBottom: 10, display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => setShowWgQr(v => !v)}>{showWgQr ? <ChevronUp size={12} /> : <ChevronDown size={12} />} {showWgQr ? t('node_modal.hide_qr') : t('node_modal.show_qr')}</button>
                     {showWgQr && conn.wgQrCode && <div className="qr-container" style={{ marginBottom: 14 }}><img src={conn.wgQrCode} alt="WG QR" style={{ width: 200, height: 200 }} /></div>}
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button className="btn btn-primary" style={{ flex: 1 }} disabled={tunnelBusy} onClick={handleWgConnect}>{tunnelBusy ? t('vpn.connecting') : `⬡ ${vpnName} up`}</button>
+                      <button className="btn btn-primary" style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} disabled={tunnelBusy} onClick={handleWgConnect}>{tunnelBusy ? t('vpn.connecting') : <><Hexagon size={14} /> {vpnName} up</>}</button>
                       <button className="btn btn-secondary btn-sm" onClick={onClose}>{t('node_modal.qr_only')}</button>
                     </div>
                   </>
@@ -687,21 +707,21 @@ export default function NodeConnectModal({
 
                 {conn.step === 'v2ray-options' && (
                   <>
-                    <div className="session-banner">✓ {t('vpn.status')} #{conn.sessionId}</div>
+                    <div className="session-banner" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Check size={14} /> {t('vpn.status')} #{conn.sessionId}</div>
                     {conn.v2rayQrCodes.length > 0 && (
                       <div style={{ marginBottom: 14 }}>
                         {conn.v2rayQrCodes.map((qr, i) => {
                           const isVMess = conn.shareLinks[i]?.startsWith('vmess://')
                           return (
                             <div key={i} style={{ marginBottom: 8 }}>
-                              <button className="btn btn-purple btn-sm" onClick={() => setExpandedQr(expandedQr === i ? null : i)}>
-                                {expandedQr === i ? `▲ ${t('node_modal.hide_qr')}` : '▼'} Link {isVMess ? 'VMess' : 'VLess'}
+                              <button className="btn btn-purple btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => setExpandedQr(expandedQr === i ? null : i)}>
+                                {expandedQr === i ? <ChevronUp size={12} /> : <ChevronDown size={12} />} Link {isVMess ? 'VMess' : 'VLess'}
                               </button>
                               {expandedQr === i && (
                                 <div className="qr-container" style={{ padding: 12 }}>
                                   <img src={qr} alt={`QR ${i}`} style={{ width: 180, height: 180 }} />
                                   <div style={{ fontSize: 9, wordBreak: 'break-all' }}>{conn.shareLinks[i]}</div>
-                                  <button className="btn btn-secondary btn-sm" onClick={() => navigator.clipboard.writeText(conn.shareLinks[i] ?? '')}>📋 {t('common.copy')}</button>
+                                  <button className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => navigator.clipboard.writeText(conn.shareLinks[i] ?? '')}><Copy size={12} /> {t('common.copy')}</button>
                                 </div>
                               )}
                             </div>
@@ -711,8 +731,8 @@ export default function NodeConnectModal({
                     )}
                     <div className="ncm-divider">{t('node_modal.or_start_proxy')}</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <button className="btn btn-primary" style={{ flex: 1 }} disabled={tunnelBusy} onClick={() => handleV2RayConnect(false)}>{tunnelBusy ? t('common.starting') : `▶ ${t('node_modal.start_proxy')}`}</button>
-                      <button className="btn btn-purple" style={{ flex: 1 }} disabled={tunnelBusy || !binaries?.tun2socksPath} onClick={() => handleV2RayConnect(true)}>{tunnelBusy ? t('common.starting') : `🛡 ${t('node_modal.start_transparent')}`}</button>
+                      <button className="btn btn-primary" style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} disabled={tunnelBusy} onClick={() => handleV2RayConnect(false)}>{tunnelBusy ? t('common.starting') : <><Play size={14} fill="currentColor" /> {t('node_modal.start_proxy')}</>}</button>
+                      <button className="btn btn-purple" style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} disabled={tunnelBusy || !binaries?.tun2socksPath} onClick={() => handleV2RayConnect(true)}>{tunnelBusy ? t('common.starting') : <><Shield size={14} /> {t('node_modal.start_transparent')}</>}</button>
                       <button className="btn btn-secondary btn-sm" onClick={onClose}>{t('node_modal.qr_only')}</button>
                     </div>
                   </>

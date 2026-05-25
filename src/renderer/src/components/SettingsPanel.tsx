@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AppSettings } from '../types'
+import { AlertTriangle, Check } from 'lucide-react'
 
 const DOH_OPTIONS = [
   { label: 'System Default (none)',  ip: null },
@@ -38,7 +39,9 @@ function Toggle({ checked, onChange, label, sub, warn, disabled }: ToggleProps) 
       <div className="setting-text">
         <div className="setting-label">{label}</div>
         {sub && <div className="setting-sub">{sub}</div>}
-        {warn && <div className="setting-warn">⚠ {warn}</div>}
+        {warn && <div className="setting-warn" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <AlertTriangle size={12} /> {warn}
+        </div>}
       </div>
       <button
         className={`toggle-btn ${checked ? 'on' : 'off'}`}
@@ -100,7 +103,9 @@ export default function SettingsPanel({ currentRpc }: Props) {
           <div className="panel-title">{t('settings.title')}</div>
           <div className="panel-sub">{t('settings.sub')}</div>
         </div>
-        {saved && <span style={{ fontSize: 11, color: 'var(--green)' }}>✓ {t('common.save')}d</span>}
+        {saved && <span style={{ fontSize: 11, color: 'var(--green)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Check size={12} /> {t('common.save')}d
+        </span>}
       </div>
 
       {/* ── Internationalization ── */}
