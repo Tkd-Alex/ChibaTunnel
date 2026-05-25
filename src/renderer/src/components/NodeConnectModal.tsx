@@ -149,27 +149,31 @@ function BwBar({ label, value, max, color }: { label: string; value: number; max
   )
 }
 
-function LivePanel({ node }: { node: ApiNode }) {
+function LivePanel({ node, initialSessionId }: { node: ApiNode, initialSessionId?: string | null }) {
   const { t } = useTranslation()
   const [live, setLive]         = useState<LiveInfo | null>(null)
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState<string | null>(null)
 
   useEffect(() => {
-    setLoading(true); setError(null); setLive(null)
-    const addr = node.api.startsWith('http') ? node.api : `https://${node.api}`
-    window.api.fetchNodeInfo(addr)
-      .then((res: any) => {
-        if (res.success && res.info) {
-          const info = (res.info['result'] ?? res.info) as LiveInfo
-          setLive(info)
-        } else {
-          setError(res.error ?? t('node_modal.node_unreachable'))
-        }
-      })
-      .catch(e => setError(String(e)))
-      .finally(() => setLoading(false))
-  }, [node.address, node.api, t])
+    // Small delay to avoid hitting the node simultaneously with handleConnect
+    const timer = setTimeout(() => {
+      setLoading(true); setError(null); setLive(null)
+      const addr = node.api.startsWith('http') ? node.api : `https://${node.api}`
+      window.api.fetchNodeInfo(addr)
+        .then((res: any) => {
+          if (res.success && res.info) {
+            const info = (res.info['result'] ?? res.info) as LiveInfo
+            setLive(info)
+          } else {
+            setError(res.error ?? t('node_modal.node_unreachable'))
+          }
+        })
+        .catch(e => setError(String(e)))
+        .finally(() => setLoading(false))
+    }, initialSessionId ? 1500 : 0)
+    return () => clearTimeout(timer)
+  }, [node.address, node.api, t, initialSessionId])
 
   const up   = parseInt(live?.uplink   ?? '0', 10)
   const down = parseInt(live?.downlink ?? '0', 10)
@@ -468,7 +472,7 @@ export default function NodeConnectModal({
         </div>
 
         <div className="ncm-body">
-          <LivePanel node={node} />
+          <LivePanel node={node} initialSessionId={initialSessionId} />
           <div className="ncm-right-panel">
             {infoOnly ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -571,12 +575,12 @@ export default function NodeConnectModal({
                     </div>
                     <div className="ncm-right-label">{t('node_modal.amount')}</div>
                     <div className="amount-row" style={{ marginBottom: 18 }}>
-                      <button className="btn btn-secondary" style={{ padding: '10px 14px', fontSize: 18 }} onClick={() => setConn(s => ({ ...s, amount: Math.max(1, s.amount - 1) }))}>−</button>
-                      <input type="number" className="amount-input" min={1} value={conn.amount} onChange={e => setConn(s => ({ ...s, amount: Math.max(1, parseInt(e.target.value) || 1) }))} />
-                      <button className="btn btn-secondary" style={{ padding: '10px 14px', fontSize: 18 }} onClick={() => setConn(s => ({ ...s, amount: s.amount + 1 }))}>+</button>
+                      <button className="btn btn-secondary" style={{ padding: '10px 14px', fontSize: 18 }} disabled={conn.step !== 'choose-type'} onClick={() => setConn(s => ({ ...s, amount: Math.max(1, s.amount - 1) }))}>−</button>
+                      <input type="number" className="amount-input" min={1} value={conn.amount} disabled={conn.step !== 'choose-type'} onChange={e => setConn(s => ({ ...s, amount: Math.max(1, parseInt(e.target.value) || 1) }))} />
+                      <button className="btn btn-secondary" style={{ padding: '10px 14px', fontSize: 18 }} disabled={conn.step !== 'choose-type'} onClick={() => setConn(s => ({ ...s, amount: s.amount + 1 }))}>+</button>
                       <span className="amount-unit">{conn.subscriptionType === 'gigabytes' ? 'GB' : 'HR'}</span>
                     </div>
-                    <button className="btn btn-primary btn-full" onClick={() => handleConnect()}>⚡ {t('node_modal.subscribe_connect', { name: vpnName })}</button>
+                    <button className="btn btn-primary btn-full" disabled={conn.step !== 'choose-type'} onClick={() => handleConnect()}>⚡ {t('node_modal.subscribe_connect', { name: vpnName })}</button>
                   </>
                 )}
 

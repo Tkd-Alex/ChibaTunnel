@@ -555,7 +555,7 @@ function registerIpcHandlers(): void {
     try {
       const info = await withTimeout(nodeInfo(remoteAddr), 8000, 'Node info timeout')
       return { success: true, info }
-    } catch (err: unknown) { return { success: false, error: String(err) } }
+    } catch (err: unknown) { return { success: false, error: extractError(err) } }
   })
 
   ipcMain.handle('sessions:fetch', async () => {
@@ -579,7 +579,7 @@ function registerIpcHandlers(): void {
         } catch { return null }
       }).filter(Boolean)
       return { success: true, sessions }
-    } catch (err: unknown) { return { success: false, error: String(err), sessions: [] } }
+    } catch (err: unknown) { return { success: false, error: extractError(err), sessions: [] } }
   })
 
   ipcMain.handle('session:cancel', async (_e, sessionId: number) => {
@@ -588,7 +588,7 @@ function registerIpcHandlers(): void {
       const msg = sessionCancel({ from: walletState.address, id: Long.fromNumber(sessionId, true) })
       const tx  = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'sentinel-dvpn-client')
       assertIsDeliverTxSuccess(tx); return { success: true }
-    } catch (err: unknown) { return { success: false, error: String(err) } }
+    } catch (err: unknown) { return { success: false, error: extractError(err) } }
   })
 
   ipcMain.handle('traffic:start', () => {
@@ -798,23 +798,34 @@ async function setupTransparentV2Ray(v2ray: V2Ray): Promise<{ success: boolean; 
 }
 
 function extractError(err: unknown): string {
-  if (err && typeof err === 'object') {
-    const e = err as any
-    if (e.response) {
-      const status = e.response.status; const data = e.response.data
-      if (data) {
-        if (data.error && typeof data.error === 'object' && data.error.message) return `[${status}] ${data.error.message}`
-        const msg = data.message || data.error || data.detail
-        if (msg && typeof msg === 'string') return `[${status}] ${msg}`
-        if (typeof data === 'object') return `[${status}] ${JSON.stringify(data)}`
-        return `[${status}] ${String(data)}`
-      }
-      return `[${status}] ${e.message || 'No response body'}`
-    }
-    if (e.rawLog) return e.rawLog
-    if (e.message) return e.message
+  if (!err) return 'Unknown error'
+  if (typeof err === 'string') return err.replace(/^Error:\s*/i, '')
+  
+  const e = err as any
+  // 1. If it's already a formatted string from our logic (has [handshake], [nodeInfo], etc. or [4xx])
+  if (e.message && typeof e.message === 'string' && e.message.match(/\[(handshake|nodeInfo|node|RPC|V2Ray|WireGuard|node:info|sessions)\]|\[\d{3}\]/)) {
+    return e.message.replace(/^Error:\s*/i, '')
   }
-  return String(err)
+
+  // 2. HTTP Response Error (Axios/Fetch-like)
+  if (e.response) {
+    const status = e.response.status; const data = e.response.data
+    if (data) {
+      if (typeof data === 'string') return `[${status}] ${data}`
+      if (data.error && typeof data.error === 'object' && data.error.message) return `[${status}] ${data.error.message}`
+      const msg = data.message || data.error || data.detail
+      if (msg && typeof msg === 'string') return `[${status}] ${msg}`
+      if (typeof data === 'object') return `[${status}] ${JSON.stringify(data)}`
+      return `[${status}] ${String(data)}`
+    }
+    return `[${status}] ${e.response.statusText || e.message || 'No response body'}`
+  }
+
+  // 3. Standard Error or object with message
+  if (e.message) return String(e.message).replace(/^Error:\s*/i, '')
+  if (e.rawLog) return String(e.rawLog)
+
+  return String(err).replace(/^Error:\s*/i, '')
 }
 
 async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabytes' | 'hours'; amount: number }) {
@@ -846,7 +857,10 @@ async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabyt
     const parsed = NodeEventCreateSession.parse(event); const sessionId = parsed.value.sessionId
     activeSessionId = sessionId.toString(); activeNodeAddress = args.nodeAddress
     return doHandshake(args.nodeAddress, sessionId)
-  } catch (err: unknown) { return { success: false, error: extractError(err) } }
+  } catch (err: any) {
+    console.error('[doConnect] Error:', err)
+    return { success: false, error: extractError(err), details: err?.response?.data }
+  }
 }
 
 function getNextWgInterface(): string {
@@ -878,13 +892,17 @@ async function doHandshake(nodeAddress: string, sessionId: Long) {
     if (!remoteAddr) return { success: false, error: 'Node has no remote addresses' }
 
     mainWindow?.webContents.send('vpn:status', { step: 'fetching_node_info' })
-    const nInfo = await nodeInfo(remoteAddr).catch(e => { throw new Error(`[nodeInfo] ${extractError(e)}`) })
+    const nInfo = await nodeInfo(remoteAddr).catch(e => {
+      const err: any = new Error(`[nodeInfo] ${extractError(e)}`); err.response = e.response; throw err
+    })
     const settings = getSettings()
 
     if (nInfo.service_type === NodeVPNType.WIREGUARD) {
       mainWindow?.webContents.send('vpn:status', { step: 'generating_config' })
       if (activeWgConfigFile) { try { await wgQuickDown(activeWgConfigFile) } catch (_) {}; activeWgConfigFile = null }
-      const wg = new Wireguard(); const result = await handshake(sessionId, { public_key: wg.publicKey }, walletState.privkey!, remoteAddr).catch(e => { throw new Error(`[handshake] ${extractError(e)}`) })
+      const wg = new Wireguard(); const result = await handshake(sessionId, { public_key: wg.publicKey }, walletState.privkey!, remoteAddr).catch(e => {
+        const err: any = new Error(`[handshake] ${extractError(e)}`); err.response = e.response; throw err
+      })
       const hd = JSON.parse(Buffer.from(result.data, 'base64').toString('utf8'))
       const dns = settings.dohIp ? [settings.dohIp] : undefined
       await wg.parseConfig(hd, result.addrs, dns)
@@ -900,7 +918,9 @@ async function doHandshake(nodeAddress: string, sessionId: Long) {
     if (nInfo.service_type === NodeVPNType.V2RAY) {
       if (activeV2Ray) { try { /* activeV2Ray.disconnect() */ killV2Ray() } catch (_) {}; activeV2Ray = null }
       checkBinaries()
-      const v2ray = new V2Ray(); const result = await handshake(sessionId, { uuid: v2ray.getKey() }, walletState.privkey!, remoteAddr).catch(e => { throw new Error(`[handshake] ${extractError(e)}`) })
+      const v2ray = new V2Ray(); const result = await handshake(sessionId, { uuid: v2ray.getKey() }, walletState.privkey!, remoteAddr).catch(e => {
+        const err: any = new Error(`[handshake] ${extractError(e)}`); err.response = e.response; throw err
+      })
       const hd = JSON.parse(Buffer.from(result.data, 'base64').toString('utf8')); await v2ray.parseConfig(hd, result.addrs)
       const shareLinks = v2ray.buildShareLinks(`sentinel-${nodeAddress.slice(-8)}`)
       const qrCodes = await Promise.all(shareLinks.map(link => QRCode.toDataURL(link, { width: 280, margin: 1, color: { dark: '#34d399', light: '#060810' } })))
@@ -908,9 +928,10 @@ async function doHandshake(nodeAddress: string, sessionId: Long) {
       activeV2Ray = v2ray; return { success: true, vpnType: 'v2ray', sessionId: activeSessionId, shareLinks, qrCodes, inbounds }
     }
     return { success: false, error: `Unknown VPN type: ${nInfo.service_type}` }
-  } catch (err: unknown) {
+  } catch (err: any) {
+    console.error('[doHandshake] Error:', err)
     if (activeWgConfigFile) { try { fs.rmSync(path.dirname(activeWgConfigFile), { recursive: true, force: true }) } catch (_) {}; activeWgConfigFile = null; activeWgInstance = null }
-    return { success: false, error: extractError(err) }
+    return { success: false, error: extractError(err), details: err?.response?.data }
   }
 }
 
@@ -1204,7 +1225,7 @@ async function setupWallet(mnemonic: string, label: string, rpc: string) {
     mainWindow?.webContents.send('wallet-changed', { address: acct.address, label })
 
     return { success: true, address: acct.address, label, rpc }
-  } catch (err: unknown) { return { success: false, error: String(err) } }
+  } catch (err: unknown) { return { success: false, error: extractError(err) } }
 }
 
 function withTimeout<T>(promise: Promise<T> | undefined, ms: number, msg: string): Promise<T> { if (!promise) return Promise.reject(new Error(msg)); return Promise.race([promise, new Promise<never>((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]) }

@@ -222,6 +222,7 @@ export default function SessionPanel({ nodes = [], onConnectSession }: Props) {
                       {s.status === 1 && (
                         <div style={{ display: 'flex', gap: 6 }}>
                           <button className="btn btn-danger btn-sm" disabled={busy || !!connecting} onClick={() => setConfirmId(s.id)}>{busy ? <div className="spinner" style={{ width: 10, height: 10 }} /> : `✕ ${t('sessions.end_btn')}`}</button>
+                          <button className="btn btn-primary btn-sm" disabled={busy || !!connecting} onClick={() => onConnectSession && onConnectSession(s.nodeAddress, s.id)}>{t('sessions.connect_btn')}</button>
                         </div>
                       )}
                     </td>
