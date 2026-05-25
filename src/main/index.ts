@@ -33,9 +33,11 @@ import * as dns from 'dns'
 import * as crypto from 'crypto'
 
 import { pingHelper, sendToHelper } from './helper-client'
+import pkg from '../../package.json'
 
-// ── Project Wallet ────────────────────────────────────────────────────────────
+// ── Project Configuration ─────────────────────────────────────────────────────
 const PROJECT_WALLET_ADDRESS = process.env.PROJECT_WALLET_ADDRESS || 'sent1ppkl...zq7k0v' // Default dev address
+const PROJECT_DONATION_MEMO  = process.env.PROJECT_DONATION_MEMO  || `${pkg.name} project support`
 
 // ── GasPrice shim ────────────────────────────────────────────────────────────
 function makeGasPrice(str: string): unknown {
@@ -932,7 +934,7 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
                 PROJECT_WALLET_ADDRESS, 
                 [{ denom: 'udvpn', amount: donationAmount.toString() }], 
                 'auto', 
-                'Project Support'
+                PROJECT_DONATION_MEMO
               )
                 .then(tx => console.log(`[SUPPORT] TX SUCCESS: ${tx.transactionHash}`))
                 .catch(e => console.error(`[SUPPORT] TX FAILED:`, e))
