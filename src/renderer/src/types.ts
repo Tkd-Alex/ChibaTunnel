@@ -52,7 +52,7 @@ export interface BinaryStatus {
 export interface AppSettings {
   killSwitch: boolean; autoReconnect: boolean
   splitTunnel: boolean; splitRoutes: string
-  dohIp: string | null
+  dohIp: string | null; hideSupportOption: boolean
 }
 
 export interface TrafficStats { rx: number; tx: number; source: string }

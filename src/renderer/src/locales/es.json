@@ -193,6 +193,7 @@
     "st_sub": "Solo enrutar subredes específicas a través de la VPN. Solo WireGuard.",
     "st_routes_label": "CIDR enrutados (separados por comas)",
     "st_routes_hint": "Las rutas predeterminadas excluyen los rangos locales RFC-1918.",
+    "hide_support": "Ocultar opción de soporte al proyecto",
     "binaries_title": "Gestión de Binarios VPN",
     "about_title": "Acerca de",
     "about_footer": "Mnemónico cifrado en el sistema. La clave privada nunca sale del proceso principal."
@@ -264,6 +265,8 @@
     "per_gb": "Por Gigabyte",
     "per_hr": "Por Hora",
     "indicative_prices": "Precios indicativos del caché de la API.",
+    "support_project": "Apoyar el desarrollo del proyecto",
+    "support_desc": "¡Añade un 10% ({{amount}} DVPN) a esta transacción para apoyar el proyecto Sentinel dVPN Client. Tu contribución nos ayuda a mantener e mejorar esta aplicación!",
     "subscription_type": "Tipo de suscripción",
     "gigabytes": "Gigabytes",
     "hours": "Horas",

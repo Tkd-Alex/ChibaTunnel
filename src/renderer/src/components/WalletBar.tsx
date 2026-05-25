@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { WalletInfo } from '../types'
-import { formatBalance, truncateAddress } from '../utils'
+import { formatBalance } from '../utils'
+import { Hexagon, RefreshCw, Trash2 } from 'lucide-react'
 
 interface Props {
   onForget: () => void
@@ -55,8 +56,8 @@ export default function WalletBar({ onForget }: Props) {
 
       {/* P2P sessions counter */}
       {info && (
-        <div className="sessions-badge" title={t('wallet.active_sessions_hint')}>
-          <span>⬡</span>
+        <div className="sessions-badge" title={t('wallet.active_sessions_hint')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Hexagon size={12} />
           <span>
             {Array.isArray(info.sessions) ? info.sessions.length : 0} {Array.isArray(info.sessions) && info.sessions.length === 1 ? t('wallet.p2p_session') : t('wallet.p2p_session_plural')}
           </span>
@@ -71,11 +72,11 @@ export default function WalletBar({ onForget }: Props) {
       )}
 
       <div className="wallet-bar-actions">
-        <button className="btn btn-secondary btn-sm" onClick={load} title={t('wallet.refresh_info')}>
-          ↻ {t('common.refresh')}
+        <button className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={load} title={t('wallet.refresh_info')}>
+          <RefreshCw size={10} /> {t('common.refresh')}
         </button>
-        {/* <button className="btn btn-danger btn-sm" onClick={onForget} title="Remove stored wallet">
-          🗑 Forget
+        {/* <button className="btn btn-danger btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={onForget} title="Remove stored wallet">
+          <Trash2 size={10} /> Forget
         </button> */}
       </div>
     </div>

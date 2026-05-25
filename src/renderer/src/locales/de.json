@@ -193,6 +193,7 @@
     "st_sub": "Nur spezifizierte Subnetze über VPN leiten. Nur WireGuard.",
     "st_routes_label": "Geroutete CIDRs (kommagetrennt)",
     "st_routes_hint": "Standardrouten schließen RFC-1918 lokale Bereiche aus.",
+    "hide_support": "Projektunterstützung ausblenden",
     "binaries_title": "VPN-Binärdateien-Verwaltung",
     "about_title": "Über",
     "about_footer": "Wiederherstellungsphrase verschlüsselt im System gespeichert. Der private Schlüssel verlässt niemals den Hauptprozess."
@@ -264,6 +265,8 @@
     "per_gb": "Pro Gigabyte",
     "per_hr": "Pro Stunde",
     "indicative_prices": "Richtpreise aus dem API-Cache.",
+    "support_project": "Projektentwicklung unterstützen",
+    "support_desc": "Fügen Sie dieser Transaktion 10% ({{amount}} DVPN) hinzu, um das Sentinel dVPN Client-Projekt zu unterstützen. Ihr Beitrag hilft uns, diese App zu warten und zu verbessern!",
     "subscription_type": "Abonnement-Typ",
     "gigabytes": "Gigabyte",
     "hours": "Stunden",

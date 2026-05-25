@@ -1,4 +1,5 @@
 import React from 'react'
+import { AlertTriangle, Info } from 'lucide-react'
 
 interface Props {
   title:       string
@@ -18,7 +19,9 @@ export default function ConfirmModal({
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onCancel() }}>
       <div className="confirm-modal">
-        <div className="confirm-icon">{danger ? '⚠' : 'ⓘ'}</div>
+        <div className="confirm-icon">
+          {danger ? <AlertTriangle size={32} color="var(--red)" /> : <Info size={32} color="var(--cyan)" />}
+        </div>
         <div className="confirm-title">{title}</div>
         <div className="confirm-message">{message}</div>
         <div className="confirm-actions">

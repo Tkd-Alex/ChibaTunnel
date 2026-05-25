@@ -53,7 +53,7 @@ const api = {
   disableKillSwitch: () => ipcRenderer.invoke('killswitch:disable'),
 
   // VPN
-  connectNode: (args: { nodeAddress: string; subscriptionType: 'gigabytes' | 'hours'; amount: number }) =>
+  connectNode: (args: { nodeAddress: string; subscriptionType: 'gigabytes' | 'hours'; amount: number; donate?: boolean }) =>
     ipcRenderer.invoke('node:connect', args),
   connectSession: (args: { nodeAddress: string; sessionId: number }) =>
     ipcRenderer.invoke('node:connectSession', args),
