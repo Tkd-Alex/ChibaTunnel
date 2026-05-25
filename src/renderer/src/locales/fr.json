@@ -193,6 +193,7 @@
     "st_sub": "Router uniquement certains sous-réseaux via le VPN. WireGuard seulement.",
     "st_routes_label": "CIDRs routés (séparés par des virgules)",
     "st_routes_hint": "Les routes par défaut excluent les plages locales RFC-1918.",
+    "hide_support": "Masquer l'option de support du projet",
     "binaries_title": "Gestion des binaires VPN",
     "about_title": "À propos",
     "about_footer": "Mnémonique chiffré sur le système. La clé privée ne quitte jamais le processus principal."
@@ -264,6 +265,8 @@
     "per_gb": "Par Gigaoctet",
     "per_hr": "Par Heure",
     "indicative_prices": "Prix indicatifs du cache API.",
+    "support_project": "Soutenir le développement du projet",
+    "support_desc": "Ajoutez 10% ({{amount}} DVPN) à cette transaction per soutenir le projet Sentinel dVPN Client. Votre contribution nous aide à maintenir et améliorer cette application !",
     "subscription_type": "Type d'abonnement",
     "gigabytes": "Gigaoctets",
     "hours": "Heures",

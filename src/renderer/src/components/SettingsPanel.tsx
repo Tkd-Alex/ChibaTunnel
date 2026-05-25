@@ -60,7 +60,8 @@ export default function SettingsPanel({ currentRpc }: Props) {
   const [settings, setSettings] = useState<AppSettings>({
     killSwitch: false, autoReconnect: true,
     splitTunnel: false, splitRoutes: '10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
-    dohIp: null
+    dohIp: null, 
+    hideSupportOption: false
   })
   const [saved,   setSaved]   = useState(false)
   const [ksError, setKsError] = useState<string | null>(null)
@@ -141,6 +142,12 @@ export default function SettingsPanel({ currentRpc }: Props) {
           sub={t('settings.ar_sub')}
           checked={settings.autoReconnect}
           onChange={v => save({ autoReconnect: v })}
+        />
+
+        <Toggle
+          label={t('settings.hide_support')}
+          checked={settings.hideSupportOption}
+          onChange={v => save({ hideSupportOption: v })}
         />
       </div>
 

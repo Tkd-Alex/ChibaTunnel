@@ -350,11 +350,17 @@ export default function NodeConnectModal({
   const [hasConfig, setHasConfig]     = useState(false)
   const [sessionInfo, setSessionInfo] = useState<any>(null)
   const [loadingSession, setLoadingSession] = useState(false)
+  const [donate, setDonate] = useState(true)
+  const [globalSettings, setGlobalSettings] = useState<any>(null)
 
   const vpnName = node.type === 1 ? 'WireGuard' : 'V2Ray'
 
   useEffect(() => {
     window.api.checkBinaries().then((b: any) => setBinaries(b))
+    window.api.getSettings().then(s => {
+      setGlobalSettings(s)
+      if (s?.hideSupportOption) setDonate(false)
+    })
     if (infoOnly) {
       setLoadingSession(true)
       window.api.getWalletInfo().then((res: any) => {
@@ -388,7 +394,8 @@ export default function NodeConnectModal({
         res = await window.api.connectNode({
           nodeAddress:      node.address,
           subscriptionType: conn.subscriptionType,
-          amount:           conn.amount
+          amount:           conn.amount,
+          donate:           donate
         })
       }
 
@@ -407,7 +414,7 @@ export default function NodeConnectModal({
     } catch (e: any) {
       setConn(s => ({ ...s, step: 'error', error: e.message ?? String(e) }))
     }
-  }, [node.address, conn.subscriptionType, conn.amount])
+  }, [node.address, conn.subscriptionType, conn.amount, donate])
 
   useEffect(() => {
     if (initialSessionId) handleConnect(initialSessionId)
@@ -418,6 +425,8 @@ export default function NodeConnectModal({
     window.addEventListener('keydown', handleEsc)
     return () => window.removeEventListener('keydown', handleEsc)
   }, [onClose])
+
+  const donationAmount = (parseFloat(formatUdvpnPrice(node.gigabytePrices)) * conn.amount * 0.1).toFixed(2)
 
   const handleWgConnect = useCallback(async () => {
     setTunnelBusy(true)
@@ -574,13 +583,37 @@ export default function NodeConnectModal({
                       ))}
                     </div>
                     <div className="ncm-right-label">{t('node_modal.amount')}</div>
-                    <div className="amount-row" style={{ marginBottom: 18 }}>
+                    <div className="amount-row" style={{ marginBottom: 12 }}>
                       <button className="btn btn-secondary" style={{ padding: '10px 14px', fontSize: 18 }} disabled={conn.step !== 'choose-type'} onClick={() => setConn(s => ({ ...s, amount: Math.max(1, s.amount - 1) }))}>−</button>
                       <input type="number" className="amount-input" min={1} value={conn.amount} disabled={conn.step !== 'choose-type'} onChange={e => setConn(s => ({ ...s, amount: Math.max(1, parseInt(e.target.value) || 1) }))} />
                       <button className="btn btn-secondary" style={{ padding: '10px 14px', fontSize: 18 }} disabled={conn.step !== 'choose-type'} onClick={() => setConn(s => ({ ...s, amount: s.amount + 1 }))}>+</button>
                       <span className="amount-unit">{conn.subscriptionType === 'gigabytes' ? 'GB' : 'HR'}</span>
                     </div>
-                    <button className="btn btn-primary btn-full" disabled={conn.step !== 'choose-type'} onClick={() => handleConnect()}>⚡ {t('node_modal.subscribe_connect', { name: vpnName })}</button>
+
+                    {!globalSettings?.hideSupportOption && (
+                      <div className="support-box">
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                          <input 
+                            type="checkbox" 
+                            id="support-check" 
+                            checked={donate} 
+                            onChange={e => setDonate(e.target.checked)}
+                            style={{ marginTop: 4, cursor: 'pointer' }}
+                          />
+                          <label htmlFor="support-check" style={{ cursor: 'pointer' }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--green)', letterSpacing: '0.05em' }}>{t('node_modal.support_project').toUpperCase()}</div>
+                            <div style={{ fontSize: 10, color: 'var(--text-3)', lineHeight: 1.5, marginTop: 2 }}>
+                              {t('node_modal.support_desc', { amount: donationAmount })}
+                            </div>
+                          </label>
+                        </div>
+                      </div>
+                    )}
+
+                    <button className="btn btn-primary btn-full" style={{ marginTop: 12 }} disabled={conn.step !== 'choose-type'} onClick={() => handleConnect()}>⚡ {t('node_modal.subscribe_connect', { name: vpnName })}</button>
+                    <style dangerouslySetInnerHTML={{ __html: `
+                      .support-box { background: var(--bg-1); border: 1px solid var(--green); border-radius: var(--radius-sm); padding: 10px; margin-bottom: 4px; box-shadow: inset 0 0 10px rgba(0,255,163,0.05); }
+                    `}} />
                   </>
                 )}
 

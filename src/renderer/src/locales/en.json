@@ -193,6 +193,7 @@
     "st_sub": "Only route specified subnets through VPN. WireGuard only — replaces AllowedIPs = 0.0.0.0/0 with your routes.",
     "st_routes_label": "Routed CIDRs (comma-separated)",
     "st_routes_hint": "Default routes exclude RFC-1918 local ranges. Reconnect to apply. To add the entire internet: add 0.0.0.0/0 (same as off).",
+    "hide_support": "Hide project support option",
     "binaries_title": "VPN Binaries Management",
     "about_title": "About",
     "about_footer": "Mnemonic encrypted via OS keychain (Electron safeStorage). Private key never leaves the main process. All node API calls are proxied through the Electron main process."
@@ -264,6 +265,8 @@
     "per_gb": "Per Gigabyte",
     "per_hr": "Per Hour",
     "indicative_prices": "Indicative prices from API cache.",
+    "support_project": "Support Project Development",
+    "support_desc": "Add 10% ({{amount}} DVPN) to this transaction to support the Sentinel dVPN Client project. Your contribution helps us maintain and improve this app!",
     "subscription_type": "Subscription Type",
     "gigabytes": "Gigabytes",
     "hours": "Hours",

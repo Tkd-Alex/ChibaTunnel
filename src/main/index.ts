@@ -22,6 +22,7 @@ import {
 } from '@sentinel-official/sentinel-js-sdk'
 import { DirectSecp256k1HdWallet } from '@cosmjs/proto-signing'
 import { assertIsDeliverTxSuccess } from '@cosmjs/stargate'
+import { MsgSend } from 'cosmjs-types/cosmos/bank/v1beta1/tx'
 import Long from 'long'
 import QRCode from 'qrcode'
 import { execFile, spawn, spawnSync, execSync, type ChildProcess } from 'child_process'
@@ -32,6 +33,9 @@ import * as dns from 'dns'
 import * as crypto from 'crypto'
 
 import { pingHelper, sendToHelper } from './helper-client'
+
+// ── Project Wallet ────────────────────────────────────────────────────────────
+const PROJECT_WALLET_ADDRESS = process.env.PROJECT_WALLET_ADDRESS || 'sent1ppkl...zq7k0v' // Default dev address
 
 // ── GasPrice shim ────────────────────────────────────────────────────────────
 function makeGasPrice(str: string): unknown {
@@ -120,6 +124,7 @@ interface AppSettings {
   splitTunnel:    boolean
   splitRoutes:    string
   dohIp:          string | null
+  hideSupportOption: boolean
 }
 const DEFAULT_SETTINGS: AppSettings = {
   killSwitch:    false,
@@ -127,6 +132,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   splitTunnel:   false,
   splitRoutes:   '10.0.0.0/8,172.16.0.0/12,192.168.0.0/16',
   dohIp:         null,
+  hideSupportOption: false,
 }
 
 const store = new Store({ name: 'sentinel-dvpn' })
@@ -600,7 +606,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.on('vpn:dns-retry-approved', () => { /* Logic handled via promise in wgQuickUp */ })
 
-  ipcMain.handle('node:connect', async (_e, args: { nodeAddress: string; subscriptionType: 'gigabytes' | 'hours'; amount: number }) => {
+  ipcMain.handle('node:connect', async (_e, args: { nodeAddress: string; subscriptionType: 'gigabytes' | 'hours'; amount: number; donate?: boolean }) => {
     if (!walletState.client || !walletState.address || !walletState.privkey) return { success: false, error: 'Wallet not initialized' }
     lastConnectArgs = args; reconnectAttempts = 0; wasConnected = false; return doConnect(args)
   })
@@ -828,7 +834,7 @@ function extractError(err: unknown): string {
   return String(err).replace(/^Error:\s*/i, '')
 }
 
-async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabytes' | 'hours'; amount: number }) {
+async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabytes' | 'hours'; amount: number; donate?: boolean }) {
   try {
     mainWindow?.webContents.send('vpn:status', { step: 'fetching_node' })
     const chainNode = await withTimeout(walletState.client!.sentinelQuery?.node.node(args.nodeAddress), RPC_TIMEOUT_MS, 'RPC timeout fetching node')
@@ -846,6 +852,7 @@ async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabyt
       hours: args.subscriptionType === 'hours' ? Long.fromNumber(Math.max(1, args.amount), true) : undefined,
       maxPrice: udvpnPrice, fee: 'auto', memo: 'sentinel-dvpn-client'
     }
+
     mainWindow?.webContents.send('vpn:status', { step: 'signing_tx' })
     mainWindow?.webContents.send('vpn:status', { step: 'broadcasting_tx' })
     const tx = await walletState.client!.signAndBroadcast(walletState.address!, [nodeStartSession(txArgs)], 'auto', 'sentinel-dvpn-client')
@@ -856,7 +863,7 @@ async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabyt
     if (!event) return { success: false, error: 'Session creation event not found' }
     const parsed = NodeEventCreateSession.parse(event); const sessionId = parsed.value.sessionId
     activeSessionId = sessionId.toString(); activeNodeAddress = args.nodeAddress
-    return doHandshake(args.nodeAddress, sessionId)
+    return doHandshake(args.nodeAddress, sessionId, args.donate, args.amount, args.subscriptionType)
   } catch (err: any) {
     console.error('[doConnect] Error:', err)
     return { success: false, error: extractError(err), details: err?.response?.data }
@@ -882,7 +889,7 @@ function getNextWgInterface(): string {
   return 'sentinel9'
 }
 
-async function doHandshake(nodeAddress: string, sessionId: Long) {
+async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolean, amount?: number, subType?: 'gigabytes' | 'hours') {
   try {
     activeSessionId = sessionId.toString(); activeNodeAddress = nodeAddress
     mainWindow?.webContents.send('vpn:status', { status: 'node_handshake', step: 'handshaking', sessionId: activeSessionId })
@@ -896,6 +903,45 @@ async function doHandshake(nodeAddress: string, sessionId: Long) {
       const err: any = new Error(`[nodeInfo] ${extractError(e)}`); err.response = e.response; throw err
     })
     const settings = getSettings()
+
+    const finalize = async (res: any) => {
+      if (res.success && donate && amount && subType && walletState.client && walletState.address) {
+        try {
+          const prices = subType === 'gigabytes' ? chainNode.gigabytePrices : chainNode.hourlyPrices
+          const udvpnPrice = (prices ?? []).find((p: Price) => p.denom === 'udvpn')
+          
+          if (udvpnPrice) {
+            console.log(`\n[SUPPORT] DEBUG DATA:`, {
+              subType, amount,
+              priceObject: JSON.stringify(udvpnPrice),
+              recipient: PROJECT_WALLET_ADDRESS
+            })
+
+            // In Sentinel v3, quoteValue is the actual price in udvpn, 
+            // while baseValue is the scale factor (usually 10^15).
+            const unitPrice = BigInt(udvpnPrice.quoteValue)
+            const qty = BigInt(amount)
+            const donationAmount = (unitPrice * qty) / 10n // 10%
+
+            if (donationAmount > 0n) {
+              console.log(`[SUPPORT] Calculated Donation: ${donationAmount.toString()} udvpn`)
+              mainWindow?.webContents.send('vpn:warning', { message: `Project donation triggered: ${donationAmount.toString()} udvpn` })
+
+              walletState.client.sendTokens(
+                walletState.address, 
+                PROJECT_WALLET_ADDRESS, 
+                [{ denom: 'udvpn', amount: donationAmount.toString() }], 
+                'auto', 
+                'Project Support'
+              )
+                .then(tx => console.log(`[SUPPORT] TX SUCCESS: ${tx.transactionHash}`))
+                .catch(e => console.error(`[SUPPORT] TX FAILED:`, e))
+            }
+          }
+        } catch (e) { console.error('[SUPPORT] Runtime error in donation logic:', e) }
+      }
+      return res
+    }
 
     if (nInfo.service_type === NodeVPNType.WIREGUARD) {
       mainWindow?.webContents.send('vpn:status', { step: 'generating_config' })
@@ -912,7 +958,7 @@ async function doHandshake(nodeAddress: string, sessionId: Long) {
       const qrCode = await QRCode.toDataURL(configStr, { width: 300, margin: 2, color: { dark: '#000000', light: '#ffffff' } })
       const ifName = getNextWgInterface(); const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `sentinel-${ifName}-`))
       activeWgConfigFile = path.join(tmpDir, `${ifName}.conf`); fs.writeFileSync(activeWgConfigFile, configStr, { mode: 0o600 }); activeWgInstance = wg
-      return { success: true, vpnType: 'wireguard', sessionId: activeSessionId, configStr, qrCode }
+      return finalize({ success: true, vpnType: 'wireguard', sessionId: activeSessionId, configStr, qrCode })
     }
 
     if (nInfo.service_type === NodeVPNType.V2RAY) {
@@ -925,7 +971,7 @@ async function doHandshake(nodeAddress: string, sessionId: Long) {
       const shareLinks = v2ray.buildShareLinks(`sentinel-${nodeAddress.slice(-8)}`)
       const qrCodes = await Promise.all(shareLinks.map(link => QRCode.toDataURL(link, { width: 280, margin: 1, color: { dark: '#34d399', light: '#060810' } })))
       const inbounds = (v2ray.config?.inbounds ?? []).filter((ib: any) => ib.protocol !== 'dokodemo-door').map((ib: any) => ({ protocol: ib.protocol, listen: ib.listen, port: ib.port }))
-      activeV2Ray = v2ray; return { success: true, vpnType: 'v2ray', sessionId: activeSessionId, shareLinks, qrCodes, inbounds }
+      activeV2Ray = v2ray; return finalize({ success: true, vpnType: 'v2ray', sessionId: activeSessionId, shareLinks, qrCodes, inbounds })
     }
     return { success: false, error: `Unknown VPN type: ${nInfo.service_type}` }
   } catch (err: any) {

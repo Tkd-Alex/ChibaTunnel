@@ -193,6 +193,7 @@
     "st_sub": "Invia solo i sottoreticoli specificati attraverso la VPN. Solo WireGuard — sostituisce AllowedIPs = 0.0.0.0/0 con le tue rotte.",
     "st_routes_label": "CIDR da instradare (separati da virgola)",
     "st_routes_hint": "Le rotte predefinite escludono i range locali RFC-1918. Riconnetti per applicare. Per aggiungere l'intera rete: inserisci 0.0.0.0/0 (come disattivato).",
+    "hide_support": "Nascondi opzione supporto progetto",
     "binaries_title": "Gestione Binari VPN",
     "about_title": "Informazioni",
     "about_footer": "Mnemonic cifrato tramite keychain dell'OS (Electron safeStorage). La chiave privata non lascia mai il processo main. Tutte le chiamate API ai nodi sono effettuate tramite il processo main di Electron."
@@ -264,6 +265,8 @@
     "per_gb": "Per Gigabyte",
     "per_hr": "Per Ora",
     "indicative_prices": "Prezzi indicativi dalla cache API.",
+    "support_project": "Supporta lo sviluppo del progetto",
+    "support_desc": "Aggiungi il 10% ({{amount}} DVPN) a questa transazione per supportare il progetto Sentinel dVPN Client. Il tuo contributo ci aiuta a mantenere e migliorare questa app!",
     "subscription_type": "Tipo Sottoscrizione",
     "gigabytes": "Gigabyte",
     "hours": "Ore",

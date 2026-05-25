@@ -193,6 +193,7 @@
     "st_sub": "仅通过 VPN 路由指定的子网。仅限 WireGuard。",
     "st_routes_label": "路由 CIDR (逗号分隔)",
     "st_routes_hint": "默认路由排除 RFC-1918 本地范围。重新连接生效。",
+    "hide_support": "隐藏项目支持选项",
     "binaries_title": "VPN 二进制文件管理",
     "about_title": "关于",
     "about_footer": "助记词通过 OS 钥匙串加密。私钥绝不离开主进程。所有 API 调用通过 Electron 主进程代理。"
@@ -264,6 +265,8 @@
     "per_gb": "每 GB",
     "per_hr": "每小时",
     "indicative_prices": "API 缓存提供的参考价格。",
+    "support_project": "支持项目开发",
+    "support_desc": "为此交易增加 10% ({{amount}} DVPN) 以支持 Sentinel dVPN Client 项目。您的贡献将帮助我们维护和改进此应用！",
     "subscription_type": "订阅类型",
     "gigabytes": "GB",
     "hours": "小时",
