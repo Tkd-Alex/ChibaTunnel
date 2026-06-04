@@ -51,7 +51,10 @@
     "fetching": "Pläne werden abgerufen...",
     "details": "Details",
     "price_per_month": "{{amount}} / Monat",
-    "no_plans": "Keine aktiven Pläne gefunden."
+    "no_plans": "Keine aktiven Pläne gefunden.",
+    "confirm_sub_title": "Plan abonnieren?",
+    "confirm_sub_msg": "Sind Sie sicher, dass Sie Plan #{{id}} abonnieren möchten? Dies wird eine On-Chain-Transaktion senden.",
+    "subscribe_success": "Abonnement-Transaktion erfolgreich gesendet!"
   },
   "subs": {
     "title": "Meine Abonnements",

@@ -44,6 +44,7 @@ const api = {
   fetchPlans:         () => ipcRenderer.invoke('plans:fetch'),
   fetchPlanNodes:     (planId: number) => ipcRenderer.invoke('plan:nodes', planId),
   fetchSubscriptions: () => ipcRenderer.invoke('subscriptions:fetch'),
+  fetchProviderInfo:  (address: string) => ipcRenderer.invoke('provider:info', address),
   subscribeToPlan:    (planId: number, denom: string) => ipcRenderer.invoke('plan:subscribe', { planId, denom }),
   connectSubscriptionNode: (subscriptionId: number, nodeAddress: string) => 
     ipcRenderer.invoke('subscription:connect', { subscriptionId, nodeAddress }),

@@ -51,7 +51,10 @@
     "fetching": "Fetching plans...",
     "details": "Details",
     "price_per_month": "{{amount}} / month",
-    "no_plans": "No active plans found."
+    "no_plans": "No active plans found.",
+    "confirm_sub_title": "Subscribe to Plan?",
+    "confirm_sub_msg": "Are you sure you want to subscribe to Plan #{{id}}? This will broadcast an on-chain transaction.",
+    "subscribe_success": "Subscription transaction sent successfully!"
   },
   "subs": {
     "title": "My Subscriptions",

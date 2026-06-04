@@ -51,7 +51,10 @@
     "fetching": "Recupero piani...",
     "details": "Dettagli",
     "price_per_month": "{{amount}} / mese",
-    "no_plans": "Nessun piano attivo trovato."
+    "no_plans": "Nessun piano attivo trovato.",
+    "confirm_sub_title": "Sottoscrivere il Piano?",
+    "confirm_sub_msg": "Sei sicuro di voler sottoscrivere il Piano #{{id}}? Questo trasmetterà una transazione on-chain.",
+    "subscribe_success": "Transazione di sottoscrizione inviata con successo!"
   },
   "subs": {
     "title": "I miei Abbonamenti",

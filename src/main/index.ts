@@ -663,8 +663,37 @@ function registerIpcHandlers(): void {
     if (!walletState.readonlyClient) return { success: false, nodes: [] }
     try {
       const res = await walletState.readonlyClient.sentinelQuery?.node.nodesForPlan(Long.fromNumber(planId, true), Status.STATUS_ACTIVE, undefined)
-      return { success: true, nodes: res?.nodes ?? [] }
+      // Map blockchain Node to a minimal ApiNode compatible object
+      const nodes = (res?.nodes ?? []).map(n => ({
+        address: n.address,
+        moniker: n.address.slice(0, 12) + '...', // Fallback moniker
+        type: 1, // Default to WG for now, or detect from elsewhere
+        isActive: n.status === Status.STATUS_ACTIVE,
+        isHealthy: true,
+        country: '??',
+        city: '',
+        gigabytePrices: n.gigabytePrices.map(p => ({ denom: p.denom, value: p.quoteValue })),
+        hourlyPrices: n.hourlyPrices.map(p => ({ denom: p.denom, value: p.quoteValue })),
+      }))
+      return { success: true, nodes }
     } catch (err: unknown) { return { success: false, error: extractError(err), nodes: [] } }
+  })
+
+  ipcMain.handle('provider:info', async (_e, address: string) => {
+    if (!walletState.readonlyClient) return { success: false, error: 'No RPC client' }
+    try {
+      const res = await walletState.readonlyClient.sentinelQuery?.provider.provider(address)
+      if (!res) return { success: false, error: 'Provider not found' }
+      return { 
+        success: true, 
+        provider: {
+          address: res.address,
+          name: res.name,
+          website: res.website,
+          description: res.description
+        } 
+      }
+    } catch (err: unknown) { return { success: false, error: extractError(err) } }
   })
 
   ipcMain.handle('subscription:connect', async (_e, { subscriptionId, nodeAddress }: { subscriptionId: number; nodeAddress: string }) => {

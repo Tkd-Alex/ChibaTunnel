@@ -51,7 +51,10 @@
     "fetching": "正在获取计划...",
     "details": "详情",
     "price_per_month": "{{amount}} / 月",
-    "no_plans": "未发现活跃计划。"
+    "no_plans": "未发现活跃计划。",
+    "confirm_sub_title": "订阅计划？",
+    "confirm_sub_msg": "您确定要订阅计划 #{{id}} 吗？这将发起一笔链上交易。",
+    "subscribe_success": "订阅交易发送成功！"
   },
   "subs": {
     "title": "我的订阅",

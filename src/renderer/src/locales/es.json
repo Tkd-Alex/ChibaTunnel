@@ -51,7 +51,10 @@
     "fetching": "Obteniendo planes...",
     "details": "Detalles",
     "price_per_month": "{{amount}} / mes",
-    "no_plans": "No se encontraron planes activos."
+    "no_plans": "No se encontraron planes activos.",
+    "confirm_sub_title": "¿Suscribirse al plan?",
+    "confirm_sub_msg": "¿Estás seguro de que deseas suscribirte al Plan #{{id}}? Esto transmitirá una transacción en la cadena.",
+    "subscribe_success": "¡Transacción de suscripción enviada con éxito!"
   },
   "subs": {
     "title": "Mis Suscripciones",

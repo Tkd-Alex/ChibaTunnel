@@ -51,7 +51,10 @@
     "fetching": "Récupération des plans...",
     "details": "Détails",
     "price_per_month": "{{amount}} / mois",
-    "no_plans": "Aucun plan actif trouvé."
+    "no_plans": "Aucun plan actif trouvé.",
+    "confirm_sub_title": "S'abonner au plan ?",
+    "confirm_sub_msg": "Êtes-vous sûr de vouloir vous abonner au Plan #{{id}} ? Cela diffusera une transaction sur la chaîne.",
+    "subscribe_success": "Transaction d'abonnement envoyée avec succès !"
   },
   "subs": {
     "title": "Mes Abonnements",

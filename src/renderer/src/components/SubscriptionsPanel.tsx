@@ -16,6 +16,23 @@ export default function SubscriptionsPanel({ subscriptions, plans, loading, onCo
   const [expandedSub, setExpandedSub] = useState<number | null>(null)
   const [planNodes, setPlanNodes] = useState<Record<number, ApiNode[]>>({})
   const [loadingNodes, setLoadingNodes] = useState<Record<number, boolean>>({})
+  const [providerNames, setProviderNames] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    // Fetch provider monikers for all active plans in subscriptions
+    subscriptions.forEach(async (sub) => {
+      const plan = plans.find(p => p.id === sub.planId)
+      if (!plan || providerNames[plan.provAddress]) return
+      try {
+        const res = await window.api.fetchProviderInfo(plan.provAddress)
+        if (res.success && res.provider) {
+          setProviderNames(prev => ({ ...prev, [plan.provAddress]: res.provider.name }))
+        }
+      } catch (e) {
+        console.error('Failed to fetch provider moniker', e)
+      }
+    })
+  }, [subscriptions, plans])
 
   const fetchPlanNodes = async (planId: number) => {
     if (planNodes[planId]) return
@@ -63,6 +80,7 @@ export default function SubscriptionsPanel({ subscriptions, plans, loading, onCo
     <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', height: '100%', overflowY: 'auto' }}>
       {subscriptions.map(sub => {
         const plan = plans.find(p => p.id === sub.planId)
+        const provName = plan ? (providerNames[plan.provAddress] || plan.provAddress.slice(0, 12) + '...') : `Plan #${sub.planId}`
         const isExpanded = expandedSub === sub.id
         
         return (
@@ -77,15 +95,16 @@ export default function SubscriptionsPanel({ subscriptions, plans, loading, onCo
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div style={{ cursor: 'pointer', flex: 1 }} onClick={() => toggleExpand(sub.id, sub.planId)}>
-                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-1)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  Plan #{sub.planId} 
+                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-1)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  🌍 {provName}
                   <span style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 400 }}>{t('subs.sub_id', { id: sub.id })}</span>
                 </div>
                 <div style={{ display: 'flex', gap: '12px', marginTop: '6px' }}>
                   <span className="badge" style={{ 
                     background: sub.status === 1 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', 
                     color: sub.status === 1 ? 'var(--green)' : 'var(--red)',
-                    fontSize: '10px', padding: '2px 8px', borderRadius: '4px'
+                    fontSize: '10px', padding: '2px 8px', borderRadius: '4px',
+                    border: `1px solid ${sub.status === 1 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`
                   }}>
                     {sub.status === 1 ? t('subs.active') : 'Inactive'}
                   </span>
@@ -124,7 +143,7 @@ export default function SubscriptionsPanel({ subscriptions, plans, loading, onCo
                     <div style={{ display: 'flex', justifyContent: 'center', padding: '20px' }}>
                       <Loader2 className="spinner" size={24} color="var(--text-3)" />
                     </div>
-                  ) : planNodes[sub.planId] ? (
+                  ) : planNodes[sub.planId] && planNodes[sub.planId].length > 0 ? (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '8px' }}>
                       {planNodes[sub.planId].map(node => {
                         const isConnected = activeNodeAddress === node.address
@@ -159,7 +178,7 @@ export default function SubscriptionsPanel({ subscriptions, plans, loading, onCo
                     </div>
                   ) : (
                     <div style={{ fontSize: '11px', color: 'var(--text-3)', textAlign: 'center', padding: '10px' }}>
-                      Failed to load nodes.
+                      {planNodes[sub.planId] ? 'No nodes available in this plan.' : 'Failed to load nodes.'}
                     </div>
                   )}
                 </div>
