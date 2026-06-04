@@ -37,8 +37,34 @@
   "tabs": {
     "globe": "نقشه",
     "nodes": "گره‌ها",
+    "plans": "طرح‌ها",
+    "my_subs": "اشتراک‌های من",
     "sessions": "نشست‌ها",
     "manage": "مدیریت"
+  },
+  "plans": {
+    "title": "طرح‌های اشتراک",
+    "by": "توسط",
+    "nodes": "گره",
+    "days": "روز",
+    "subscribe": "خرید اشتراک",
+    "fetching": "در حال دریافت طرح‌ها...",
+    "details": "جزئیات",
+    "price_per_month": "{{amount}} / ماه",
+    "no_plans": "هیچ طرح فعالی یافت نشد."
+  },
+  "subs": {
+    "title": "اشتراک‌های من",
+    "active": "فعال",
+    "expires": "انقضا",
+    "quota": "سهمیه",
+    "connect": "اتصال",
+    "no_subs": "هیچ اشتراک فعالی یافت نشد.",
+    "nodes_in_plan": "گره‌های موجود در طرح",
+    "connected": "متصل",
+    "renew": "تمدید",
+    "cancel": "لغو",
+    "sub_id": "اشتراک #{{id}}"
   },
   "filters": {
     "title": "فیلترهای نقشه",

@@ -13,7 +13,9 @@ import SessionPanel       from './components/SessionPanel'
 import SettingsPanel      from './components/SettingsPanel'
 import WalletManager      from './components/WalletManager'
 import ConfirmModal       from './components/ConfirmModal'
-import { ApiNode, NodeFilters, ConnectionState, BinaryStatus, INITIAL_CONNECTION } from './types'
+import PlansPanel         from './components/PlansPanel'
+import SubscriptionsPanel from './components/SubscriptionsPanel'
+import { ApiNode, ApiPlan, ApiSubscription, NodeFilters, ConnectionState, BinaryStatus, INITIAL_CONNECTION } from './types'
 import { 
   Globe as GlobeIcon, 
   Hexagon, 
@@ -27,11 +29,13 @@ import {
   Heart, 
   Star, 
   Home,
-  Play
+  Play,
+  Ticket,
+  CreditCard
 } from 'lucide-react'
 
 type AppScreen = 'loading' | 'setup' | 'main'
-type Tab       = 'globe' | 'nodes' | 'sessions' | 'manage'
+type Tab       = 'globe' | 'nodes' | 'plans' | 'my_subs' | 'sessions' | 'manage'
 
 const GLOBE_DEFAULTS: NodeFilters = {
   search: '', country: '', city: '', type: '',
@@ -62,6 +66,11 @@ export default function App() {
   const [nodes, setNodes]               = useState<ApiNode[]>([])
   const [nodesLoading, setNodesLoading] = useState(false)
   const [nodesError, setNodesError]     = useState<string | null>(null)
+
+  const [plans, setPlans]               = useState<ApiPlan[]>([])
+  const [plansLoading, setPlansLoading] = useState(false)
+  const [subscriptions, setSubscriptions] = useState<ApiSubscription[]>([])
+  const [subsLoading, setSubsLoading]     = useState(false)
 
   const [globeFilters, setGlobeFilters] = useState<NodeFilters>(GLOBE_DEFAULTS)
   const [tableFilters, setTableFilters] = useState<NodeFilters>(TABLE_DEFAULTS)
@@ -106,6 +115,24 @@ export default function App() {
     finally { setNodesLoading(false) }
   }, [])
 
+  const fetchPlans = useCallback(async () => {
+    setPlansLoading(true)
+    try {
+      const res = await window.api.fetchPlans()
+      if (res.success) setPlans(res.plans as ApiPlan[])
+    } catch (e) { console.error(e) }
+    finally { setPlansLoading(false) }
+  }, [])
+
+  const fetchSubscriptions = useCallback(async () => {
+    setSubsLoading(true)
+    try {
+      const res = await window.api.fetchSubscriptions()
+      if (res.success) setSubscriptions(res.subscriptions as ApiSubscription[])
+    } catch (e) { console.error(e) }
+    finally { setSubsLoading(false) }
+  }, [])
+
   useEffect(() => {
     async function boot() {
       refreshIp()
@@ -130,7 +157,13 @@ export default function App() {
     boot()
   }, [refreshIp])
 
-  useEffect(() => { if (screen === 'main') fetchNodes() }, [screen, fetchNodes])
+  useEffect(() => { 
+    if (screen === 'main') {
+      fetchNodes()
+      fetchPlans()
+      fetchSubscriptions()
+    } 
+  }, [screen, fetchNodes, fetchPlans, fetchSubscriptions])
 
   useEffect(() => {
     const u1 = window.api.onVpnStatus((d: any) => {
@@ -236,6 +269,8 @@ export default function App() {
   const tabs: Array<{ id: Tab; label: string; icon: React.ReactNode }> = [
     { id: 'globe',    label: t('tabs.globe'),    icon: <GlobeIcon size={14} /> },
     { id: 'nodes',    label: t('tabs.nodes'),    icon: <Hexagon size={14} /> },
+    { id: 'plans',    label: t('tabs.plans'),    icon: <Ticket size={14} /> },
+    { id: 'my_subs',  label: t('tabs.my_subs'),  icon: <CreditCard size={14} /> },
     { id: 'sessions', label: t('tabs.sessions'), icon: <LayoutGrid size={14} /> },
     { id: 'manage',   label: t('tabs.manage'),   icon: <Settings size={14} /> },
   ]
@@ -367,7 +402,33 @@ export default function App() {
               </div>
             )}
 
-            {activeTab === 'sessions' && <SessionPanel nodes={nodes} onConnectSession={handleConnectSession} />}
+            {activeTab === 'plans' && (
+              <PlansPanel 
+                plans={plans} 
+                loading={plansLoading} 
+                onSubscribe={() => fetchSubscriptions()} 
+              />
+            )}
+
+            {activeTab === 'my_subs' && (
+              <SubscriptionsPanel 
+                subscriptions={subscriptions} 
+                plans={plans} 
+                loading={subsLoading}
+                activeNodeAddress={activeConnection?.node?.address}
+                onConnect={async (subId, nodeAddr) => {
+                  const res = await window.api.connectSubscriptionNode(subId, nodeAddr)
+                  if (res.success) {
+                    setActiveConnection(res as any)
+                    setTimeout(refreshIp, 2000)
+                  } else {
+                    alert(t('common.error') + ': ' + res.error)
+                  }
+                }}
+              />
+            )}
+
+            {activeTab === 'sessions' && <SessionPanel nodes={nodes} subscriptions={subscriptions} plans={plans} onConnectSession={handleConnectSession} />}
 
             {activeTab === 'manage' && (
               <div className="manage-tab-layout">

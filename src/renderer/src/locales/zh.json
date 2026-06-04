@@ -37,8 +37,34 @@
   "tabs": {
     "globe": "地球",
     "nodes": "节点",
+    "plans": "计划",
+    "my_subs": "我的订阅",
     "sessions": "会话",
     "manage": "管理"
+  },
+  "plans": {
+    "title": "订阅计划",
+    "by": "提供者",
+    "nodes": "个节点",
+    "days": "天",
+    "subscribe": "订阅",
+    "fetching": "正在获取计划...",
+    "details": "详情",
+    "price_per_month": "{{amount}} / 月",
+    "no_plans": "未发现活跃计划。"
+  },
+  "subs": {
+    "title": "我的订阅",
+    "active": "活跃",
+    "expires": "到期时间",
+    "quota": "配额",
+    "connect": "连接",
+    "no_subs": "未发现活跃订阅。",
+    "nodes_in_plan": "计划内可用节点",
+    "connected": "已连接",
+    "renew": "续订",
+    "cancel": "取消",
+    "sub_id": "订阅 #{{id}}"
   },
   "filters": {
     "title": "地球过滤器",

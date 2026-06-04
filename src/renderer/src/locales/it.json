@@ -37,8 +37,34 @@
   "tabs": {
     "globe": "Globo",
     "nodes": "Nodi",
+    "plans": "Piani",
+    "my_subs": "Abbonamenti",
     "sessions": "Sessioni",
     "manage": "Gestione"
+  },
+  "plans": {
+    "title": "Piani di Abbonamento",
+    "by": "da",
+    "nodes": "nodi",
+    "days": "giorni",
+    "subscribe": "Abbonati",
+    "fetching": "Recupero piani...",
+    "details": "Dettagli",
+    "price_per_month": "{{amount}} / mese",
+    "no_plans": "Nessun piano attivo trovato."
+  },
+  "subs": {
+    "title": "I miei Abbonamenti",
+    "active": "Attivo",
+    "expires": "Scade",
+    "quota": "Quota",
+    "connect": "Connetti",
+    "no_subs": "Nessun abbonamento attivo trovato.",
+    "nodes_in_plan": "Nodi disponibili nel piano",
+    "connected": "connesso",
+    "renew": "Rinnova",
+    "cancel": "Annulla",
+    "sub_id": "Sub #{{id}}"
   },
   "filters": {
     "title": "Filtri Globo",

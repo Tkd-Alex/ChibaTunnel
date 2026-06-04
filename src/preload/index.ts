@@ -40,6 +40,14 @@ const api = {
   fetchNodes:     () => ipcRenderer.invoke('nodes:fetch'),
   fetchNodeInfo:  (remoteAddr: string) => ipcRenderer.invoke('node:info', remoteAddr),
 
+  // Plans & Subscriptions
+  fetchPlans:         () => ipcRenderer.invoke('plans:fetch'),
+  fetchPlanNodes:     (planId: number) => ipcRenderer.invoke('plan:nodes', planId),
+  fetchSubscriptions: () => ipcRenderer.invoke('subscriptions:fetch'),
+  subscribeToPlan:    (planId: number, denom: string) => ipcRenderer.invoke('plan:subscribe', { planId, denom }),
+  connectSubscriptionNode: (subscriptionId: number, nodeAddress: string) => 
+    ipcRenderer.invoke('subscription:connect', { subscriptionId, nodeAddress }),
+
   // Sessions
   fetchSessions:  () => ipcRenderer.invoke('sessions:fetch'),
   cancelSession:  (id: number) => ipcRenderer.invoke('session:cancel', id),

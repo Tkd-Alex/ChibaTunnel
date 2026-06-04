@@ -37,8 +37,34 @@
   "tabs": {
     "globe": "Globo",
     "nodes": "Nodos",
+    "plans": "Planes",
+    "my_subs": "Mis Suscripciones",
     "sessions": "Sesiones",
     "manage": "Gestionar"
+  },
+  "plans": {
+    "title": "Planes de Suscripción",
+    "by": "por",
+    "nodes": "nodos",
+    "days": "días",
+    "subscribe": "Suscribirse",
+    "fetching": "Obteniendo planes...",
+    "details": "Detalles",
+    "price_per_month": "{{amount}} / mes",
+    "no_plans": "No se encontraron planes activos."
+  },
+  "subs": {
+    "title": "Mis Suscripciones",
+    "active": "Activo",
+    "expires": "Expira",
+    "quota": "Cuota",
+    "connect": "Conectar",
+    "no_subs": "No se encontraron suscripciones activas.",
+    "nodes_in_plan": "Nodos disponibles en el plan",
+    "connected": "conectado",
+    "renew": "Renovar",
+    "cancel": "Cancelar",
+    "sub_id": "Sus #{{id}}"
   },
   "filters": {
     "title": "Filtros del Globo",

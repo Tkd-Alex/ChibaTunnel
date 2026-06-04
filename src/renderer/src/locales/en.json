@@ -37,8 +37,34 @@
   "tabs": {
     "globe": "Globe",
     "nodes": "Nodes",
+    "plans": "Plans",
+    "my_subs": "My Subs",
     "sessions": "Sessions",
     "manage": "Manage"
+  },
+  "plans": {
+    "title": "Subscription Plans",
+    "by": "by",
+    "nodes": "nodes",
+    "days": "days",
+    "subscribe": "Subscribe",
+    "fetching": "Fetching plans...",
+    "details": "Details",
+    "price_per_month": "{{amount}} / month",
+    "no_plans": "No active plans found."
+  },
+  "subs": {
+    "title": "My Subscriptions",
+    "active": "Active",
+    "expires": "Expires",
+    "quota": "Quota",
+    "connect": "Connect",
+    "no_subs": "No active subscriptions found.",
+    "nodes_in_plan": "Available nodes in plan",
+    "connected": "connected",
+    "renew": "Renew",
+    "cancel": "Cancel",
+    "sub_id": "Sub #{{id}}"
   },
   "filters": {
     "title": "Globe Filters",

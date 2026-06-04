@@ -37,8 +37,34 @@
   "tabs": {
     "globe": "Globe",
     "nodes": "Nœuds",
+    "plans": "Plans",
+    "my_subs": "Mes Abos",
     "sessions": "Sessions",
     "manage": "Gérer"
+  },
+  "plans": {
+    "title": "Plans d'abonnement",
+    "by": "par",
+    "nodes": "nœuds",
+    "days": "jours",
+    "subscribe": "S'abonner",
+    "fetching": "Récupération des plans...",
+    "details": "Détails",
+    "price_per_month": "{{amount}} / mois",
+    "no_plans": "Aucun plan actif trouvé."
+  },
+  "subs": {
+    "title": "Mes Abonnements",
+    "active": "Actif",
+    "expires": "Expire le",
+    "quota": "Quota",
+    "connect": "Connecter",
+    "no_subs": "Aucun abonnement actif trouvé.",
+    "nodes_in_plan": "Nœuds disponibles dans le plan",
+    "connected": "connecté",
+    "renew": "Renouveler",
+    "cancel": "Annuler",
+    "sub_id": "Abo #{{id}}"
   },
   "filters": {
     "title": "Filtres du Globe",

@@ -37,8 +37,34 @@
   "tabs": {
     "globe": "الخريطة",
     "nodes": "العقد",
+    "plans": "الخطط",
+    "my_subs": "اشتراكاتي",
     "sessions": "الجلسات",
     "manage": "إدارة"
+  },
+  "plans": {
+    "title": "خطط الاشتراك",
+    "by": "بواسطة",
+    "nodes": "عقدة",
+    "days": "يوم",
+    "subscribe": "اشترك",
+    "fetching": "جاري جلب الخطط...",
+    "details": "التفاصيل",
+    "price_per_month": "{{amount}} / شهر",
+    "no_plans": "لم يتم العثور على خطط نشطة."
+  },
+  "subs": {
+    "title": "اشتراكاتي",
+    "active": "نشط",
+    "expires": "تنتهي في",
+    "quota": "الحصة",
+    "connect": "اتصال",
+    "no_subs": "لم يتم العثور على اشتراكات نشطة.",
+    "nodes_in_plan": "العقد المتاحة في الخطة",
+    "connected": "متصل",
+    "renew": "تجديد",
+    "cancel": "إلغاء",
+    "sub_id": "اشتراك #{{id}}"
   },
   "filters": {
     "title": "فلاتر الخريطة",

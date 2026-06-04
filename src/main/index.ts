@@ -18,7 +18,13 @@ import {
   Session,
   BaseSession,
   type TxNodeStartSession,
-  type Price
+  type Price,
+  Plan,
+  Subscription,
+  Status,
+  subscriptionStart,
+  subscriptionStartSession,
+  RenewalPricePolicy
 } from '@sentinel-official/sentinel-js-sdk'
 import { DirectSecp256k1HdWallet } from '@cosmjs/proto-signing'
 import { assertIsDeliverTxSuccess } from '@cosmjs/stargate'
@@ -596,6 +602,102 @@ function registerIpcHandlers(): void {
       const msg = sessionCancel({ from: walletState.address, id: Long.fromNumber(sessionId, true) })
       const tx  = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'sentinel-dvpn-client')
       assertIsDeliverTxSuccess(tx); return { success: true }
+    } catch (err: unknown) { return { success: false, error: extractError(err) } }
+  })
+
+  ipcMain.handle('plans:fetch', async () => {
+    if (!walletState.readonlyClient) return { success: false, plans: [] }
+    try {
+      const res = await walletState.readonlyClient.sentinelQuery?.plan.plans(Status.STATUS_ACTIVE, undefined)
+      const plans = (res?.plans ?? []).map(p => ({
+        id: longToNum(p.id),
+        provAddress: p.provAddress,
+        bytes: p.bytes,
+        duration: p.duration ? longToNum(p.duration.seconds) : 0,
+        prices: p.prices.map(price => ({ denom: price.denom, amount: price.amount })),
+        status: p.status,
+        private: p.private
+      }))
+      return { success: true, plans }
+    } catch (err: unknown) { return { success: false, error: extractError(err), plans: [] } }
+  })
+
+  ipcMain.handle('subscriptions:fetch', async () => {
+    if (!walletState.readonlyClient || !walletState.address) return { success: false, subscriptions: [] }
+    try {
+      const res = await walletState.readonlyClient.sentinelQuery?.subscription.subscriptionsForAccount(walletState.address, undefined)
+      const subscriptions = (res?.subscriptions ?? []).map(anyVal => {
+        try {
+          const s = Subscription.decode(anyVal.value)
+          return {
+            id: longToNum(s.id),
+            accAddress: s.accAddress,
+            planId: longToNum(s.planId),
+            price: s.price ? { denom: s.price.denom, baseValue: s.price.baseValue, quoteValue: s.price.quoteValue } : null,
+            status: s.status,
+            inactiveAt: s.inactiveAt?.toISOString() ?? null,
+            startAt: s.startAt?.toISOString() ?? null,
+          }
+        } catch { return null }
+      }).filter(Boolean)
+      return { success: true, subscriptions }
+    } catch (err: unknown) { return { success: false, error: extractError(err), subscriptions: [] } }
+  })
+
+  ipcMain.handle('plan:subscribe', async (_e, { planId, denom }: { planId: number; denom: string }) => {
+    if (!walletState.client || !walletState.address) return { success: false, error: 'Wallet not initialized' }
+    try {
+      const msg = subscriptionStart({
+        from: walletState.address,
+        id: Long.fromNumber(planId, true),
+        denom: denom,
+        renewalPricePolicy: RenewalPricePolicy.RENEWAL_PRICE_POLICY_ALWAYS
+      })
+      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'sentinel-dvpn-client')
+      assertIsDeliverTxSuccess(tx)
+      return { success: true, txHash: tx.transactionHash }
+    } catch (err: unknown) { return { success: false, error: extractError(err) } }
+  })
+
+  ipcMain.handle('plan:nodes', async (_e, planId: number) => {
+    if (!walletState.readonlyClient) return { success: false, nodes: [] }
+    try {
+      const res = await walletState.readonlyClient.sentinelQuery?.node.nodesForPlan(Long.fromNumber(planId, true), Status.STATUS_ACTIVE, undefined)
+      return { success: true, nodes: res?.nodes ?? [] }
+    } catch (err: unknown) { return { success: false, error: extractError(err), nodes: [] } }
+  })
+
+  ipcMain.handle('subscription:connect', async (_e, { subscriptionId, nodeAddress }: { subscriptionId: number; nodeAddress: string }) => {
+    if (!walletState.client || !walletState.address || !walletState.privkey) return { success: false, error: 'Wallet not initialized' }
+    try {
+      mainWindow?.webContents.send('vpn:status', { step: 'signing_tx' })
+      const msg = subscriptionStartSession({
+        from: walletState.address,
+        id: Long.fromNumber(subscriptionId, true),
+        nodeAddress: nodeAddress
+      })
+      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'sentinel-dvpn-client')
+      assertIsDeliverTxSuccess(tx)
+
+      const event = searchEvent('sentinel.vpn.session.v1.EventCreate', tx.events) || searchEvent('sentinel.vpn.session.v2.EventCreate', tx.events) || searchEvent('EventCreate', tx.events)
+      let sessionId: Long | null = null
+      if (event) {
+        const sidAttr = event.attributes.find(a => a.key === 'id' || a.key === 'session_id')
+        if (sidAttr) sessionId = Long.fromString(sidAttr.value, true)
+      }
+
+      if (!sessionId) {
+        const createSessionEvent = searchEvent(NodeEventCreateSession.type, tx.events)
+        if (createSessionEvent) {
+          sessionId = NodeEventCreateSession.parse(createSessionEvent).value.sessionId
+        }
+      }
+
+      if (!sessionId) return { success: false, error: 'Session ID not found in transaction events' }
+
+      activeSessionId = sessionId.toString()
+      activeNodeAddress = nodeAddress
+      return doHandshake(nodeAddress, sessionId)
     } catch (err: unknown) { return { success: false, error: extractError(err) } }
   })
 

@@ -37,8 +37,34 @@
   "tabs": {
     "globe": "Globus",
     "nodes": "Knoten",
+    "plans": "Pläne",
+    "my_subs": "Meine Abos",
     "sessions": "Sitzungen",
     "manage": "Verwalten"
+  },
+  "plans": {
+    "title": "Abonnement-Pläne",
+    "by": "von",
+    "nodes": "Knoten",
+    "days": "Tage",
+    "subscribe": "Abonnieren",
+    "fetching": "Pläne werden abgerufen...",
+    "details": "Details",
+    "price_per_month": "{{amount}} / Monat",
+    "no_plans": "Keine aktiven Pläne gefunden."
+  },
+  "subs": {
+    "title": "Meine Abonnements",
+    "active": "Aktiv",
+    "expires": "Läuft ab",
+    "quota": "Kontingent",
+    "connect": "Verbinden",
+    "no_subs": "Keine aktiven Abonnements gefunden.",
+    "nodes_in_plan": "Verfügbare Knoten im Plan",
+    "connected": "verbunden",
+    "renew": "Erneuern",
+    "cancel": "Abbrechen",
+    "sub_id": "Abo #{{id}}"
   },
   "filters": {
     "title": "Globus-Filter",
