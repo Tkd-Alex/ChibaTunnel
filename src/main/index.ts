@@ -614,7 +614,13 @@ function registerIpcHandlers(): void {
         provAddress: p.provAddress,
         bytes: p.bytes,
         duration: p.duration ? longToNum(p.duration.seconds) : 0,
-        prices: p.prices.map(price => ({ denom: price.denom, amount: price.amount })),
+        prices: p.prices.map(price => {
+          const rawVal = (price as any).quoteValue || price.amount || (price as any).value || '0'
+          return {
+            denom: price.denom,
+            amount: typeof rawVal === 'object' && rawVal !== null ? rawVal.toString() : String(rawVal)
+          }
+        }),
         status: p.status,
         private: p.private
       }))
@@ -662,21 +668,75 @@ function registerIpcHandlers(): void {
   ipcMain.handle('plan:nodes', async (_e, planId: number) => {
     if (!walletState.readonlyClient) return { success: false, nodes: [] }
     try {
-      const res = await walletState.readonlyClient.sentinelQuery?.node.nodesForPlan(Long.fromNumber(planId, true), Status.STATUS_ACTIVE, undefined)
-      // Map blockchain Node to a minimal ApiNode compatible object
+      const id = Long.fromNumber(planId, true)
+      const res = await walletState.readonlyClient.sentinelQuery?.node.nodesForPlan(id, Status.STATUS_ACTIVE, undefined)
+      
       const nodes = (res?.nodes ?? []).map(n => ({
         address: n.address,
-        moniker: n.address.slice(0, 12) + '...', // Fallback moniker
-        type: 1, // Default to WG for now, or detect from elsewhere
+        moniker: n.address.slice(0, 12) + '...',
+        version: (n as any).version || '',
+        type: 1, 
         isActive: n.status === Status.STATUS_ACTIVE,
         isHealthy: true,
         country: '??',
         city: '',
         gigabytePrices: n.gigabytePrices.map(p => ({ denom: p.denom, value: p.quoteValue })),
         hourlyPrices: n.hourlyPrices.map(p => ({ denom: p.denom, value: p.quoteValue })),
+        sessions: 0,
+        peers: 0,
+        isResidential: false,
+        isWhitelisted: false,
+        isDuplicate: false,
+        errorMessage: null,
+        fetchedAt: new Date().toISOString()
       }))
       return { success: true, nodes }
-    } catch (err: unknown) { return { success: false, error: extractError(err), nodes: [] } }
+    } catch (err: unknown) { 
+      console.error(`[IPC] Error fetching nodes for plan ${planId}:`, err)
+      return { success: false, error: extractError(err), nodes: [] } 
+    }
+  })
+
+  ipcMain.handle('plans:scanNodes', async (_e, planIds: number[]) => {
+    if (!walletState.readonlyClient) return { success: false, nodesMap: {} }
+    const nodesMap: Record<number, any[]> = {}
+    
+    // Concurrency limit: 10
+    const chunks = []
+    for (let i = 0; i < planIds.length; i += 10) {
+      chunks.push(planIds.slice(i, i + 10))
+    }
+
+    for (const chunk of chunks) {
+      await Promise.all(chunk.map(async (id) => {
+        try {
+          const res = await walletState.readonlyClient!.sentinelQuery?.node.nodesForPlan(Long.fromNumber(id, true), Status.STATUS_ACTIVE, undefined)
+          nodesMap[id] = (res?.nodes ?? []).map(n => ({
+            address: n.address,
+            moniker: n.address.slice(0, 12) + '...',
+            version: (n as any).version || '',
+            type: 1, 
+            isActive: n.status === Status.STATUS_ACTIVE,
+            isHealthy: true,
+            country: '??',
+            city: '',
+            gigabytePrices: n.gigabytePrices.map(p => ({ denom: p.denom, value: p.quoteValue })),
+            hourlyPrices: n.hourlyPrices.map(p => ({ denom: p.denom, value: p.quoteValue })),
+            sessions: 0,
+            peers: 0,
+            isResidential: false,
+            isWhitelisted: false,
+            isDuplicate: false,
+            errorMessage: null,
+            fetchedAt: new Date().toISOString()
+          }))
+        } catch (err) {
+          console.error(`[IPC] Error scanning plan ${id}:`, err)
+          nodesMap[id] = []
+        }
+      }))
+    }
+    return { success: true, nodesMap }
   })
 
   ipcMain.handle('provider:info', async (_e, address: string) => {
@@ -689,11 +749,41 @@ function registerIpcHandlers(): void {
         provider: {
           address: res.address,
           name: res.name,
+          identity: res.identity,
           website: res.website,
-          description: res.description
+          description: res.description,
+          status: res.status,
+          statusAt: res.statusAt?.toISOString()
         } 
       }
     } catch (err: unknown) { return { success: false, error: extractError(err) } }
+  })
+
+  ipcMain.handle('providers:fetchBatch', async (_e, addresses: string[]) => {
+    if (!walletState.readonlyClient) return { success: false, providers: {} }
+    const providers: Record<string, any> = {}
+    
+    // Concurrency limit: 20 (providers are simpler)
+    const chunks = []
+    for (let i = 0; i < addresses.length; i += 20) {
+      chunks.push(addresses.slice(i, i + 20))
+    }
+
+    for (const chunk of chunks) {
+      await Promise.all(chunk.map(async (addr) => {
+        try {
+          const res = await walletState.readonlyClient!.sentinelQuery?.provider.provider(addr)
+          if (res) {
+            providers[addr] = {
+              name: res.name,
+              website: res.website,
+              description: res.description
+            }
+          }
+        } catch { /* ignore */ }
+      }))
+    }
+    return { success: true, providers }
   })
 
   ipcMain.handle('subscription:connect', async (_e, { subscriptionId, nodeAddress }: { subscriptionId: number; nodeAddress: string }) => {

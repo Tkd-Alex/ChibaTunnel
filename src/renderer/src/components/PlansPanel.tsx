@@ -1,13 +1,21 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ApiPlan, ApiNode } from '../types'
-import { Globe, Users, Clock, CreditCard, ChevronRight, CheckCircle2, Loader2, Info, Search } from 'lucide-react'
+import { Globe, Users, Clock, CreditCard, CheckCircle2, Loader2, Info, ShieldCheck, Server, Search, AlertCircle, Database, ExternalLink } from 'lucide-react'
 import ConfirmModal from './ConfirmModal'
 import NodeTable from './NodeTable'
+import { formatDataQuota } from '../utils'
 
 interface Props {
   plans: ApiPlan[]
   loading: boolean
+  globalNodes: ApiNode[]
+  planNodesCache: Record<number, ApiNode[]>
+  setPlanNodesCache: React.Dispatch<React.SetStateAction<Record<number, ApiNode[]>>>
+  providerNamesCache: Record<string, any>
+  setProviderNamesCache: React.Dispatch<React.SetStateAction<Record<string, any>>>
+  scannedOnce: boolean
+  setScannedOnce: React.Dispatch<React.SetStateAction<boolean>>
   bookmarks: string[]
   onToggleBookmark: (address: string) => void
   activeNodeAddress?: string | null
@@ -18,6 +26,13 @@ interface Props {
 export default function PlansPanel({ 
   plans, 
   loading, 
+  globalNodes,
+  planNodesCache,
+  setPlanNodesCache,
+  providerNamesCache,
+  setProviderNamesCache,
+  scannedOnce,
+  setScannedOnce,
   bookmarks, 
   onToggleBookmark, 
   activeNodeAddress, 
@@ -26,63 +41,79 @@ export default function PlansPanel({
 }: Props) {
   const { t } = useTranslation()
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null)
-  const [planNodes, setPlanNodes] = useState<Record<number, ApiNode[]>>({})
-  const [loadingNodes, setLoadingNodes] = useState<Record<number, boolean>>({})
-  const [providerNames, setProviderNames] = useState<Record<string, string>>({})
+  const [isScanning, setIsScanning] = useState(false)
   const [confirmingPlan, setConfirmingPlan] = useState<ApiPlan | null>(null)
   const [subscribing, setSubscribing] = useState(false)
 
-  useEffect(() => {
-    // Fetch provider monikers for all plans
-    plans.forEach(async (plan) => {
-      if (providerNames[plan.provAddress]) return
-      try {
-        const res = await window.api.fetchProviderInfo(plan.provAddress)
-        if (res.success && res.provider) {
-          setProviderNames(prev => ({ ...prev, [plan.provAddress]: res.provider.name }))
-        }
-      } catch (e) {
-        console.error('Failed to fetch provider moniker', e)
+  // Batch Scan logic
+  const performBatchScan = useCallback(async () => {
+    if (plans.length === 0 || scannedOnce || isScanning) return
+    
+    setIsScanning(true)
+    try {
+      // 1. Fetch Providers Batch
+      const uniqueProviders = Array.from(new Set(plans.map(p => p.provAddress)))
+      const provRes = await window.api.fetchProvidersBatch(uniqueProviders)
+      if (provRes.success) {
+        setProviderNamesCache(prev => ({ ...prev, ...provRes.providers }))
       }
-    })
-  }, [plans])
 
+      // 2. Fetch Nodes Batch for all plans
+      const planIds = plans.map(p => p.id)
+      const nodesRes = await window.api.scanPlanNodes(planIds)
+      if (nodesRes.success) {
+        setPlanNodesCache(prev => ({ ...prev, ...nodesRes.nodesMap }))
+      }
+      
+      setScannedOnce(true)
+    } catch (e) {
+      console.error('Batch scan failed', e)
+    } finally {
+      setIsScanning(false)
+    }
+  }, [plans, scannedOnce, isScanning, setProviderNamesCache, setPlanNodesCache, setScannedOnce])
+
+  useEffect(() => {
+    if (!loading && plans.length > 0 && !scannedOnce) {
+      performBatchScan()
+    }
+  }, [loading, plans, scannedOnce, performBatchScan])
+
+  // Filter out staging/test providers AND empty plans
   const filteredPlans = useMemo(() => {
     return plans.filter(plan => {
-      const name = (providerNames[plan.provAddress] || '').toLowerCase()
-      // Skip staging/test providers
+      const pInfo = providerNamesCache[plan.provAddress]
+      const name = (pInfo?.name || '').toLowerCase()
       if (name.includes('test') || name.includes('staging')) return false
+      
+      if (scannedOnce) {
+        const nodes = planNodesCache[plan.id]
+        if (!nodes || nodes.length === 0) return false
+      }
+      
       return true
     })
-  }, [plans, providerNames])
+  }, [plans, providerNamesCache, scannedOnce, planNodesCache])
 
-  const fetchPlanNodes = async (planId: number) => {
-    if (planNodes[planId]) return
-    setLoadingNodes(prev => ({ ...prev, [planId]: true }))
-    try {
-      const res = await window.api.fetchPlanNodes(planId)
-      if (res.success) {
-        setPlanNodes(prev => ({ ...prev, [planId]: res.nodes }))
-      }
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setLoadingNodes(prev => ({ ...prev, [planId]: false }))
-    }
-  }
-
+  // Select first filtered plan by default
   useEffect(() => {
-    if (selectedPlanId !== null) {
-      fetchPlanNodes(selectedPlanId)
-    }
-  }, [selectedPlanId])
-
-  // Select first plan by default if none selected
-  useEffect(() => {
-    if (selectedPlanId === null && filteredPlans.length > 0) {
+    if (selectedPlanId === null && filteredPlans.length > 0 && scannedOnce) {
       setSelectedPlanId(filteredPlans[0].id)
     }
-  }, [filteredPlans, selectedPlanId])
+  }, [filteredPlans, selectedPlanId, scannedOnce])
+
+  const selectedPlan = filteredPlans.find(p => p.id === selectedPlanId)
+  const selectedProv = selectedPlan ? providerNamesCache[selectedPlan.provAddress] : null
+
+  // Cross-reference nodes with global list
+  const richNodes = useMemo(() => {
+    if (selectedPlanId === null || !planNodesCache[selectedPlanId]) return []
+    return planNodesCache[selectedPlanId].map(pn => {
+      const globalNode = globalNodes.find(gn => gn.address === pn.address)
+      if (globalNode) return globalNode
+      return pn // Fallback
+    })
+  }, [selectedPlanId, planNodesCache, globalNodes])
 
   const handleSubscribe = async () => {
     if (!confirmingPlan) return
@@ -114,121 +145,200 @@ export default function PlansPanel({
     )
   }
 
-  if (filteredPlans.length === 0) {
+  if (isScanning && !scannedOnce) {
+    return (
+      <div className="empty-state" style={{ background: 'var(--bg-0)' }}>
+        <Loader2 className="spinner" size={48} color="var(--cyan)" />
+        <div className="empty-state-text" style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-1)', marginTop: '16px' }}>
+          Analyzing network plans...
+        </div>
+        <div style={{ fontSize: '12px', color: 'var(--text-3)', marginTop: '8px' }}>
+          Filtering for active plans with available nodes.
+        </div>
+      </div>
+    )
+  }
+
+  if (scannedOnce && filteredPlans.length === 0) {
     return (
       <div className="empty-state">
-        <Info size={32} color="var(--text-3)" />
-        <div className="empty-state-text">{t('plans.no_plans')}</div>
+        <AlertCircle size={48} color="var(--red)" style={{ opacity: 0.6, marginBottom: 16 }} />
+        <div className="empty-state-text" style={{ color: 'var(--red)' }}>No active plans with nodes found.</div>
+        <div style={{ fontSize: '11px', color: 'var(--text-3)', marginTop: 8 }}>Try changing your RPC or refreshing the list.</div>
+        <button className="btn btn-secondary btn-sm" style={{ marginTop: 16 }} onClick={() => { setScannedOnce(false); performBatchScan() }}>
+           <Search size={12} style={{ marginRight: 8 }} /> Retry Network Scan
+        </button>
       </div>
     )
   }
 
   return (
-    <div className="plans-panel-layout" style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+    <div className="plans-panel-layout" style={{ display: 'flex', flex: 1, height: '100%', overflow: 'hidden' }}>
       {/* Left Column: Plan Cards */}
       <div className="plans-sidebar" style={{ 
-        width: '320px', 
+        width: '450px', 
         flexShrink: 0, 
-        borderRight: '1px solid var(--bg-2)', 
+        borderRight: '1px solid var(--border)', 
         overflowY: 'auto', 
-        padding: '16px', 
+        padding: '20px', 
         display: 'flex', 
         flexDirection: 'column', 
-        gap: '12px',
-        background: 'rgba(0,0,0,0.2)'
+        gap: '16px',
+        background: 'rgba(0,0,0,0.3)'
       }}>
-        <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px' }}>
-          {t('plans.title')}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.15em' }}>
+            {t('plans.title')}
+          </div>
+          <div style={{ fontSize: '10px', color: 'var(--green)', fontWeight: 600 }}>{filteredPlans.length} ACTIVE</div>
         </div>
+
         {filteredPlans.map(plan => {
-          const provName = providerNames[plan.provAddress] || plan.provAddress.slice(0, 12) + '...'
+          const provInfo = providerNamesCache[plan.provAddress]
+          const provName = provInfo?.name || plan.provAddress.slice(0, 12) + '...'
           const isSelected = selectedPlanId === plan.id
           
           return (
             <div 
               key={plan.id} 
-              className={`plan-mini-card ${isSelected ? 'active' : ''}`}
+              className={`card plan-card ${isSelected ? 'active' : ''}`}
               onClick={() => setSelectedPlanId(plan.id)}
               style={{ 
                 background: isSelected ? 'rgba(0,255,159,0.05)' : 'var(--bg-1)', 
-                border: `1px solid ${isSelected ? 'var(--green)' : 'var(--bg-2)'}`,
-                borderRadius: '8px',
-                padding: '12px',
+                border: `1px solid ${isSelected ? 'var(--green)' : 'var(--border)'}`,
+                borderRadius: '12px',
+                padding: '20px',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '8px',
-                boxShadow: isSelected ? '0 0 10px rgba(0,255,159,0.1)' : 'none'
+                gap: '12px',
+                boxShadow: isSelected ? '0 0 15px rgba(0,255,159,0.15)' : 'none',
+                position: 'relative',
+                overflow: 'hidden'
               }}
             >
+              {isSelected && <div style={{ position: 'absolute', top: 0, left: 0, width: '4px', height: '100%', background: 'var(--green)' }} />}
+              
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: isSelected ? 'var(--green)' : 'var(--text-1)' }}>
-                  {provName}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '15px', fontWeight: 600, color: isSelected ? 'var(--green)' : 'var(--text-1)', display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <ShieldCheck size={16} /> {provName}
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-3)', marginTop: '4px' }}>
+                    Plan #{plan.id}
+                  </div>
                 </div>
-                <div style={{ fontSize: '10px', color: 'var(--text-3)' }}>#{plan.id}</div>
+                <div className="badge badge-green" style={{ fontSize: '10px' }}>{planNodesCache[plan.id]?.length || 0} NODES</div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                   <div style={{ fontSize: '10px', color: 'var(--text-2)' }}>
-                     <strong>{plan.bytes === '0' ? '∞' : (parseInt(plan.bytes) / 1e9).toFixed(0)}</strong> GB
-                   </div>
-                   <div style={{ fontSize: '10px', color: 'var(--text-2)' }}>
-                     <strong>{(plan.duration / 86400).toFixed(0)}</strong> {t('plans.days')}
-                   </div>
+              <div style={{ display: 'flex', gap: '20px', marginTop: '4px' }}>
+                <div style={{ fontSize: '12px', color: 'var(--text-2)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Database size={14} style={{ opacity: 0.7 }} />
+                  <strong>{formatDataQuota(plan.bytes)}</strong>
                 </div>
-                <div style={{ fontSize: '11px', color: 'var(--yellow)', fontWeight: 600 }}>
-                  {parseInt(plan.prices[0]?.amount || '0') / 1e6} {plan.prices[0]?.denom.replace('u', '').toUpperCase()}
+                <div style={{ fontSize: '12px', color: 'var(--text-2)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Clock size={14} style={{ opacity: 0.7 }} />
+                  <strong>{(plan.duration / 86400).toFixed(0)}</strong> {t('plans.days')}
                 </div>
               </div>
 
-              {isSelected && (
-                <button 
-                  className="btn btn-primary btn-sm" 
-                  style={{ marginTop: '4px', width: '100%', justifyContent: 'center', height: '28px', fontSize: '10px' }}
-                  onClick={(e) => { e.stopPropagation(); setConfirmingPlan(plan) }}
-                >
-                  <CreditCard size={12} style={{ marginRight: '6px' }} /> {t('plans.subscribe')}
-                </button>
-              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
+                <div style={{ fontSize: '14px', color: 'var(--yellow)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <CreditCard size={14} />
+                  {parseInt(plan.prices[0]?.amount || '0') / 1_000_000} {plan.prices[0]?.denom.replace('u', '').toUpperCase()}
+                </div>
+                {isSelected && (
+                   <div className="badge badge-green" style={{ fontSize: '10px', fontWeight: 700 }}>SELECTED</div>
+                )}
+              </div>
             </div>
           )
         })}
       </div>
 
-      {/* Right Column: Node Table */}
-      <div className="plans-main" style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-        {selectedPlanId !== null ? (
-          loadingNodes[selectedPlanId] ? (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
-              <Loader2 className="spinner" size={24} />
-              <div style={{ fontSize: '11px', color: 'var(--text-3)' }}>{t('common.loading_simple')}</div>
-            </div>
-          ) : planNodes[selectedPlanId] ? (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-               <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--bg-2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-2)' }}>
-                    {t('subs.nodes_in_plan')} ({planNodes[selectedPlanId].length})
+      {/* Right Column: Header + Table */}
+      <div className="plans-main" style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-0)', overflow: 'hidden' }}>
+        {selectedPlan ? (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {/* Header Area */}
+            <div style={{ padding: '24px 30px', borderBottom: '1px solid var(--border)', background: 'rgba(255,255,255,0.02)' }}>
+               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                  <div style={{ minWidth: 0, flex: 1, marginRight: 20 }}>
+                    <h2 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-1)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <Globe size={28} color="var(--green)" /> {selectedProv?.name || 'Plan Details'}
+                    </h2>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                       <p style={{ fontSize: '12px', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedPlan.provAddress}</p>
+                       {selectedProv?.website && (
+                          <a href={selectedProv.website} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--cyan)', fontSize: '11px', textDecoration: 'none' }}>
+                             <ExternalLink size={12} /> {selectedProv.website.replace('https://', '')}
+                          </a>
+                       )}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <button 
+                      className="btn btn-primary" 
+                      style={{ height: '42px', padding: '0 24px', fontSize: '13px', fontWeight: 700, boxShadow: '0 0 15px rgba(0,255,159,0.2)' }}
+                      onClick={() => setConfirmingPlan(selectedPlan)}
+                    >
+                      <CreditCard size={16} style={{ marginRight: 8 }} />
+                      SUBSCRIBE FOR {parseInt(selectedPlan.prices[0]?.amount || '0') / 1_000_000} {selectedPlan.prices[0]?.denom.replace('u', '').toUpperCase()}
+                    </button>
                   </div>
                </div>
-               <NodeTable 
-                 nodes={planNodes[selectedPlanId]} 
-                 onSelect={onSelectNode}
-                 bookmarks={bookmarks}
-                 onToggleBookmark={onToggleBookmark}
-                 activeNodeAddress={activeNodeAddress}
-               />
+
+               {selectedProv?.description && (
+                  <p style={{ fontSize: '13px', color: 'var(--text-2)', marginBottom: '20px', maxWidth: '800px', lineHeight: 1.6 }}>
+                    {selectedProv.description}
+                  </p>
+               )}
+
+               <div style={{ display: 'flex', gap: '40px' }}>
+                  <div className="detail-item">
+                    <div style={{ fontSize: '11px', color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: '4px' }}>{t('subs.quota')}</div>
+                    <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--cyan)' }}>{formatDataQuota(selectedPlan.bytes)}</div>
+                  </div>
+                  <div className="detail-item">
+                    <div style={{ fontSize: '11px', color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: '4px' }}>Duration</div>
+                    <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--cyan)' }}>{(selectedPlan.duration / 86400).toFixed(0)} {t('plans.days')}</div>
+                  </div>
+                  <div className="detail-item">
+                    <div style={{ fontSize: '11px', color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: '4px' }}>{t('subs.nodes_in_plan')}</div>
+                    <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--cyan)' }}>{richNodes.length} Available</div>
+                  </div>
+               </div>
             </div>
-          ) : (
-             <div className="empty-state">
-                <div className="empty-state-text">Failed to load nodes for this plan.</div>
-             </div>
-          )
+
+            {/* Table Area */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+               {richNodes.length > 0 ? (
+                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                   <div style={{ padding: '16px 30px 8px', fontSize: '11px', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Server size={12} /> {t('subs.nodes_in_plan')}
+                   </div>
+                   <div style={{ flex: 1, overflowY: 'auto' }}>
+                      <NodeTable 
+                        nodes={richNodes} 
+                        onSelect={() => {}} 
+                        bookmarks={[]} 
+                        onToggleBookmark={() => {}}
+                        activeNodeAddress={activeNodeAddress}
+                      />
+                   </div>
+                 </div>
+               ) : (
+                 <div className="empty-state">
+                    <div className="empty-state-text">No nodes found for this plan.</div>
+                 </div>
+               )}
+            </div>
+          </div>
         ) : (
           <div className="empty-state">
-            <Info size={32} color="var(--text-3)" />
-            <div className="empty-state-text">Select a plan from the list to view its nodes.</div>
+            <Info size={48} color="var(--text-3)" style={{ marginBottom: 16, opacity: 0.5 }} />
+            <div className="empty-state-text">Select a plan to view its characteristics and available nodes.</div>
           </div>
         )}
       </div>

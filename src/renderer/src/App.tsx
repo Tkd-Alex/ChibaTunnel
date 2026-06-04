@@ -72,6 +72,10 @@ export default function App() {
   const [subscriptions, setSubscriptions] = useState<ApiSubscription[]>([])
   const [subsLoading, setSubsLoading]     = useState(false)
 
+  const [planNodesCache, setPlanNodesCache]         = useState<Record<number, ApiNode[]>>({})
+  const [providerNamesCache, setProviderNamesCache] = useState<Record<string, string>>({})
+  const [scannedOnce, setScannedOnce]               = useState(false)
+
   const [globeFilters, setGlobeFilters] = useState<NodeFilters>(GLOBE_DEFAULTS)
   const [tableFilters, setTableFilters] = useState<NodeFilters>(TABLE_DEFAULTS)
 
@@ -406,6 +410,13 @@ export default function App() {
               <PlansPanel 
                 plans={plans} 
                 loading={plansLoading} 
+                globalNodes={nodes}
+                planNodesCache={planNodesCache}
+                setPlanNodesCache={setPlanNodesCache}
+                providerNamesCache={providerNamesCache}
+                setProviderNamesCache={setProviderNamesCache}
+                scannedOnce={scannedOnce}
+                setScannedOnce={setScannedOnce}
                 bookmarks={bookmarks}
                 onToggleBookmark={toggleBookmark}
                 activeNodeAddress={activeConnection?.node?.address}
@@ -419,6 +430,11 @@ export default function App() {
                 subscriptions={subscriptions} 
                 plans={plans} 
                 loading={subsLoading}
+                globalNodes={nodes}
+                providerNamesCache={providerNamesCache}
+                setProviderNamesCache={setProviderNamesCache}
+                planNodesCache={planNodesCache}
+                setPlanNodesCache={setPlanNodesCache}
                 bookmarks={bookmarks}
                 onToggleBookmark={toggleBookmark}
                 activeNodeAddress={activeConnection?.node?.address}
