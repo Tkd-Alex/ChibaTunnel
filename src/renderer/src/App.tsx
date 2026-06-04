@@ -406,6 +406,10 @@ export default function App() {
               <PlansPanel 
                 plans={plans} 
                 loading={plansLoading} 
+                bookmarks={bookmarks}
+                onToggleBookmark={toggleBookmark}
+                activeNodeAddress={activeConnection?.node?.address}
+                onSelectNode={node => { setModalInfoOnly(true); setModalNode(node) }}
                 onSubscribe={() => fetchSubscriptions()} 
               />
             )}
@@ -415,6 +419,8 @@ export default function App() {
                 subscriptions={subscriptions} 
                 plans={plans} 
                 loading={subsLoading}
+                bookmarks={bookmarks}
+                onToggleBookmark={toggleBookmark}
                 activeNodeAddress={activeConnection?.node?.address}
                 onConnect={async (subId, nodeAddr) => {
                   const res = await window.api.connectSubscriptionNode(subId, nodeAddr)
