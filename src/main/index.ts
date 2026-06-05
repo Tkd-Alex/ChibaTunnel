@@ -653,16 +653,21 @@ function registerIpcHandlers(): void {
   ipcMain.handle('plan:subscribe', async (_e, { planId, denom }: { planId: number; denom: string }) => {
     if (!walletState.client || !walletState.address) return { success: false, error: 'Wallet not initialized' }
     try {
+      console.log(`[Plan:Subscribe] Starting sub for Plan #${planId} with denom ${denom}`)
       const msg = subscriptionStart({
         from: walletState.address,
         id: Long.fromNumber(planId, true),
         denom: denom,
-        renewalPricePolicy: RenewalPricePolicy.RENEWAL_PRICE_POLICY_ALWAYS
+        renewalPricePolicy: RenewalPricePolicy.RENEWAL_PRICE_POLICY_UNSPECIFIED
       })
       const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'sentinel-dvpn-client')
       assertIsDeliverTxSuccess(tx)
+      console.log(`[Plan:Subscribe] Success! TX: ${tx.transactionHash}`)
       return { success: true, txHash: tx.transactionHash }
-    } catch (err: unknown) { return { success: false, error: extractError(err) } }
+    } catch (err: unknown) { 
+      console.error(`[Plan:Subscribe] Error:`, err)
+      return { success: false, error: extractError(err) } 
+    }
   })
 
   ipcMain.handle('plan:nodes', async (_e, planId: number) => {
@@ -789,6 +794,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('subscription:connect', async (_e, { subscriptionId, nodeAddress }: { subscriptionId: number; nodeAddress: string }) => {
     if (!walletState.client || !walletState.address || !walletState.privkey) return { success: false, error: 'Wallet not initialized' }
     try {
+      console.log(`[Subscription:Connect] Starting session with Sub #${subscriptionId} on node ${nodeAddress}`)
       mainWindow?.webContents.send('vpn:status', { step: 'signing_tx' })
       const msg = subscriptionStartSession({
         from: walletState.address,
@@ -797,27 +803,49 @@ function registerIpcHandlers(): void {
       })
       const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'sentinel-dvpn-client')
       assertIsDeliverTxSuccess(tx)
+      console.log(`[Subscription:Connect] TX broadcasted: ${tx.transactionHash}`)
 
-      const event = searchEvent('sentinel.vpn.session.v1.EventCreate', tx.events) || searchEvent('sentinel.vpn.session.v2.EventCreate', tx.events) || searchEvent('EventCreate', tx.events)
+      // Hub v3 (v12) emits sentinel.subscription.v3.EventCreateSession
+      const event = 
+        searchEvent('sentinel.subscription.v3.EventCreateSession', tx.events) || 
+        searchEvent('sentinel.vpn.session.v1.EventCreate', tx.events) || 
+        searchEvent('sentinel.vpn.session.v2.EventCreate', tx.events) || 
+        searchEvent('EventCreate', tx.events)
+      
       let sessionId: Long | null = null
       if (event) {
+        console.log(`[Subscription:Connect] Found creation event: ${event.type}`)
         const sidAttr = event.attributes.find(a => a.key === 'id' || a.key === 'session_id')
-        if (sidAttr) sessionId = Long.fromString(sidAttr.value, true)
-      }
-
-      if (!sessionId) {
-        const createSessionEvent = searchEvent(NodeEventCreateSession.type, tx.events)
-        if (createSessionEvent) {
-          sessionId = NodeEventCreateSession.parse(createSessionEvent).value.sessionId
+        if (sidAttr) {
+          sessionId = Long.fromString(sidAttr.value, true)
+          console.log(`[Subscription:Connect] Extracted Session ID: ${sessionId.toString()}`)
         }
       }
 
-      if (!sessionId) return { success: false, error: 'Session ID not found in transaction events' }
+      if (!sessionId) {
+        // Last fallback: search for ANY session-id in events
+        for (const e of tx.events) {
+          const attr = e.attributes.find(a => a.key === 'session_id' || (e.type.includes('session') && a.key === 'id'))
+          if (attr) {
+            sessionId = Long.fromString(attr.value, true)
+            console.log(`[Subscription:Connect] Fallback extracted Session ID: ${sessionId.toString()} from event ${e.type}`)
+            break
+          }
+        }
+      }
+
+      if (!sessionId) {
+        console.error(`[Subscription:Connect] Failed to extract Session ID from events. Events:`, JSON.stringify(tx.events, null, 2))
+        return { success: false, error: 'Session ID not found in transaction events' }
+      }
 
       activeSessionId = sessionId.toString()
       activeNodeAddress = nodeAddress
       return doHandshake(nodeAddress, sessionId)
-    } catch (err: unknown) { return { success: false, error: extractError(err) } }
+    } catch (err: unknown) { 
+      console.error(`[Subscription:Connect] Error:`, err)
+      return { success: false, error: extractError(err) } 
+    }
   })
 
   ipcMain.handle('traffic:start', () => {
