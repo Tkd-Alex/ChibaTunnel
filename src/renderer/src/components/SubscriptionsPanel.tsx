@@ -38,6 +38,7 @@ export default function SubscriptionsPanel({
   const [selectedSubId, setSelectedSubId] = useState<number | null>(null)
   const [loadingNodes, setLoadingNodes] = useState<Record<number, boolean>>({})
   const [selectedNode, setSelectedNode] = useState<ApiNode | null>(null)
+  const [connectingTo, setConnectingTo] = useState<string | null>(null)
 
   // Fetch provider monikers
   useEffect(() => {
@@ -55,14 +56,13 @@ export default function SubscriptionsPanel({
     })
   }, [subscriptions, plans, providerNamesCache, setProviderNamesCache])
 
-  // Filter out staging/test providers
   const filteredSubscriptions = useMemo(() => {
     return subscriptions.filter(sub => {
       const plan = plans.find(p => p.id === sub.planId)
       if (!plan) return true
       const moniker = providerNamesCache[plan.provAddress]?.name || ''
       const name = moniker.toLowerCase()
-      if (name.includes('test') || name.includes('staging')) return false
+      // if (name.includes('test') || name.includes('staging')) return false
       return true
     })
   }, [subscriptions, plans, providerNamesCache])
@@ -230,11 +230,19 @@ export default function SubscriptionsPanel({
                     {selectedNode ? (
                        <button 
                          className="btn btn-primary" 
+                         disabled={connectingTo === selectedNode.address}
                          style={{ height: '42px', padding: '0 24px', fontSize: '13px', fontWeight: 700, boxShadow: '0 0 15px rgba(0,255,159,0.2)' }}
-                         onClick={() => onConnect(selectedSub.id, selectedNode.address)}
+                         onClick={async () => {
+                           setConnectingTo(selectedNode.address)
+                           await onConnect(selectedSub.id, selectedNode.address)
+                           setConnectingTo(null)
+                         }}
                        >
-                         <Play size={16} fill="currentColor" style={{ marginRight: 8 }} />
-                         {activeNodeAddress === selectedNode.address ? 'CONNECTED' : `CONNECT TO ${selectedNode.moniker.toUpperCase()}`}
+                         {connectingTo === selectedNode.address ? (
+                           <><Loader2 size={16} className="spinner" style={{ marginRight: 8 }} /> {t('common.starting', { defaultValue: 'CONNECTING...' })}</>
+                         ) : (
+                           <><Play size={16} fill="currentColor" style={{ marginRight: 8 }} /> {activeNodeAddress === selectedNode.address ? 'CONNECTED' : `CONNECT TO ${selectedNode.moniker.toUpperCase()}`}</>
+                         )}
                        </button>
                     ) : (
                        <div className={`badge ${selectedSub.status === 1 ? 'badge-green' : 'badge-red'}`} style={{ fontSize: '14px', padding: '8px 20px', fontWeight: 700 }}>
