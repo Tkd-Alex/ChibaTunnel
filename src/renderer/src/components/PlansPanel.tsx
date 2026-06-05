@@ -248,6 +248,7 @@ export default function PlansPanel({
               className={`card plan-card ${isSelected ? 'active' : ''}`}
               onClick={() => setSelectedPlanId(plan.id)}
               style={{ 
+                flexShrink: 0,
                 background: isSelected ? 'rgba(0,255,159,0.05)' : 'var(--bg-1)', 
                 border: `1px solid ${isSelected ? 'var(--green)' : 'var(--border)'}`,
                 borderRadius: '12px',

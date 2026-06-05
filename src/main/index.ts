@@ -632,9 +632,8 @@ function registerIpcHandlers(): void {
     if (!walletState.readonlyClient || !walletState.address) return { success: false, subscriptions: [] }
     try {
       const res = await walletState.readonlyClient.sentinelQuery?.subscription.subscriptionsForAccount(walletState.address, undefined)
-      const subscriptions = (res?.subscriptions ?? []).map(anyVal => {
+      const subscriptions = (res?.subscriptions ?? []).map(s => {
         try {
-          const s = Subscription.decode(anyVal.value)
           return {
             id: longToNum(s.id),
             accAddress: s.accAddress,
@@ -836,7 +835,7 @@ function registerIpcHandlers(): void {
 
       if (!sessionId) {
         console.error(`[Subscription:Connect] Failed to extract Session ID from events. Events:`, JSON.stringify(tx.events, null, 2))
-        return { success: false, error: 'Session ID not found in transaction events' }
+        return { success: false, error: 'Session ID not found in transaction events. TX Hash: ' + tx.transactionHash }
       }
 
       activeSessionId = sessionId.toString()
