@@ -44,6 +44,8 @@ export default function PlansPanel({
   const [isScanning, setIsScanning] = useState(false)
   const [confirmingPlan, setConfirmingPlan] = useState<ApiPlan | null>(null)
   const [subscribing, setSubscribing] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [showPrivate, setShowPrivate] = useState(false)
 
   // Batch Scan logic
   const performBatchScan = useCallback(async () => {
@@ -82,10 +84,19 @@ export default function PlansPanel({
   // Filter out staging/test providers AND empty plans
   const filteredPlans = useMemo(() => {
     return plans.filter(plan => {
+      if (!showPrivate && plan.private) return false
+
       const pInfo = providerNamesCache[plan.provAddress]
       const name = (pInfo?.name || '').toLowerCase()
-      if (name.includes('test') || name.includes('staging')) return false
+      // if (name.includes('test') || name.includes('staging')) return false
       
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase()
+        if (!name.includes(term) && !plan.id.toString().includes(term) && !plan.provAddress.toLowerCase().includes(term)) {
+          return false
+        }
+      }
+
       if (scannedOnce) {
         const nodes = planNodesCache[plan.id]
         if (!nodes || nodes.length === 0) return false
@@ -93,7 +104,7 @@ export default function PlansPanel({
       
       return true
     })
-  }, [plans, providerNamesCache, scannedOnce, planNodesCache])
+  }, [plans, providerNamesCache, scannedOnce, planNodesCache, searchTerm, showPrivate])
 
   // Select first filtered plan by default
   useEffect(() => {
@@ -191,6 +202,39 @@ export default function PlansPanel({
             {t('plans.title')}
           </div>
           <div style={{ fontSize: '10px', color: 'var(--green)', fontWeight: 600 }}>{filteredPlans.length} ACTIVE</div>
+        </div>
+
+        {/* Filter Bar */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '8px' }}>
+          <div style={{ position: 'relative' }}>
+            <Search size={14} color="var(--text-3)" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+            <input 
+              type="text" 
+              placeholder="Search provider or ID..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{ 
+                width: '100%', 
+                background: 'var(--bg-1)', 
+                border: '1px solid var(--border)', 
+                borderRadius: '8px', 
+                padding: '8px 12px 8px 32px',
+                color: 'var(--text-1)',
+                fontSize: '11px',
+                fontFamily: 'var(--font-mono)',
+                outline: 'none'
+              }}
+            />
+          </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '11px', color: 'var(--text-2)' }}>
+            <input 
+              type="checkbox" 
+              checked={showPrivate} 
+              onChange={(e) => setShowPrivate(e.target.checked)} 
+              style={{ accentColor: 'var(--cyan)' }}
+            />
+            Show Private Plans
+          </label>
         </div>
 
         {filteredPlans.map(plan => {
