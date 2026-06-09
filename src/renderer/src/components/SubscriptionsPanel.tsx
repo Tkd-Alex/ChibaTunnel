@@ -89,6 +89,16 @@ export default function SubscriptionsPanel({
     }
   }
 
+  // Trigger nodes fetch when sub selection changes
+  useEffect(() => {
+    if (selectedSubId !== null) {
+      const sub = filteredSubscriptions.find(s => s.id === selectedSubId)
+      if (sub) {
+        fetchPlanNodes(sub.planId)
+      }
+    }
+  }, [selectedSubId, filteredSubscriptions])
+
   const selectedSub = filteredSubscriptions.find(s => s.id === selectedSubId)
   const selectedPlan = selectedSub ? plans.find(p => p.id === selectedSub.planId) : null
   const selectedProv = selectedPlan ? providerNamesCache[selectedPlan.provAddress] : null
@@ -228,26 +238,27 @@ export default function SubscriptionsPanel({
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
                     {selectedNode ? (
-                       <button 
-                         className="btn btn-primary" 
-                         disabled={connectingTo === selectedNode.address}
-                         style={{ height: '42px', padding: '0 24px', fontSize: '13px', fontWeight: 700, boxShadow: '0 0 15px rgba(0,255,159,0.2)' }}
-                         onClick={async () => {
-                           setConnectingTo(selectedNode.address)
-                           await onConnect(selectedSub.id, selectedNode.address)
-                           setConnectingTo(null)
-                         }}
-                       >
-                         {connectingTo === selectedNode.address ? (
-                           <><Loader2 size={16} className="spinner" style={{ marginRight: 8 }} /> {t('common.starting', { defaultValue: 'CONNECTING...' })}</>
-                         ) : (
-                           <><Play size={16} fill="currentColor" style={{ marginRight: 8 }} /> {activeNodeAddress === selectedNode.address ? 'CONNECTED' : `CONNECT TO ${selectedNode.moniker.toUpperCase()}`}</>
-                         )}
-                       </button>
+                      <button
+                        className="btn btn-primary"
+                        disabled={connectingTo === selectedNode.address}
+                        style={{ height: '42px', padding: '0 24px', fontSize: '13px', fontWeight: 700, boxShadow: '0 0 15px rgba(0,255,159,0.2)' }}
+                        onClick={() => {
+                          setConnectingTo(selectedNode.address)
+                          onConnect(selectedSub.id, selectedNode.address)
+                          // Modal will open; re-enable button after a tick so rapid
+                          // double-clicks can't queue a second call before the modal appears.
+                          setTimeout(() => setConnectingTo(null), 500)
+                        }}
+                      >
+                        <Play size={16} fill="currentColor" style={{ marginRight: 8 }} />
+                        {activeNodeAddress === selectedNode.address
+                          ? t('subs.connected').toUpperCase()
+                          : `${t('subs.connect').toUpperCase()} ${selectedNode.moniker.toUpperCase()}`}
+                      </button>
                     ) : (
-                       <div className={`badge ${selectedSub.status === 1 ? 'badge-green' : 'badge-red'}`} style={{ fontSize: '14px', padding: '8px 20px', fontWeight: 700 }}>
-                         {selectedSub.status === 1 ? 'ACTIVE' : 'INACTIVE'}
-                       </div>
+                      <div className={`badge ${selectedSub.status === 1 ? 'badge-green' : 'badge-red'}`} style={{ fontSize: '14px', padding: '8px 20px', fontWeight: 700 }}>
+                        {selectedSub.status === 1 ? t('subs.active') : t('common.error')}
+                      </div>
                     )}
                   </div>
                </div>

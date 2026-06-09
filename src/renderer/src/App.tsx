@@ -84,6 +84,7 @@ export default function App() {
   const [modalNode, setModalNode]           = useState<ApiNode | null>(null)
   const [modalInfoOnly, setModalInfoOnly]   = useState(false)
   const [reuseSessionId, setReuseSessionId] = useState<number | null>(null)
+  const [reuseSubscriptionId, setReuseSubscriptionId] = useState<number | null>(null)
   
   const [showIpModal, setShowIpModal]           = useState(false)
   
@@ -270,6 +271,18 @@ export default function App() {
     setReuseSessionId(sid); setModalInfoOnly(false); setModalNode(target)
   }
 
+  async function handleConnectSubscription(subId: number, nodeAddr: string) {
+    let target = nodes.find(n => n.address === nodeAddr)
+    if (!target) {
+      try {
+        const res = await window.api.fetchNodeInfo(nodeAddr)
+        if (res.success) target = (res.info as any).result || res.info
+      } catch (e) { console.error('Failed to fetch node info', e) }
+    }
+    if (!target) { alert(`Node not found: ${nodeAddr}`); return }
+    setReuseSubscriptionId(subId); setModalInfoOnly(false); setModalNode(target)
+  }
+
   const tabs: Array<{ id: Tab; label: string; icon: React.ReactNode }> = [
     { id: 'globe',    label: t('tabs.globe'),    icon: <GlobeIcon size={14} /> },
     { id: 'nodes',    label: t('tabs.nodes'),    icon: <Hexagon size={14} /> },
@@ -438,15 +451,7 @@ export default function App() {
                 bookmarks={bookmarks}
                 onToggleBookmark={toggleBookmark}
                 activeNodeAddress={activeConnection?.node?.address}
-                onConnect={async (subId, nodeAddr) => {
-                  const res = await window.api.connectSubscriptionNode(subId, nodeAddr)
-                  if (res.success) {
-                    setActiveConnection(res as any)
-                    setTimeout(refreshIp, 2000)
-                  } else {
-                    alert(t('common.error') + ': ' + res.error)
-                  }
-                }}
+                onConnect={handleConnectSubscription}
               />
             )}
 
@@ -511,12 +516,14 @@ export default function App() {
         <NodeConnectModal
           node={modalNode} bookmarked={bookmarks.includes(modalNode.address)}
           onBookmark={() => toggleBookmark(modalNode.address)}
-          onClose={() => { setModalNode(null); setModalInfoOnly(false); setReuseSessionId(null) }}
-          onConnected={state => { 
-            setActiveConnection(state); setModalNode(null); setModalInfoOnly(false); setReuseSessionId(null)
+          onClose={() => { setModalNode(null); setModalInfoOnly(false); setReuseSessionId(null); setReuseSubscriptionId(null) }}
+          onConnected={state => {
+            setActiveConnection(state); setModalNode(null); setModalInfoOnly(false); setReuseSessionId(null); setReuseSubscriptionId(null)
             setTimeout(refreshIp, 2000)
           }}
-          infoOnly={modalInfoOnly} initialSessionId={reuseSessionId ? reuseSessionId.toString() : null}
+          infoOnly={modalInfoOnly}
+          initialSessionId={reuseSessionId ? reuseSessionId.toString() : null}
+          initialSubscriptionId={reuseSubscriptionId ? reuseSubscriptionId.toString() : null}
         />
       )}
 

@@ -24,10 +24,12 @@ import {
   Status,
   subscriptionStart,
   subscriptionStartSession,
-  RenewalPricePolicy
+  RenewalPricePolicy,
+  SubscriptionEventCreateSession
 } from '@sentinel-official/sentinel-js-sdk'
 import { DirectSecp256k1HdWallet } from '@cosmjs/proto-signing'
 import { assertIsDeliverTxSuccess } from '@cosmjs/stargate'
+import { fromBech32 } from '@cosmjs/encoding'
 import { MsgSend } from 'cosmjs-types/cosmos/bank/v1beta1/tx'
 import Long from 'long'
 import QRCode from 'qrcode'
@@ -168,6 +170,7 @@ let activeV2RayServerIp: string | null    = null
 let activeSessionId:    string | null    = null
 let activeNodeAddress:  string | null    = null
 let wasConnected:       boolean          = false
+let connectInProgress:  boolean          = false
 
 let trafficInterval: ReturnType<typeof setInterval> | null = null
 
@@ -792,6 +795,8 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('subscription:connect', async (_e, { subscriptionId, nodeAddress }: { subscriptionId: number; nodeAddress: string }) => {
     if (!walletState.client || !walletState.address || !walletState.privkey) return { success: false, error: 'Wallet not initialized' }
+    if (connectInProgress) return { success: false, error: 'A connection is already in progress' }
+    connectInProgress = true
     try {
       console.log(`[Subscription:Connect] Starting session with Sub #${subscriptionId} on node ${nodeAddress}`)
       mainWindow?.webContents.send('vpn:status', { step: 'signing_tx' })
@@ -802,48 +807,44 @@ function registerIpcHandlers(): void {
       })
       const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'sentinel-dvpn-client')
       assertIsDeliverTxSuccess(tx)
-      console.log(`[Subscription:Connect] TX broadcasted: ${tx.transactionHash}`)
 
-      // Hub v3 (v12) emits sentinel.subscription.v3.EventCreateSession
-      const event = 
-        searchEvent('sentinel.subscription.v3.EventCreateSession', tx.events) || 
-        searchEvent('sentinel.vpn.session.v1.EventCreate', tx.events) || 
-        searchEvent('sentinel.vpn.session.v2.EventCreate', tx.events) || 
-        searchEvent('EventCreate', tx.events)
+      mainWindow?.webContents.send('vpn:status', { step: 'extracting_tx' })
       
-      let sessionId: Long | null = null
-      if (event) {
-        console.log(`[Subscription:Connect] Found creation event: ${event.type}`)
-        const sidAttr = event.attributes.find(a => a.key === 'id' || a.key === 'session_id')
-        if (sidAttr) {
-          sessionId = Long.fromString(sidAttr.value, true)
-          console.log(`[Subscription:Connect] Extracted Session ID: ${sessionId.toString()}`)
-        }
+      // Parse event using SDK helper
+      const event = searchEvent(SubscriptionEventCreateSession.type, tx.events)
+      if (!event) {
+        return { success: false, error: 'Session creation event not found in transaction' }
       }
 
-      if (!sessionId) {
-        // Last fallback: search for ANY session-id in events
-        for (const e of tx.events) {
-          const attr = e.attributes.find(a => a.key === 'session_id' || (e.type.includes('session') && a.key === 'id'))
-          if (attr) {
-            sessionId = Long.fromString(attr.value, true)
-            console.log(`[Subscription:Connect] Fallback extracted Session ID: ${sessionId.toString()} from event ${e.type}`)
-            break
-          }
-        }
-      }
-
-      if (!sessionId) {
-        console.error(`[Subscription:Connect] Failed to extract Session ID from events. Events:`, JSON.stringify(tx.events, null, 2))
-        return { success: false, error: 'Session ID not found in transaction events. TX Hash: ' + tx.transactionHash }
-      }
+      const parsed = SubscriptionEventCreateSession.parse(event)
+      const sessionId = parsed.value.sessionId
 
       activeSessionId = sessionId.toString()
       activeNodeAddress = nodeAddress
-      return doHandshake(nodeAddress, sessionId)
-    } catch (err: unknown) { 
+
+      // Handshake with a small retry loop for propagation delay
+      let lastErr: any = null
+      for (let i = 0; i < 5; i++) {
+        try {
+          if (i > 0) await new Promise(r => setTimeout(r, 2000))
+          console.log(`[Subscription:Connect] Handshake attempt ${i + 1} for Session #${sessionId}`)
+          return await doHandshake(nodeAddress, sessionId)
+        } catch (err: any) {
+          lastErr = err
+          const msg = (err.message || '').toLowerCase()
+          if (msg.includes('not exist') || msg.includes('404')) {
+            console.warn(`[Subscription:Connect] Session not indexed yet, retrying...`)
+            continue
+          }
+          throw err // Other errors fail immediately
+        }
+      }
+      throw lastErr
+    } catch (err: unknown) {
       console.error(`[Subscription:Connect] Error:`, err)
-      return { success: false, error: extractError(err) } 
+      return { success: false, error: extractError(err) }
+    } finally {
+      connectInProgress = false
     }
   })
 
@@ -858,6 +859,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('node:connect', async (_e, args: { nodeAddress: string; subscriptionType: 'gigabytes' | 'hours'; amount: number; donate?: boolean }) => {
     if (!walletState.client || !walletState.address || !walletState.privkey) return { success: false, error: 'Wallet not initialized' }
+    if (connectInProgress) return { success: false, error: 'A connection is already in progress' }
     lastConnectArgs = args; reconnectAttempts = 0; wasConnected = false; return doConnect(args)
   })
 
@@ -938,6 +940,7 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('node:disconnect', async () => {
+    connectInProgress = false
     await killActiveConnections(false)
     mainWindow?.webContents.send('vpn:disconnected', { reason: 'manual' })
     return { success: true }
@@ -1085,6 +1088,7 @@ function extractError(err: unknown): string {
 }
 
 async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabytes' | 'hours'; amount: number; donate?: boolean }) {
+  connectInProgress = true
   try {
     mainWindow?.webContents.send('vpn:status', { step: 'fetching_node' })
     const chainNode = await withTimeout(walletState.client!.sentinelQuery?.node.node(args.nodeAddress), RPC_TIMEOUT_MS, 'RPC timeout fetching node')
@@ -1110,13 +1114,39 @@ async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabyt
 
     mainWindow?.webContents.send('vpn:status', { step: 'extracting_tx' })
     const event = searchEvent(NodeEventCreateSession.type, tx.events)
-    if (!event) return { success: false, error: 'Session creation event not found' }
-    const parsed = NodeEventCreateSession.parse(event); const sessionId = parsed.value.sessionId
-    activeSessionId = sessionId.toString(); activeNodeAddress = args.nodeAddress
-    return doHandshake(args.nodeAddress, sessionId, args.donate, args.amount, args.subscriptionType)
+    if (!event) {
+      return { success: false, error: 'Session creation event not found' }
+    }
+
+    const parsed = NodeEventCreateSession.parse(event)
+    const sessionId = parsed.value.sessionId
+
+    activeSessionId = sessionId.toString()
+    activeNodeAddress = args.nodeAddress
+
+    // Handshake with a small retry loop for propagation delay
+    let lastErr: any = null
+    for (let i = 0; i < 5; i++) {
+      try {
+        if (i > 0) await new Promise(r => setTimeout(r, 2000))
+        console.log(`[Node:Connect] Handshake attempt ${i + 1} for Session #${sessionId}`)
+        return await doHandshake(args.nodeAddress, sessionId, args.donate, args.amount, args.subscriptionType)
+      } catch (err: any) {
+        lastErr = err
+        const msg = (err.message || '').toLowerCase()
+        if (msg.includes('not exist') || msg.includes('404')) {
+          console.warn(`[Node:Connect] Session not indexed yet, retrying...`)
+          continue
+        }
+        throw err // Other errors fail immediately
+      }
+    }
+    throw lastErr
   } catch (err: any) {
     console.error('[doConnect] Error:', err)
     return { success: false, error: extractError(err), details: err?.response?.data }
+  } finally {
+    connectInProgress = false
   }
 }
 
@@ -1173,7 +1203,15 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
             const qty = BigInt(amount)
             const donationAmount = (unitPrice * qty) / 10n // 10%
 
-            if (donationAmount > 0n) {
+            // Validate the recipient before attempting any transfer. The default
+            // PROJECT_WALLET_ADDRESS is a placeholder and an invalid/misconfigured
+            // address must never abort or even attempt the donation.
+            let recipientValid = false
+            try { recipientValid = fromBech32(PROJECT_WALLET_ADDRESS).prefix === 'sent' } catch { recipientValid = false }
+
+            if (donationAmount > 0n && !recipientValid) {
+              console.log(`[SUPPORT] Donation skipped: invalid recipient address "${PROJECT_WALLET_ADDRESS}"`)
+            } else if (donationAmount > 0n) {
               console.log(`[SUPPORT] Calculated Donation: ${donationAmount.toString()} udvpn`)
               mainWindow?.webContents.send('vpn:warning', { message: `Project donation triggered: ${donationAmount.toString()} udvpn` })
 
