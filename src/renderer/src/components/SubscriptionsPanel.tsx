@@ -21,7 +21,7 @@ interface Props {
   activeNodeAddress?: string | null
 }
 
-const POLICIES = [
+export const POLICIES = [
   { value: 0, labelKey: 'renewal.policy_0', descKey: 'renewal.desc_0' },
   { value: 1, labelKey: 'renewal.policy_1', descKey: 'renewal.desc_1' },
   { value: 2, labelKey: 'renewal.policy_2', descKey: 'renewal.desc_2' },

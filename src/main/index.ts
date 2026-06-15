@@ -653,15 +653,15 @@ function registerIpcHandlers(): void {
     } catch (err: unknown) { return { success: false, error: extractError(err), subscriptions: [] } }
   })
 
-  ipcMain.handle('plan:subscribe', async (_e, { planId, denom }: { planId: number; denom: string }) => {
+  ipcMain.handle('plan:subscribe', async (_e, { planId, denom, policy }: { planId: number; denom: string; policy: number }) => {
     if (!walletState.client || !walletState.address) return { success: false, error: 'Wallet not initialized' }
     try {
-      console.log(`[Plan:Subscribe] Starting sub for Plan #${planId} with denom ${denom}`)
+      console.log(`[Plan:Subscribe] Starting sub for Plan #${planId} with denom ${denom} and policy ${policy}`)
       const msg = subscriptionStart({
         from: walletState.address,
         id: Long.fromNumber(planId, true),
         denom: denom,
-        renewalPricePolicy: RenewalPricePolicy.RENEWAL_PRICE_POLICY_UNSPECIFIED
+        renewalPricePolicy: policy
       })
       const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'sentinel-dvpn-client')
       assertIsDeliverTxSuccess(tx)

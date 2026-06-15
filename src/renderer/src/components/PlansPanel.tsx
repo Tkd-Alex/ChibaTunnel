@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ApiPlan, ApiNode } from '../types'
-import { Globe, Users, Clock, CreditCard, CheckCircle2, Loader2, Info, ShieldCheck, Server, Search, AlertCircle, Database, ExternalLink } from 'lucide-react'
+import { Globe, Users, Clock, CreditCard, CheckCircle2, Loader2, Info, ShieldCheck, Server, Search, AlertCircle, Database, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
 import ConfirmModal from './ConfirmModal'
 import NodeTable from './NodeTable'
 import { formatDataQuota } from '../utils'
+import { POLICIES } from './SubscriptionsPanel'
 
 interface Props {
   plans: ApiPlan[]
@@ -46,6 +47,9 @@ export default function PlansPanel({
   const [subscribing, setSubscribing] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [showPrivate, setShowPrivate] = useState(false)
+  
+  const [selectedPolicy, setSelectedPolicy] = useState(0) // Default: Unspecified
+  const [showPolicyDropdown, setShowPolicyDropdown] = useState(false)
 
   // Batch Scan logic
   const performBatchScan = useCallback(async () => {
@@ -393,10 +397,66 @@ export default function PlansPanel({
           title={t('plans.confirm_sub_title')}
           message={t('plans.confirm_sub_msg', { id: confirmingPlan.id })}
           onConfirm={handleSubscribe}
-          onCancel={() => !subscribing && setConfirmingPlan(null)}
+          onCancel={() => {
+             if (!subscribing) {
+               setConfirmingPlan(null)
+               setShowPolicyDropdown(false)
+               setSelectedPolicy(0)
+             }
+          }}
           confirmLabel={subscribing ? t('common.starting') : t('plans.subscribe')}
           cancelLabel={subscribing ? "" : t('common.cancel')}
-        />
+        >
+          <div style={{ marginTop: '20px', position: 'relative' }}>
+            <div style={{ fontSize: '11px', color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: '6px' }}>
+              {t('renewal.title')}
+            </div>
+            <button 
+              className="btn btn-secondary btn-full" 
+              style={{ fontSize: '13px', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              onClick={() => setShowPolicyDropdown(!showPolicyDropdown)}
+              disabled={subscribing}
+            >
+              {t(POLICIES.find(p => p.value === selectedPolicy)?.labelKey || 'renewal.policy_0')}
+              {showPolicyDropdown ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+            {showPolicyDropdown && (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, marginTop: '8px', width: '100%',
+                background: 'var(--bg-1)', border: '1px solid var(--border)', borderRadius: '8px',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.5)', zIndex: 100, overflow: 'hidden',
+                maxHeight: '200px', overflowY: 'auto'
+              }}>
+                {POLICIES.map(p => {
+                  const isCurrent = p.value === selectedPolicy
+                  return (
+                    <div 
+                      key={p.value}
+                      onClick={() => {
+                        setSelectedPolicy(p.value)
+                        setShowPolicyDropdown(false)
+                      }}
+                      style={{ 
+                        padding: '12px 16px', cursor: 'pointer', borderBottom: '1px solid var(--bg-0)',
+                        background: isCurrent ? 'rgba(6, 182, 212, 0.1)' : 'transparent',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseOver={e => { if (!isCurrent) e.currentTarget.style.background = 'var(--bg-2)' }}
+                      onMouseOut={e => { if (!isCurrent) e.currentTarget.style.background = 'transparent' }}
+                    >
+                      <div style={{ fontSize: '12px', fontWeight: 600, color: isCurrent ? 'var(--cyan)' : 'var(--text-1)', marginBottom: '4px' }}>
+                        {t(p.labelKey)}
+                      </div>
+                      <div style={{ fontSize: '10px', color: 'var(--text-3)', lineHeight: 1.4 }}>
+                        {t(p.descKey)}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </ConfirmModal>
       )}
     </div>
   )
