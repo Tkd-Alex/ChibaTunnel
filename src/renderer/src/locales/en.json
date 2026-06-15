@@ -1,5 +1,7 @@
 {
   "common": {
+    "selected": "SELECTED",
+    "never": "Never",
     "loading": "INITIALIZING...",
     "fetching_nodes": "Fetching nodes...",
     "refresh": "Refresh",
@@ -37,8 +39,56 @@
   "tabs": {
     "globe": "Globe",
     "nodes": "Nodes",
+    "plans": "Plans",
+    "my_subs": "My Subs",
     "sessions": "Sessions",
     "manage": "Manage"
+  },
+  "plans": {
+    "analyzing": "Analyzing network plans...",
+    "filtering": "Filtering for active plans with available nodes.",
+    "no_nodes_found": "No active plans with nodes found.",
+    "try_changing_rpc": "Try changing your RPC or refreshing the list.",
+    "retry_scan": "Retry Network Scan",
+    "search_placeholder": "Search provider or ID...",
+    "show_private": "Show Private Plans",
+    "details_title": "Plan Details",
+    "subscribe_for": "SUBSCRIBE FOR {{amount}} {{denom}}",
+    "available": "Available",
+    "no_nodes_for_plan": "No nodes found for this plan.",
+    "select_plan_hint": "Select a plan to view its characteristics and available nodes.",
+    "title": "Subscription Plans",
+    "by": "by",
+    "nodes": "nodes",
+    "days": "days",
+    "subscribe": "Subscribe",
+    "fetching": "Fetching plans...",
+    "details": "Details",
+    "price_per_month": "{{amount}} / month",
+    "no_plans": "No active plans found.",
+    "confirm_sub_title": "Subscribe to Plan?",
+    "confirm_sub_msg": "Are you sure you want to subscribe to Plan #{{id}}? This will broadcast an on-chain transaction.",
+    "subscribe_success": "Subscription transaction sent successfully!"
+  },
+  "subs": {
+    "plan_identity": "Plan Identity",
+    "valid_until": "Valid Until",
+    "available_pool": "Available Pool",
+    "select_node_hint": "Select a node from the list to enable connection",
+    "no_nodes_for_sub": "No nodes found for this subscription pool.",
+    "select_sub_hint": "Select a subscription to manage your access and connect to nodes.",
+    "details_title": "Subscription Details",
+    "title": "My Subscriptions",
+    "active": "Active",
+    "expires": "Expires",
+    "quota": "Quota",
+    "connect": "Connect",
+    "no_subs": "No active subscriptions found.",
+    "nodes_in_plan": "Available nodes in plan",
+    "connected": "connected",
+    "renew": "Renew",
+    "cancel": "Cancel",
+    "sub_id": "Sub #{{id}}"
   },
   "filters": {
     "title": "Globe Filters",
@@ -311,5 +361,24 @@
       "tun2socks": "Required for system-wide V2Ray support via TUN interface."
     },
     "wintun_missing": "Windows requirement: Place 'wintun.dll' in the same folder as tun2socks.exe."
+  },
+  "renewal": {
+    "title": "Auto-Renewal Policy",
+    "policy_0": "Do not renew",
+    "policy_1": "Only if price drops",
+    "policy_2": "If price drops or stays same",
+    "policy_3": "Only if price is unchanged",
+    "policy_4": "Only if price changes",
+    "policy_5": "Only if price increases",
+    "policy_6": "If price increases or stays same",
+    "policy_7": "Always renew",
+    "desc_0": "Subscription will expire at the end of the term.",
+    "desc_1": "Protects you from price increases. Renews only if the provider lowers the price.",
+    "desc_2": "Standard protection. Renews only if the provider does not raise the price.",
+    "desc_3": "Renews only if the exact price is maintained.",
+    "desc_7": "Renews regardless of price changes by the provider or oracle.",
+    "desc_other": "Advanced policy based on price movement.",
+    "update_btn": "Update Policy",
+    "updating": "Updating..."
   }
 }

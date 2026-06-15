@@ -7,6 +7,7 @@ interface Props {
   confirmLabel?: string
   cancelLabel?:  string
   danger?:     boolean
+  children?:   React.ReactNode
   onConfirm:   () => void
   onCancel:    () => void
 }
@@ -14,7 +15,7 @@ interface Props {
 export default function ConfirmModal({
   title, message,
   confirmLabel = 'Confirm', cancelLabel = 'Cancel',
-  danger = false, onConfirm, onCancel
+  danger = false, children, onConfirm, onCancel
 }: Props) {
   return (
     <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) onCancel() }}>
@@ -24,6 +25,7 @@ export default function ConfirmModal({
         </div>
         <div className="confirm-title">{title}</div>
         <div className="confirm-message">{message}</div>
+        {children && <div style={{ margin: '16px 0', textAlign: 'left' }}>{children}</div>}
         <div className="confirm-actions">
           {cancelLabel !== "" && (
             <button className="btn btn-secondary" style={{ flex: 1 }} onClick={onCancel}>

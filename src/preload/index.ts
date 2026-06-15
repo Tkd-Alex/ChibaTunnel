@@ -40,6 +40,19 @@ const api = {
   fetchNodes:     () => ipcRenderer.invoke('nodes:fetch'),
   fetchNodeInfo:  (remoteAddr: string) => ipcRenderer.invoke('node:info', remoteAddr),
 
+  // Plans & Subscriptions
+  fetchPlans:         () => ipcRenderer.invoke('plans:fetch'),
+  fetchPlanNodes:     (planId: number) => ipcRenderer.invoke('plan:nodes', planId),
+  scanPlanNodes:      (planIds: number[]) => ipcRenderer.invoke('plans:scanNodes', planIds),
+  fetchSubscriptions: () => ipcRenderer.invoke('subscriptions:fetch'),
+  fetchProviderInfo:  (address: string) => ipcRenderer.invoke('provider:info', address),
+  fetchProvidersBatch: (addresses: string[]) => ipcRenderer.invoke('providers:fetchBatch', addresses),
+  subscribeToPlan:    (planId: number, denom: string, policy: number) => ipcRenderer.invoke('plan:subscribe', { planId, denom, policy }),
+  updateSubscription: (subscriptionId: number, policy: number) => ipcRenderer.invoke('subscription:update', { subscriptionId, policy }),
+  cancelSubscription: (subscriptionId: number) => ipcRenderer.invoke('subscription:cancel', subscriptionId),
+  connectSubscriptionNode: (subscriptionId: number, nodeAddress: string) => 
+    ipcRenderer.invoke('subscription:connect', { subscriptionId, nodeAddress }),
+
   // Sessions
   fetchSessions:  () => ipcRenderer.invoke('sessions:fetch'),
   cancelSession:  (id: number) => ipcRenderer.invoke('session:cancel', id),

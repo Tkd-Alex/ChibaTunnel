@@ -50,17 +50,26 @@ No repeated password prompts or UAC dialogs during normal use.
 ### Connection Lifecycle
 
 ```mermaid
-graph LR
-  A[Choose Node] --> B[Subscribe on-chain]
-  B --> C[Handshake with node]
-  C --> D[Generate config]
-  D --> E{VPN type?}
-  E -->|WireGuard| F[wg-up via Helper]
-  E -->|V2Ray standard| G[spawn v2ray]
-  E -->|V2Ray transparent| G
-  G --> H[start-transparent via Helper]
-  F --> I[Tunnel active]
-  H --> I
+graph TD
+  subgraph Pay-Per-Use
+    A1[Choose Node] --> B1[Start Session & Escrow Deposit]
+  end
+  
+  subgraph Plan Subscription
+    A2[Choose Plan] --> B2[Subscribe to Plan]
+    B2 --> C2[Select Node from Pool]
+    C2 --> D2[Start Session from Allocation]
+  end
+
+  B1 --> E[Handshake with Node]
+  D2 --> E
+  
+  E --> F[Generate Config]
+  F --> G{VPN Type?}
+  G -->|WireGuard| H[wg-up via Helper]
+  G -->|V2Ray| I[spawn v2ray / tun2socks]
+  H --> J[Tunnel Active]
+  I --> J
 ```
 
 ### Privileged Operations Flow

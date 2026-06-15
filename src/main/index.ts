@@ -18,10 +18,18 @@ import {
   Session,
   BaseSession,
   type TxNodeStartSession,
-  type Price
+  type Price,
+  Plan,
+  Subscription,
+  Status,
+  subscriptionStart,
+  subscriptionStartSession,
+  RenewalPricePolicy,
+  SubscriptionEventCreateSession
 } from '@sentinel-official/sentinel-js-sdk'
 import { DirectSecp256k1HdWallet } from '@cosmjs/proto-signing'
 import { assertIsDeliverTxSuccess } from '@cosmjs/stargate'
+import { fromBech32 } from '@cosmjs/encoding'
 import { MsgSend } from 'cosmjs-types/cosmos/bank/v1beta1/tx'
 import Long from 'long'
 import QRCode from 'qrcode'
@@ -162,6 +170,7 @@ let activeV2RayServerIp: string | null    = null
 let activeSessionId:    string | null    = null
 let activeNodeAddress:  string | null    = null
 let wasConnected:       boolean          = false
+let connectInProgress:  boolean          = false
 
 let trafficInterval: ReturnType<typeof setInterval> | null = null
 
@@ -599,6 +608,290 @@ function registerIpcHandlers(): void {
     } catch (err: unknown) { return { success: false, error: extractError(err) } }
   })
 
+  ipcMain.handle('plans:fetch', async () => {
+    if (!walletState.readonlyClient) return { success: false, plans: [] }
+    try {
+      const res = await walletState.readonlyClient.sentinelQuery?.plan.plans(Status.STATUS_ACTIVE, undefined)
+      const plans = (res?.plans ?? []).map(p => ({
+        id: longToNum(p.id),
+        provAddress: p.provAddress,
+        bytes: p.bytes,
+        duration: p.duration ? longToNum(p.duration.seconds) : 0,
+        prices: p.prices.map(price => {
+          const rawVal = (price as any).quoteValue || price.amount || (price as any).value || '0'
+          return {
+            denom: price.denom,
+            amount: typeof rawVal === 'object' && rawVal !== null ? rawVal.toString() : String(rawVal)
+          }
+        }),
+        status: p.status,
+        private: p.private
+      }))
+      return { success: true, plans }
+    } catch (err: unknown) { return { success: false, error: extractError(err), plans: [] } }
+  })
+
+  ipcMain.handle('subscriptions:fetch', async () => {
+    if (!walletState.readonlyClient || !walletState.address) return { success: false, subscriptions: [] }
+    try {
+      const res = await walletState.readonlyClient.sentinelQuery?.subscription.subscriptionsForAccount(walletState.address, undefined)
+      const subscriptions = (res?.subscriptions ?? []).map(s => {
+        try {
+          return {
+            id: longToNum(s.id),
+            accAddress: s.accAddress,
+            planId: longToNum(s.planId),
+            price: s.price ? { denom: s.price.denom, baseValue: s.price.baseValue, quoteValue: s.price.quoteValue } : null,
+            status: s.status,
+            inactiveAt: s.inactiveAt?.toISOString() ?? null,
+            startAt: s.startAt?.toISOString() ?? null,
+            renewalPricePolicy: s.renewalPricePolicy
+          }
+        } catch { return null }
+      }).filter(Boolean)
+      return { success: true, subscriptions }
+    } catch (err: unknown) { return { success: false, error: extractError(err), subscriptions: [] } }
+  })
+
+  ipcMain.handle('plan:subscribe', async (_e, { planId, denom, policy }: { planId: number; denom: string; policy: number }) => {
+    if (!walletState.client || !walletState.address) return { success: false, error: 'Wallet not initialized' }
+    try {
+      console.log(`[Plan:Subscribe] Starting sub for Plan #${planId} with denom ${denom} and policy ${policy}`)
+      const msg = subscriptionStart({
+        from: walletState.address,
+        id: Long.fromNumber(planId, true),
+        denom: denom,
+        renewalPricePolicy: policy
+      })
+      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'sentinel-dvpn-client')
+      assertIsDeliverTxSuccess(tx)
+      console.log(`[Plan:Subscribe] Success! TX: ${tx.transactionHash}`)
+      return { success: true, txHash: tx.transactionHash }
+    } catch (err: unknown) { 
+      console.error(`[Plan:Subscribe] Error:`, err)
+      return { success: false, error: extractError(err) } 
+    }
+  })
+
+  ipcMain.handle('plan:nodes', async (_e, planId: number) => {
+    if (!walletState.readonlyClient) return { success: false, nodes: [] }
+    try {
+      const id = Long.fromNumber(planId, true)
+      const res = await walletState.readonlyClient.sentinelQuery?.node.nodesForPlan(id, Status.STATUS_ACTIVE, undefined)
+      
+      const nodes = (res?.nodes ?? []).map(n => ({
+        address: n.address,
+        moniker: n.address.slice(0, 12) + '...',
+        version: (n as any).version || '',
+        type: 1, 
+        isActive: n.status === Status.STATUS_ACTIVE,
+        isHealthy: true,
+        country: '??',
+        city: '',
+        gigabytePrices: n.gigabytePrices.map(p => ({ denom: p.denom, value: p.quoteValue })),
+        hourlyPrices: n.hourlyPrices.map(p => ({ denom: p.denom, value: p.quoteValue })),
+        sessions: 0,
+        peers: 0,
+        isResidential: false,
+        isWhitelisted: false,
+        isDuplicate: false,
+        errorMessage: null,
+        fetchedAt: new Date().toISOString()
+      }))
+      return { success: true, nodes }
+    } catch (err: unknown) { 
+      console.error(`[IPC] Error fetching nodes for plan ${planId}:`, err)
+      return { success: false, error: extractError(err), nodes: [] } 
+    }
+  })
+
+  ipcMain.handle('plans:scanNodes', async (_e, planIds: number[]) => {
+    if (!walletState.readonlyClient) return { success: false, nodesMap: {} }
+    const nodesMap: Record<number, any[]> = {}
+    
+    // Concurrency limit: 10
+    const chunks = []
+    for (let i = 0; i < planIds.length; i += 10) {
+      chunks.push(planIds.slice(i, i + 10))
+    }
+
+    for (const chunk of chunks) {
+      await Promise.all(chunk.map(async (id) => {
+        try {
+          const res = await walletState.readonlyClient!.sentinelQuery?.node.nodesForPlan(Long.fromNumber(id, true), Status.STATUS_ACTIVE, undefined)
+          nodesMap[id] = (res?.nodes ?? []).map(n => ({
+            address: n.address,
+            moniker: n.address.slice(0, 12) + '...',
+            version: (n as any).version || '',
+            type: 1, 
+            isActive: n.status === Status.STATUS_ACTIVE,
+            isHealthy: true,
+            country: '??',
+            city: '',
+            gigabytePrices: n.gigabytePrices.map(p => ({ denom: p.denom, value: p.quoteValue })),
+            hourlyPrices: n.hourlyPrices.map(p => ({ denom: p.denom, value: p.quoteValue })),
+            sessions: 0,
+            peers: 0,
+            isResidential: false,
+            isWhitelisted: false,
+            isDuplicate: false,
+            errorMessage: null,
+            fetchedAt: new Date().toISOString()
+          }))
+        } catch (err) {
+          console.error(`[IPC] Error scanning plan ${id}:`, err)
+          nodesMap[id] = []
+        }
+      }))
+    }
+    return { success: true, nodesMap }
+  })
+
+  ipcMain.handle('provider:info', async (_e, address: string) => {
+    if (!walletState.readonlyClient) return { success: false, error: 'No RPC client' }
+    try {
+      const res = await walletState.readonlyClient.sentinelQuery?.provider.provider(address)
+      if (!res) return { success: false, error: 'Provider not found' }
+      return { 
+        success: true, 
+        provider: {
+          address: res.address,
+          name: res.name,
+          identity: res.identity,
+          website: res.website,
+          description: res.description,
+          status: res.status,
+          statusAt: res.statusAt?.toISOString()
+        } 
+      }
+    } catch (err: unknown) { return { success: false, error: extractError(err) } }
+  })
+
+  ipcMain.handle('providers:fetchBatch', async (_e, addresses: string[]) => {
+    if (!walletState.readonlyClient) return { success: false, providers: {} }
+    const providers: Record<string, any> = {}
+    
+    // Concurrency limit: 20 (providers are simpler)
+    const chunks = []
+    for (let i = 0; i < addresses.length; i += 20) {
+      chunks.push(addresses.slice(i, i + 20))
+    }
+
+    for (const chunk of chunks) {
+      await Promise.all(chunk.map(async (addr) => {
+        try {
+          const res = await walletState.readonlyClient!.sentinelQuery?.provider.provider(addr)
+          if (res) {
+            providers[addr] = {
+              name: res.name,
+              website: res.website,
+              description: res.description
+            }
+          }
+        } catch { /* ignore */ }
+      }))
+    }
+    return { success: true, providers }
+  })
+
+  ipcMain.handle('subscription:cancel', async (_e, subscriptionId: number) => {
+    if (!walletState.client || !walletState.address || !walletState.privkey) return { success: false, error: 'Wallet not initialized' }
+    try {
+      console.log(`[Subscription:Cancel] Cancelling Sub #${subscriptionId}`)
+      const msg = {
+        typeUrl: '/sentinel.subscription.v3.MsgCancelSubscriptionRequest',
+        value: {
+          from: walletState.address,
+          id: Long.fromNumber(subscriptionId, true)
+        }
+      }
+      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'sentinel-dvpn-client')
+      assertIsDeliverTxSuccess(tx)
+      console.log(`[Subscription:Cancel] Success! TX: ${tx.transactionHash}`)
+      return { success: true, txHash: tx.transactionHash }
+    } catch (err: unknown) {
+      console.error(`[Subscription:Cancel] Error:`, err)
+      return { success: false, error: extractError(err) }
+    }
+  })
+
+  ipcMain.handle('subscription:update', async (_e, { subscriptionId, policy }: { subscriptionId: number; policy: number }) => {
+    if (!walletState.client || !walletState.address || !walletState.privkey) return { success: false, error: 'Wallet not initialized' }
+    try {
+      console.log(`[Subscription:Update] Updating Sub #${subscriptionId} with policy ${policy}`)
+      const msg = {
+        typeUrl: '/sentinel.subscription.v3.MsgUpdateSubscriptionRequest',
+        value: {
+          from: walletState.address,
+          id: Long.fromNumber(subscriptionId, true),
+          renewalPricePolicy: policy
+        }
+      }
+      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'sentinel-dvpn-client')
+      assertIsDeliverTxSuccess(tx)
+      console.log(`[Subscription:Update] Success! TX: ${tx.transactionHash}`)
+      return { success: true, txHash: tx.transactionHash }
+    } catch (err: unknown) {
+      console.error(`[Subscription:Update] Error:`, err)
+      return { success: false, error: extractError(err) }
+    }
+  })
+
+  ipcMain.handle('subscription:connect', async (_e, { subscriptionId, nodeAddress }: { subscriptionId: number; nodeAddress: string }) => {
+    if (!walletState.client || !walletState.address || !walletState.privkey) return { success: false, error: 'Wallet not initialized' }
+    if (connectInProgress) return { success: false, error: 'A connection is already in progress' }
+    connectInProgress = true
+    try {
+      console.log(`[Subscription:Connect] Starting session with Sub #${subscriptionId} on node ${nodeAddress}`)
+      mainWindow?.webContents.send('vpn:status', { step: 'signing_tx' })
+      const msg = subscriptionStartSession({
+        from: walletState.address,
+        id: Long.fromNumber(subscriptionId, true),
+        nodeAddress: nodeAddress
+      })
+      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'sentinel-dvpn-client')
+      assertIsDeliverTxSuccess(tx)
+
+      mainWindow?.webContents.send('vpn:status', { step: 'extracting_tx' })
+      
+      // Parse event using SDK helper
+      const event = searchEvent(SubscriptionEventCreateSession.type, tx.events)
+      if (!event) {
+        return { success: false, error: 'Session creation event not found in transaction' }
+      }
+
+      const parsed = SubscriptionEventCreateSession.parse(event)
+      const sessionId = parsed.value.sessionId
+
+      activeSessionId = sessionId.toString()
+      activeNodeAddress = nodeAddress
+
+      // Handshake with a small retry loop for propagation delay
+      let lastErr: any = null
+      for (let i = 0; i < 5; i++) {
+        try {
+          if (i > 0) await new Promise(r => setTimeout(r, 2000))
+          console.log(`[Subscription:Connect] Handshake attempt ${i + 1} for Session #${sessionId}`)
+          return await doHandshake(nodeAddress, sessionId)
+        } catch (err: any) {
+          lastErr = err
+          const msg = (err.message || '').toLowerCase()
+          if (msg.includes('not exist') || msg.includes('404')) {
+            console.warn(`[Subscription:Connect] Session not indexed yet, retrying...`)
+            continue
+          }
+          throw err // Other errors fail immediately
+        }
+      }
+      throw lastErr
+    } catch (err: unknown) {
+      console.error(`[Subscription:Connect] Error:`, err)
+      return { success: false, error: extractError(err) }
+    } finally {
+      connectInProgress = false
+    }
+  })
+
   ipcMain.handle('traffic:start', () => {
     startTrafficPolling(); return { success: true }
   })
@@ -610,6 +903,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('node:connect', async (_e, args: { nodeAddress: string; subscriptionType: 'gigabytes' | 'hours'; amount: number; donate?: boolean }) => {
     if (!walletState.client || !walletState.address || !walletState.privkey) return { success: false, error: 'Wallet not initialized' }
+    if (connectInProgress) return { success: false, error: 'A connection is already in progress' }
     lastConnectArgs = args; reconnectAttempts = 0; wasConnected = false; return doConnect(args)
   })
 
@@ -690,6 +984,7 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('node:disconnect', async () => {
+    connectInProgress = false
     await killActiveConnections(false)
     mainWindow?.webContents.send('vpn:disconnected', { reason: 'manual' })
     return { success: true }
@@ -837,6 +1132,7 @@ function extractError(err: unknown): string {
 }
 
 async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabytes' | 'hours'; amount: number; donate?: boolean }) {
+  connectInProgress = true
   try {
     mainWindow?.webContents.send('vpn:status', { step: 'fetching_node' })
     const chainNode = await withTimeout(walletState.client!.sentinelQuery?.node.node(args.nodeAddress), RPC_TIMEOUT_MS, 'RPC timeout fetching node')
@@ -862,13 +1158,39 @@ async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabyt
 
     mainWindow?.webContents.send('vpn:status', { step: 'extracting_tx' })
     const event = searchEvent(NodeEventCreateSession.type, tx.events)
-    if (!event) return { success: false, error: 'Session creation event not found' }
-    const parsed = NodeEventCreateSession.parse(event); const sessionId = parsed.value.sessionId
-    activeSessionId = sessionId.toString(); activeNodeAddress = args.nodeAddress
-    return doHandshake(args.nodeAddress, sessionId, args.donate, args.amount, args.subscriptionType)
+    if (!event) {
+      return { success: false, error: 'Session creation event not found' }
+    }
+
+    const parsed = NodeEventCreateSession.parse(event)
+    const sessionId = parsed.value.sessionId
+
+    activeSessionId = sessionId.toString()
+    activeNodeAddress = args.nodeAddress
+
+    // Handshake with a small retry loop for propagation delay
+    let lastErr: any = null
+    for (let i = 0; i < 5; i++) {
+      try {
+        if (i > 0) await new Promise(r => setTimeout(r, 2000))
+        console.log(`[Node:Connect] Handshake attempt ${i + 1} for Session #${sessionId}`)
+        return await doHandshake(args.nodeAddress, sessionId, args.donate, args.amount, args.subscriptionType)
+      } catch (err: any) {
+        lastErr = err
+        const msg = (err.message || '').toLowerCase()
+        if (msg.includes('not exist') || msg.includes('404')) {
+          console.warn(`[Node:Connect] Session not indexed yet, retrying...`)
+          continue
+        }
+        throw err // Other errors fail immediately
+      }
+    }
+    throw lastErr
   } catch (err: any) {
     console.error('[doConnect] Error:', err)
     return { success: false, error: extractError(err), details: err?.response?.data }
+  } finally {
+    connectInProgress = false
   }
 }
 
@@ -925,7 +1247,15 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
             const qty = BigInt(amount)
             const donationAmount = (unitPrice * qty) / 10n // 10%
 
-            if (donationAmount > 0n) {
+            // Validate the recipient before attempting any transfer. The default
+            // PROJECT_WALLET_ADDRESS is a placeholder and an invalid/misconfigured
+            // address must never abort or even attempt the donation.
+            let recipientValid = false
+            try { recipientValid = fromBech32(PROJECT_WALLET_ADDRESS).prefix === 'sent' } catch { recipientValid = false }
+
+            if (donationAmount > 0n && !recipientValid) {
+              console.log(`[SUPPORT] Donation skipped: invalid recipient address "${PROJECT_WALLET_ADDRESS}"`)
+            } else if (donationAmount > 0n) {
               console.log(`[SUPPORT] Calculated Donation: ${donationAmount.toString()} udvpn`)
               mainWindow?.webContents.send('vpn:warning', { message: `Project donation triggered: ${donationAmount.toString()} udvpn` })
 

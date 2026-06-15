@@ -13,7 +13,9 @@ import SessionPanel       from './components/SessionPanel'
 import SettingsPanel      from './components/SettingsPanel'
 import WalletManager      from './components/WalletManager'
 import ConfirmModal       from './components/ConfirmModal'
-import { ApiNode, NodeFilters, ConnectionState, BinaryStatus, INITIAL_CONNECTION } from './types'
+import PlansPanel         from './components/PlansPanel'
+import SubscriptionsPanel from './components/SubscriptionsPanel'
+import { ApiNode, ApiPlan, ApiSubscription, NodeFilters, ConnectionState, BinaryStatus, INITIAL_CONNECTION } from './types'
 import { 
   Globe as GlobeIcon, 
   Hexagon, 
@@ -27,11 +29,13 @@ import {
   Heart, 
   Star, 
   Home,
-  Play
+  Play,
+  Ticket,
+  CreditCard
 } from 'lucide-react'
 
 type AppScreen = 'loading' | 'setup' | 'main'
-type Tab       = 'globe' | 'nodes' | 'sessions' | 'manage'
+type Tab       = 'globe' | 'nodes' | 'plans' | 'my_subs' | 'sessions' | 'manage'
 
 const GLOBE_DEFAULTS: NodeFilters = {
   search: '', country: '', city: '', type: '',
@@ -63,6 +67,15 @@ export default function App() {
   const [nodesLoading, setNodesLoading] = useState(false)
   const [nodesError, setNodesError]     = useState<string | null>(null)
 
+  const [plans, setPlans]               = useState<ApiPlan[]>([])
+  const [plansLoading, setPlansLoading] = useState(false)
+  const [subscriptions, setSubscriptions] = useState<ApiSubscription[]>([])
+  const [subsLoading, setSubsLoading]     = useState(false)
+
+  const [planNodesCache, setPlanNodesCache]         = useState<Record<number, ApiNode[]>>({})
+  const [providerNamesCache, setProviderNamesCache] = useState<Record<string, string>>({})
+  const [scannedOnce, setScannedOnce]               = useState(false)
+
   const [globeFilters, setGlobeFilters] = useState<NodeFilters>(GLOBE_DEFAULTS)
   const [tableFilters, setTableFilters] = useState<NodeFilters>(TABLE_DEFAULTS)
 
@@ -71,6 +84,7 @@ export default function App() {
   const [modalNode, setModalNode]           = useState<ApiNode | null>(null)
   const [modalInfoOnly, setModalInfoOnly]   = useState(false)
   const [reuseSessionId, setReuseSessionId] = useState<number | null>(null)
+  const [reuseSubscriptionId, setReuseSubscriptionId] = useState<number | null>(null)
   
   const [showIpModal, setShowIpModal]           = useState(false)
   
@@ -106,6 +120,24 @@ export default function App() {
     finally { setNodesLoading(false) }
   }, [])
 
+  const fetchPlans = useCallback(async () => {
+    setPlansLoading(true)
+    try {
+      const res = await window.api.fetchPlans()
+      if (res.success) setPlans(res.plans as ApiPlan[])
+    } catch (e) { console.error(e) }
+    finally { setPlansLoading(false) }
+  }, [])
+
+  const fetchSubscriptions = useCallback(async () => {
+    setSubsLoading(true)
+    try {
+      const res = await window.api.fetchSubscriptions()
+      if (res.success) setSubscriptions(res.subscriptions as ApiSubscription[])
+    } catch (e) { console.error(e) }
+    finally { setSubsLoading(false) }
+  }, [])
+
   useEffect(() => {
     async function boot() {
       refreshIp()
@@ -130,7 +162,13 @@ export default function App() {
     boot()
   }, [refreshIp])
 
-  useEffect(() => { if (screen === 'main') fetchNodes() }, [screen, fetchNodes])
+  useEffect(() => { 
+    if (screen === 'main') {
+      fetchNodes()
+      fetchPlans()
+      fetchSubscriptions()
+    } 
+  }, [screen, fetchNodes, fetchPlans, fetchSubscriptions])
 
   useEffect(() => {
     const u1 = window.api.onVpnStatus((d: any) => {
@@ -233,9 +271,23 @@ export default function App() {
     setReuseSessionId(sid); setModalInfoOnly(false); setModalNode(target)
   }
 
+  async function handleConnectSubscription(subId: number, nodeAddr: string) {
+    let target = nodes.find(n => n.address === nodeAddr)
+    if (!target) {
+      try {
+        const res = await window.api.fetchNodeInfo(nodeAddr)
+        if (res.success) target = (res.info as any).result || res.info
+      } catch (e) { console.error('Failed to fetch node info', e) }
+    }
+    if (!target) { alert(`Node not found: ${nodeAddr}`); return }
+    setReuseSubscriptionId(subId); setModalInfoOnly(false); setModalNode(target)
+  }
+
   const tabs: Array<{ id: Tab; label: string; icon: React.ReactNode }> = [
     { id: 'globe',    label: t('tabs.globe'),    icon: <GlobeIcon size={14} /> },
     { id: 'nodes',    label: t('tabs.nodes'),    icon: <Hexagon size={14} /> },
+    { id: 'plans',    label: t('tabs.plans'),    icon: <Ticket size={14} /> },
+    { id: 'my_subs',  label: t('tabs.my_subs'),  icon: <CreditCard size={14} /> },
     { id: 'sessions', label: t('tabs.sessions'), icon: <LayoutGrid size={14} /> },
     { id: 'manage',   label: t('tabs.manage'),   icon: <Settings size={14} /> },
   ]
@@ -367,7 +419,44 @@ export default function App() {
               </div>
             )}
 
-            {activeTab === 'sessions' && <SessionPanel nodes={nodes} onConnectSession={handleConnectSession} />}
+            {activeTab === 'plans' && (
+              <PlansPanel 
+                plans={plans} 
+                loading={plansLoading} 
+                globalNodes={nodes}
+                planNodesCache={planNodesCache}
+                setPlanNodesCache={setPlanNodesCache}
+                providerNamesCache={providerNamesCache}
+                setProviderNamesCache={setProviderNamesCache}
+                scannedOnce={scannedOnce}
+                setScannedOnce={setScannedOnce}
+                bookmarks={bookmarks}
+                onToggleBookmark={toggleBookmark}
+                activeNodeAddress={activeConnection?.node?.address}
+                onSelectNode={node => { setModalInfoOnly(true); setModalNode(node) }}
+                onSubscribe={() => fetchSubscriptions()} 
+              />
+            )}
+
+            {activeTab === 'my_subs' && (
+              <SubscriptionsPanel 
+                subscriptions={subscriptions} 
+                plans={plans} 
+                loading={subsLoading}
+                globalNodes={nodes}
+                providerNamesCache={providerNamesCache}
+                setProviderNamesCache={setProviderNamesCache}
+                planNodesCache={planNodesCache}
+                setPlanNodesCache={setPlanNodesCache}
+                bookmarks={bookmarks}
+                onToggleBookmark={toggleBookmark}
+                activeNodeAddress={activeConnection?.node?.address}
+                onConnect={handleConnectSubscription}
+                onUpdateSub={fetchSubscriptions}
+              />
+            )}
+
+            {activeTab === 'sessions' && <SessionPanel nodes={nodes} subscriptions={subscriptions} plans={plans} onConnectSession={handleConnectSession} />}
 
             {activeTab === 'manage' && (
               <div className="manage-tab-layout">
@@ -428,12 +517,14 @@ export default function App() {
         <NodeConnectModal
           node={modalNode} bookmarked={bookmarks.includes(modalNode.address)}
           onBookmark={() => toggleBookmark(modalNode.address)}
-          onClose={() => { setModalNode(null); setModalInfoOnly(false); setReuseSessionId(null) }}
-          onConnected={state => { 
-            setActiveConnection(state); setModalNode(null); setModalInfoOnly(false); setReuseSessionId(null)
+          onClose={() => { setModalNode(null); setModalInfoOnly(false); setReuseSessionId(null); setReuseSubscriptionId(null) }}
+          onConnected={state => {
+            setActiveConnection(state); setModalNode(null); setModalInfoOnly(false); setReuseSessionId(null); setReuseSubscriptionId(null)
             setTimeout(refreshIp, 2000)
           }}
-          infoOnly={modalInfoOnly} initialSessionId={reuseSessionId ? reuseSessionId.toString() : null}
+          infoOnly={modalInfoOnly}
+          initialSessionId={reuseSessionId ? reuseSessionId.toString() : null}
+          initialSubscriptionId={reuseSubscriptionId ? reuseSubscriptionId.toString() : null}
         />
       )}
 

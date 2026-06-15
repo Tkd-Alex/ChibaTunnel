@@ -10,6 +10,27 @@ export interface ApiNode {
   errorMessage: string | null; fetchedAt: string
 }
 
+export interface ApiPlan {
+  id: number
+  provAddress: string
+  bytes: string
+  duration: number
+  prices: { denom: string; amount: string }[]
+  status: number
+  private: boolean
+}
+
+export interface ApiSubscription {
+  id: number
+  accAddress: string
+  planId: number
+  price: { denom: string; baseValue: string; quoteValue: string } | null
+  status: number
+  inactiveAt: string | null
+  startAt: string | null
+  renewalPricePolicy?: number
+}
+
 // Session decoded via Session.decode(any.value) in main, serialized to plain JS for IPC.
 // Mirrors BaseSession from @sentinel-official/sentinel-js-sdk sentinel/session/v3/session
 // wrapped in node/v3/session Session { baseSession, price }

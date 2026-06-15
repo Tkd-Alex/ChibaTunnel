@@ -1,5 +1,7 @@
 {
   "common": {
+    "selected": "SELECCIONADO",
+    "never": "Nunca",
     "loading": "INICIALIZANDO...",
     "fetching_nodes": "Obteniendo nodos...",
     "refresh": "Actualizar",
@@ -37,8 +39,56 @@
   "tabs": {
     "globe": "Globo",
     "nodes": "Nodos",
+    "plans": "Planes",
+    "my_subs": "Mis Suscripciones",
     "sessions": "Sesiones",
     "manage": "Gestionar"
+  },
+  "plans": {
+    "analyzing": "Analizando planes de red...",
+    "filtering": "Filtrando planes activos con nodos disponibles.",
+    "no_nodes_found": "No se encontraron planes activos con nodos.",
+    "try_changing_rpc": "Intenta cambiar de RPC o refrescar la lista.",
+    "retry_scan": "Reintentar Escaneo de Red",
+    "search_placeholder": "Buscar proveedor o ID...",
+    "show_private": "Mostrar Planes Privados",
+    "details_title": "Detalles del Plan",
+    "subscribe_for": "SUSCRIBIRSE POR {{amount}} {{denom}}",
+    "available": "Disponible",
+    "no_nodes_for_plan": "No se encontraron nodos para este plan.",
+    "select_plan_hint": "Selecciona un plan para ver sus características y nodos disponibles.",
+    "title": "Planes de Suscripción",
+    "by": "por",
+    "nodes": "nodos",
+    "days": "días",
+    "subscribe": "Suscribirse",
+    "fetching": "Obteniendo planes...",
+    "details": "Detalles",
+    "price_per_month": "{{amount}} / mes",
+    "no_plans": "No se encontraron planes activos.",
+    "confirm_sub_title": "¿Suscribirse al plan?",
+    "confirm_sub_msg": "¿Estás seguro de que deseas suscribirte al Plan #{{id}}? Esto transmitirá una transacción en la cadena.",
+    "subscribe_success": "¡Transacción de suscripción enviada con éxito!"
+  },
+  "subs": {
+    "plan_identity": "Identidad del Plan",
+    "valid_until": "Válido Hasta",
+    "available_pool": "Pool Disponible",
+    "select_node_hint": "Selecciona un nodo de la lista para habilitar la conexión",
+    "no_nodes_for_sub": "No se encontraron nodos para este pool de suscripción.",
+    "select_sub_hint": "Selecciona una suscripción para gestionar tu acceso y conectarte a los nodos.",
+    "details_title": "Detalles de la Suscripción",
+    "title": "Mis Suscripciones",
+    "active": "Activo",
+    "expires": "Expira",
+    "quota": "Cuota",
+    "connect": "Conectar",
+    "no_subs": "No se encontraron suscripciones activas.",
+    "nodes_in_plan": "Nodos disponibles en el plan",
+    "connected": "conectado",
+    "renew": "Renovar",
+    "cancel": "Cancelar",
+    "sub_id": "Sus #{{id}}"
   },
   "filters": {
     "title": "Filtros del Globo",
@@ -311,5 +361,24 @@
       "tun2socks": "Necesario para soporte V2Ray en todo el sistema vía interfaz TUN."
     },
     "wintun_missing": "Requisito de Windows: Coloque 'wintun.dll' in la misma carpeta que tun2socks.exe."
+  },
+  "renewal": {
+    "title": "Política de Renovación Automática",
+    "policy_0": "No renovar",
+    "policy_1": "Solo si el precio baja",
+    "policy_2": "Si el precio baja o se mantiene",
+    "policy_3": "Solo si el precio se mantiene",
+    "policy_4": "Solo si el precio cambia",
+    "policy_5": "Solo si el precio sube",
+    "policy_6": "Si el precio sube o se mantiene",
+    "policy_7": "Renovar siempre",
+    "desc_0": "La suscripción expirará al final del período.",
+    "desc_1": "Te protege de los aumentos de precio. Renueva solo si el proveedor baja el precio.",
+    "desc_2": "Protección estándar. Renueva solo si el proveedor no sube el precio.",
+    "desc_3": "Renueva solo si se mantiene el precio exacto.",
+    "desc_7": "Renueva independientemente de los cambios de precio del proveedor o del oráculo.",
+    "desc_other": "Política avanzada basada en el movimiento de precios.",
+    "update_btn": "Actualizar Política",
+    "updating": "Actualizando..."
   }
 }

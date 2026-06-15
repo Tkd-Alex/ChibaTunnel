@@ -67,3 +67,17 @@ export function truncateAddress(addr: string, len = 12): string {
 export function uniqueSorted(arr: string[]): string[] {
   return [...new Set(arr.filter(Boolean))].sort()
 }
+
+export function formatDataQuota(bytesStr: string): string {
+  const bytes = parseInt(bytesStr, 10)
+  if (!bytes || isNaN(bytes)) return '∞'
+  if (bytes === 0) return '∞'
+  
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB']
+  let l = 0, n = bytes
+  while (n >= 1024 && l < units.length - 1) {
+    n = n / 1024
+    l++
+  }
+  return n.toFixed(n < 10 && l > 0 ? 1 : 0) + ' ' + units[l]
+}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ApiNode, ConnectionState, INITIAL_CONNECTION, SubscriptionType, BinaryStatus } from '../types'
 import { countryToIsoCode, formatUdvpnPrice, vpnTypeLabel } from '../utils'
@@ -355,13 +355,15 @@ interface Props {
   onConnected:     (state: ConnectionState) => void
   infoOnly?:       boolean
   initialSessionId?: string | null
+  initialSubscriptionId?: string | null
 }
 
 export default function NodeConnectModal({
-  node, bookmarked, onBookmark, onClose, onConnected, infoOnly = false, initialSessionId = null
+  node, bookmarked, onBookmark, onClose, onConnected, infoOnly = false, initialSessionId = null, initialSubscriptionId = null
 }: Props) {
   const { t } = useTranslation()
-  const [conn, setConn]               = useState<ConnectionState>({ ...INITIAL_CONNECTION, node, sessionId: initialSessionId, step: initialSessionId ? 'fetching_node' : 'choose-type' })
+  const autoStart = !!initialSessionId || !!initialSubscriptionId
+  const [conn, setConn]               = useState<ConnectionState>({ ...INITIAL_CONNECTION, node, sessionId: initialSessionId, step: autoStart ? 'fetching_node' : 'choose-type' })
   const [showWgQr, setShowWgQr]       = useState(false)
   const [expandedQr, setExpandedQr]   = useState<number | null>(null)
   const [tunnelBusy, setTunnelBusy]   = useState(false)
@@ -370,6 +372,7 @@ export default function NodeConnectModal({
   const [sessionInfo, setSessionInfo] = useState<any>(null)
   const [loadingSession, setLoadingSession] = useState(false)
   const [donate, setDonate] = useState(true)
+  const autoStartFired = useRef(false)
   const [globalSettings, setGlobalSettings] = useState<any>(null)
 
   const vpnName = node.type === 1 ? 'WireGuard' : 'V2Ray'
@@ -400,14 +403,19 @@ export default function NodeConnectModal({
     return () => { unsub() }
   }, [])
 
-  const handleConnect = useCallback(async (existingSessionId?: string) => {
+  const handleConnect = useCallback(async (opts?: { sessionId?: string; subscriptionId?: string }) => {
     setConn(s => ({ ...s, step: 'fetching_node', error: null }))
     try {
       let res: any
-      if (existingSessionId) {
+      if (opts?.subscriptionId) {
+        res = await window.api.connectSubscriptionNode(
+          parseInt(opts.subscriptionId),
+          node.address
+        )
+      } else if (opts?.sessionId) {
         res = await window.api.connectSession({
           nodeAddress: node.address,
-          sessionId:   parseInt(existingSessionId)
+          sessionId:   parseInt(opts.sessionId)
         })
       } else {
         res = await window.api.connectNode({
@@ -436,8 +444,10 @@ export default function NodeConnectModal({
   }, [node.address, conn.subscriptionType, conn.amount, donate])
 
   useEffect(() => {
-    if (initialSessionId) handleConnect(initialSessionId)
-  }, [initialSessionId, handleConnect])
+    if (autoStartFired.current) return
+    if (initialSubscriptionId) { autoStartFired.current = true; handleConnect({ subscriptionId: initialSubscriptionId }) }
+    else if (initialSessionId) { autoStartFired.current = true; handleConnect({ sessionId: initialSessionId }) }
+  }, [initialSessionId, initialSubscriptionId, handleConnect])
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
