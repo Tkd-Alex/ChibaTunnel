@@ -58,6 +58,24 @@ export default function SubscriptionsPanel({
   const [confirmingCancel, setConfirmingCancel] = useState<number | null>(null)
   const [canceling, setCanceling] = useState(false)
 
+  const handleCancelSubscription = async () => {
+    if (!confirmingCancel) return
+    setCanceling(true)
+    try {
+      const res = await window.api.cancelSubscription(confirmingCancel)
+      if (res.success) {
+        setConfirmingCancel(null)
+        onUpdateSub()
+      } else {
+        alert(t('common.error') + ': ' + res.error)
+      }
+    } catch (e) {
+      alert(t('common.error') + ': ' + String(e))
+    } finally {
+      setCanceling(false)
+    }
+  }
+
   // Fetch provider monikers
 
   useEffect(() => {
