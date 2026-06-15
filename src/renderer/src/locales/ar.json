@@ -1,5 +1,7 @@
 {
   "common": {
+    "selected": "محدد",
+    "never": "أبدًا",
     "loading": "جاري التحميل...",
     "fetching_nodes": "جاري جلب العقد...",
     "refresh": "تحديث",
@@ -43,6 +45,18 @@
     "manage": "إدارة"
   },
   "plans": {
+    "analyzing": "جاري تحليل خطط الشبكة...",
+    "filtering": "تصفية الخطط النشطة ذات العقد المتاحة.",
+    "no_nodes_found": "لم يتم العثور على خطط نشطة تحتوي على عقد.",
+    "try_changing_rpc": "حاول تغيير RPC الخاص بك أو تحديث القائمة.",
+    "retry_scan": "إعادة محاولة فحص الشبكة",
+    "search_placeholder": "ابحث عن مزود أو معرف...",
+    "show_private": "عرض الخطط الخاصة",
+    "details_title": "تفاصيل الخطة",
+    "subscribe_for": "اشترك مقابل {{amount}} {{denom}}",
+    "available": "متاح",
+    "no_nodes_for_plan": "لم يتم العثور على عقد لهذه الخطة.",
+    "select_plan_hint": "حدد خطة لعرض خصائصها والعقد المتاحة.",
     "title": "خطط الاشتراك",
     "by": "بواسطة",
     "nodes": "عقدة",
@@ -57,6 +71,13 @@
     "subscribe_success": "تم إرسال معاملة الاشتراك بنجاح!"
   },
   "subs": {
+    "plan_identity": "هوية الخطة",
+    "valid_until": "صالح حتى",
+    "available_pool": "المجمع المتاح",
+    "select_node_hint": "حدد عقدة من القائمة لتمكين الاتصال",
+    "no_nodes_for_sub": "لم يتم العثور على عقد لمجمع الاشتراك هذا.",
+    "select_sub_hint": "حدد اشتراكًا لإدارة وصولك والاتصال بالعقد.",
+    "details_title": "تفاصيل الاشتراك",
     "title": "اشتراكاتي",
     "active": "نشط",
     "expires": "تنتهي في",

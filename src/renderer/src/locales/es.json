@@ -1,5 +1,7 @@
 {
   "common": {
+    "selected": "SELECCIONADO",
+    "never": "Nunca",
     "loading": "INICIALIZANDO...",
     "fetching_nodes": "Obteniendo nodos...",
     "refresh": "Actualizar",
@@ -43,6 +45,18 @@
     "manage": "Gestionar"
   },
   "plans": {
+    "analyzing": "Analizando planes de red...",
+    "filtering": "Filtrando planes activos con nodos disponibles.",
+    "no_nodes_found": "No se encontraron planes activos con nodos.",
+    "try_changing_rpc": "Intenta cambiar de RPC o refrescar la lista.",
+    "retry_scan": "Reintentar Escaneo de Red",
+    "search_placeholder": "Buscar proveedor o ID...",
+    "show_private": "Mostrar Planes Privados",
+    "details_title": "Detalles del Plan",
+    "subscribe_for": "SUSCRIBIRSE POR {{amount}} {{denom}}",
+    "available": "Disponible",
+    "no_nodes_for_plan": "No se encontraron nodos para este plan.",
+    "select_plan_hint": "Selecciona un plan para ver sus características y nodos disponibles.",
     "title": "Planes de Suscripción",
     "by": "por",
     "nodes": "nodos",
@@ -57,6 +71,13 @@
     "subscribe_success": "¡Transacción de suscripción enviada con éxito!"
   },
   "subs": {
+    "plan_identity": "Identidad del Plan",
+    "valid_until": "Válido Hasta",
+    "available_pool": "Pool Disponible",
+    "select_node_hint": "Selecciona un nodo de la lista para habilitar la conexión",
+    "no_nodes_for_sub": "No se encontraron nodos para este pool de suscripción.",
+    "select_sub_hint": "Selecciona una suscripción para gestionar tu acceso y conectarte a los nodos.",
+    "details_title": "Detalles de la Suscripción",
     "title": "Mis Suscripciones",
     "active": "Activo",
     "expires": "Expira",

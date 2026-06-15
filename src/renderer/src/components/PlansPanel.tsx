@@ -346,12 +346,12 @@ export default function PlansPanel({
                     <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--cyan)' }}>{formatDataQuota(selectedPlan.bytes)}</div>
                   </div>
                   <div className="detail-item">
-                    <div style={{ fontSize: '11px', color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: '4px' }}>Duration</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: '4px' }}>{t('node_modal.duration')}</div>
                     <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--cyan)' }}>{(selectedPlan.duration / 86400).toFixed(0)} {t('plans.days')}</div>
                   </div>
                   <div className="detail-item">
                     <div style={{ fontSize: '11px', color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: '4px' }}>{t('subs.nodes_in_plan')}</div>
-                    <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--cyan)' }}>{richNodes.length} Available</div>
+                    <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--cyan)' }}>{richNodes.length} {t('plans.available')}</div>
                   </div>
                </div>
             </div>

@@ -1,5 +1,7 @@
 {
   "common": {
+    "selected": "已选择",
+    "never": "从不",
     "loading": "正在初始化...",
     "fetching_nodes": "正在获取节点...",
     "refresh": "刷新",
@@ -43,6 +45,18 @@
     "manage": "管理"
   },
   "plans": {
+    "analyzing": "正在分析网络计划...",
+    "filtering": "筛选具有可用节点的活跃计划。",
+    "no_nodes_found": "未找到具有可用节点的活跃计划。",
+    "try_changing_rpc": "请尝试更改您的RPC或刷新列表。",
+    "retry_scan": "重试网络扫描",
+    "search_placeholder": "搜索提供商或ID...",
+    "show_private": "显示私有计划",
+    "details_title": "计划详情",
+    "subscribe_for": "订阅：{{amount}} {{denom}}",
+    "available": "可用",
+    "no_nodes_for_plan": "未找到此计划的节点。",
+    "select_plan_hint": "选择一个计划以查看其特征和可用节点。",
     "title": "订阅计划",
     "by": "提供者",
     "nodes": "个节点",
@@ -57,6 +71,13 @@
     "subscribe_success": "订阅交易发送成功！"
   },
   "subs": {
+    "plan_identity": "计划身份",
+    "valid_until": "有效期至",
+    "available_pool": "可用池",
+    "select_node_hint": "从列表中选择一个节点以启用连接",
+    "no_nodes_for_sub": "未找到此订阅池的节点。",
+    "select_sub_hint": "选择一个订阅以管理您的访问并连接到节点。",
+    "details_title": "订阅详情",
     "title": "我的订阅",
     "active": "活跃",
     "expires": "到期时间",

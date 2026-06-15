@@ -1,5 +1,7 @@
 {
   "common": {
+    "selected": "SELEZIONATO",
+    "never": "Mai",
     "loading": "INIZIALIZZAZIONE...",
     "fetching_nodes": "Recupero nodi...",
     "refresh": "Aggiorna",
@@ -43,6 +45,18 @@
     "manage": "Gestione"
   },
   "plans": {
+    "analyzing": "Analisi dei piani di rete...",
+    "filtering": "Filtraggio dei piani attivi con nodi disponibili.",
+    "no_nodes_found": "Nessun piano attivo con nodi trovato.",
+    "try_changing_rpc": "Prova a cambiare RPC o ad aggiornare la lista.",
+    "retry_scan": "Riprova Scansione di Rete",
+    "search_placeholder": "Cerca provider o ID...",
+    "show_private": "Mostra Piani Privati",
+    "details_title": "Dettagli Piano",
+    "subscribe_for": "ISCRIVITI PER {{amount}} {{denom}}",
+    "available": "Disponibile",
+    "no_nodes_for_plan": "Nessun nodo trovato per questo piano.",
+    "select_plan_hint": "Seleziona un piano per visualizzare le sue caratteristiche e i nodi disponibili.",
     "title": "Piani di Abbonamento",
     "by": "da",
     "nodes": "nodi",
@@ -57,6 +71,13 @@
     "subscribe_success": "Transazione di sottoscrizione inviata con successo!"
   },
   "subs": {
+    "plan_identity": "Identità Piano",
+    "valid_until": "Valido Fino Al",
+    "available_pool": "Pool Disponibile",
+    "select_node_hint": "Seleziona un nodo dalla lista per abilitare la connessione",
+    "no_nodes_for_sub": "Nessun nodo trovato per questo pool di abbonamento.",
+    "select_sub_hint": "Seleziona un abbonamento per gestire l'accesso e connetterti ai nodi.",
+    "details_title": "Dettagli Abbonamento",
     "title": "I miei Abbonamenti",
     "active": "Attivo",
     "expires": "Scade",

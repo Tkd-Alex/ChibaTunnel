@@ -1,5 +1,7 @@
 {
   "common": {
+    "selected": "SELECTED",
+    "never": "Never",
     "loading": "INITIALIZING...",
     "fetching_nodes": "Fetching nodes...",
     "refresh": "Refresh",
@@ -43,6 +45,18 @@
     "manage": "Manage"
   },
   "plans": {
+    "analyzing": "Analyzing network plans...",
+    "filtering": "Filtering for active plans with available nodes.",
+    "no_nodes_found": "No active plans with nodes found.",
+    "try_changing_rpc": "Try changing your RPC or refreshing the list.",
+    "retry_scan": "Retry Network Scan",
+    "search_placeholder": "Search provider or ID...",
+    "show_private": "Show Private Plans",
+    "details_title": "Plan Details",
+    "subscribe_for": "SUBSCRIBE FOR {{amount}} {{denom}}",
+    "available": "Available",
+    "no_nodes_for_plan": "No nodes found for this plan.",
+    "select_plan_hint": "Select a plan to view its characteristics and available nodes.",
     "title": "Subscription Plans",
     "by": "by",
     "nodes": "nodes",
@@ -57,6 +71,13 @@
     "subscribe_success": "Subscription transaction sent successfully!"
   },
   "subs": {
+    "plan_identity": "Plan Identity",
+    "valid_until": "Valid Until",
+    "available_pool": "Available Pool",
+    "select_node_hint": "Select a node from the list to enable connection",
+    "no_nodes_for_sub": "No nodes found for this subscription pool.",
+    "select_sub_hint": "Select a subscription to manage your access and connect to nodes.",
+    "details_title": "Subscription Details",
     "title": "My Subscriptions",
     "active": "Active",
     "expires": "Expires",

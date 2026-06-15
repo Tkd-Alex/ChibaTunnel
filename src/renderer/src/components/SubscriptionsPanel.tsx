@@ -318,7 +318,7 @@ export default function SubscriptionsPanel({
         ) : (
           <div className="empty-state">
             <CreditCard size={48} color="var(--text-3)" style={{ marginBottom: 16, opacity: 0.5 }} />
-            <div className="empty-state-text">Select a subscription to manage your access and connect to nodes.</div>
+            <div className="empty-state-text">{t('subs.select_sub_hint')}</div>
           </div>
         )}
       </div>

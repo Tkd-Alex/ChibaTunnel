@@ -1,5 +1,7 @@
 {
   "common": {
+    "selected": "SÉLECTIONNÉ",
+    "never": "Jamais",
     "loading": "INITIALISATION...",
     "fetching_nodes": "Récupération des nœuds...",
     "refresh": "Actualiser",
@@ -43,6 +45,18 @@
     "manage": "Gérer"
   },
   "plans": {
+    "analyzing": "Analyse des forfaits réseau...",
+    "filtering": "Filtrage des forfaits actifs avec nœuds disponibles.",
+    "no_nodes_found": "Aucun forfait actif avec nœuds trouvé.",
+    "try_changing_rpc": "Essayez de changer de RPC ou d'actualiser la liste.",
+    "retry_scan": "Réessayer l'analyse du réseau",
+    "search_placeholder": "Rechercher un fournisseur ou un ID...",
+    "show_private": "Afficher les forfaits privés",
+    "details_title": "Détails du forfait",
+    "subscribe_for": "S'ABONNER POUR {{amount}} {{denom}}",
+    "available": "Disponible",
+    "no_nodes_for_plan": "Aucun nœud trouvé pour ce forfait.",
+    "select_plan_hint": "Sélectionnez un forfait pour voir ses caractéristiques et les nœuds disponibles.",
     "title": "Plans d'abonnement",
     "by": "par",
     "nodes": "nœuds",
@@ -57,6 +71,13 @@
     "subscribe_success": "Transaction d'abonnement envoyée avec succès !"
   },
   "subs": {
+    "plan_identity": "Identité du forfait",
+    "valid_until": "Valable jusqu'au",
+    "available_pool": "Pool disponible",
+    "select_node_hint": "Sélectionnez un nœud dans la liste pour activer la connexion",
+    "no_nodes_for_sub": "Aucun nœud trouvé pour ce pool d'abonnement.",
+    "select_sub_hint": "Sélectionnez un abonnement pour gérer votre accès et vous connecter aux nœuds.",
+    "details_title": "Détails de l'abonnement",
     "title": "Mes Abonnements",
     "active": "Actif",
     "expires": "Expire le",

@@ -1,5 +1,7 @@
 {
   "common": {
+    "selected": "AUSGEWÄHLT",
+    "never": "Niemals",
     "loading": "INITIALISIERUNG...",
     "fetching_nodes": "Knoten werden abgerufen...",
     "refresh": "Aktualisieren",
@@ -43,6 +45,18 @@
     "manage": "Verwalten"
   },
   "plans": {
+    "analyzing": "Netzwerkpläne werden analysiert...",
+    "filtering": "Filterung nach aktiven Plänen mit verfügbaren Knoten.",
+    "no_nodes_found": "Keine aktiven Pläne mit Knoten gefunden.",
+    "try_changing_rpc": "Versuche, den RPC zu ändern oder die Liste zu aktualisieren.",
+    "retry_scan": "Netzwerk-Scan wiederholen",
+    "search_placeholder": "Anbieter oder ID suchen...",
+    "show_private": "Private Pläne anzeigen",
+    "details_title": "Plan-Details",
+    "subscribe_for": "ABONNIEREN FÜR {{amount}} {{denom}}",
+    "available": "Verfügbar",
+    "no_nodes_for_plan": "Keine Knoten für diesen Plan gefunden.",
+    "select_plan_hint": "Wähle einen Plan, um seine Eigenschaften und verfügbaren Knoten anzuzeigen.",
     "title": "Abonnement-Pläne",
     "by": "von",
     "nodes": "Knoten",
@@ -57,6 +71,13 @@
     "subscribe_success": "Abonnement-Transaktion erfolgreich gesendet!"
   },
   "subs": {
+    "plan_identity": "Plan-Identität",
+    "valid_until": "Gültig bis",
+    "available_pool": "Verfügbarer Pool",
+    "select_node_hint": "Wähle einen Knoten aus der Liste, um die Verbindung zu aktivieren",
+    "no_nodes_for_sub": "Keine Knoten für diesen Abonnement-Pool gefunden.",
+    "select_sub_hint": "Wähle ein Abonnement, um deinen Zugang zu verwalten und dich mit Knoten zu verbinden.",
+    "details_title": "Abonnement-Details",
     "title": "Meine Abonnements",
     "active": "Aktiv",
     "expires": "Läuft ab",
