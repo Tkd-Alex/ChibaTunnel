@@ -794,6 +794,27 @@ function registerIpcHandlers(): void {
     return { success: true, providers }
   })
 
+  ipcMain.handle('subscription:cancel', async (_e, subscriptionId: number) => {
+    if (!walletState.client || !walletState.address || !walletState.privkey) return { success: false, error: 'Wallet not initialized' }
+    try {
+      console.log(`[Subscription:Cancel] Cancelling Sub #${subscriptionId}`)
+      const msg = {
+        typeUrl: '/sentinel.subscription.v3.MsgCancelSubscriptionRequest',
+        value: {
+          from: walletState.address,
+          id: Long.fromNumber(subscriptionId, true)
+        }
+      }
+      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'sentinel-dvpn-client')
+      assertIsDeliverTxSuccess(tx)
+      console.log(`[Subscription:Cancel] Success! TX: ${tx.transactionHash}`)
+      return { success: true, txHash: tx.transactionHash }
+    } catch (err: unknown) {
+      console.error(`[Subscription:Cancel] Error:`, err)
+      return { success: false, error: extractError(err) }
+    }
+  })
+
   ipcMain.handle('subscription:update', async (_e, { subscriptionId, policy }: { subscriptionId: number; policy: number }) => {
     if (!walletState.client || !walletState.address || !walletState.privkey) return { success: false, error: 'Wallet not initialized' }
     try {

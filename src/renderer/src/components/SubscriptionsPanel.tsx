@@ -54,6 +54,8 @@ export default function SubscriptionsPanel({
   const [connectingTo, setConnectingTo] = useState<string | null>(null)
   const [showPolicyDropdown, setShowPolicyDropdown] = useState(false)
   const [updatingPolicy, setUpdatingPolicy] = useState(false)
+  const [confirmingCancel, setConfirmingCancel] = useState<number | null>(null)
+  const [canceling, setCanceling] = useState(false)
 
   // Fetch provider monikers
 
@@ -276,6 +278,15 @@ export default function SubscriptionsPanel({
                         {selectedSub.status === 1 ? t('subs.active') : t('common.error')}
                       </div>
                     )}
+                    {selectedSub.status === 1 && (
+                      <button 
+                        className="btn btn-danger btn-sm"
+                        style={{ height: '42px', padding: '0 20px', fontSize: '13px', fontWeight: 700 }}
+                        onClick={() => setConfirmingCancel(selectedSub.id)}
+                      >
+                        {t('subs.cancel')}
+                      </button>
+                    )}
                   </div>
                </div>
 
@@ -391,6 +402,23 @@ export default function SubscriptionsPanel({
             <div className="empty-state-text">{t('subs.select_sub_hint')}</div>
           </div>
         )}
+      </div>
+
+      {confirmingCancel && (
+        <ConfirmModal
+          title={t('sessions.cancel_confirm_title')}
+          message={t('sessions.cancel_confirm_msg')}
+          danger
+          onConfirm={handleCancelSubscription}
+          onCancel={() => !canceling && setConfirmingCancel(null)}
+          confirmLabel={canceling ? t('common.starting') : t('subs.cancel')}
+          cancelLabel={canceling ? "" : t('common.cancel')}
+        />
+      )}
+    </div>
+  )
+}
+  )}
       </div>
     </div>
   )

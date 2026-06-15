@@ -49,6 +49,7 @@ const api = {
   fetchProvidersBatch: (addresses: string[]) => ipcRenderer.invoke('providers:fetchBatch', addresses),
   subscribeToPlan:    (planId: number, denom: string, policy: number) => ipcRenderer.invoke('plan:subscribe', { planId, denom, policy }),
   updateSubscription: (subscriptionId: number, policy: number) => ipcRenderer.invoke('subscription:update', { subscriptionId, policy }),
+  cancelSubscription: (subscriptionId: number) => ipcRenderer.invoke('subscription:cancel', subscriptionId),
   connectSubscriptionNode: (subscriptionId: number, nodeAddress: string) => 
     ipcRenderer.invoke('subscription:connect', { subscriptionId, nodeAddress }),
 
