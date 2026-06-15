@@ -234,6 +234,40 @@ h1,h2,h3 { letter-spacing: .08em; text-transform: uppercase; }
 .balance-chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .balance-chip  { padding: 2px 9px; background: var(--bg-2); border: 1px solid var(--border); border-radius: 20px; font-size: 10px; color: var(--cyan); white-space: nowrap; }
 .sessions-badge { display: flex; align-items: center; gap: 6px; padding: 2px 9px; background: rgba(168,85,247,.1); border: 1px solid rgba(168,85,247,.3); border-radius: 20px; font-size: 10px; color: var(--purple); }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  border: 1px solid transparent;
+  text-transform: uppercase;
+}
+.badge-green {
+  color: var(--green);
+  background: rgba(0, 255, 159, 0.1);
+  border-color: rgba(0, 255, 159, 0.2);
+}
+.badge-red {
+  color: var(--red);
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+.badge-yellow {
+  color: var(--yellow);
+  background: rgba(250, 204, 21, 0.1);
+  border-color: rgba(250, 204, 21, 0.2);
+}
+.badge-cyan {
+  color: var(--cyan);
+  background: rgba(6, 182, 212, 0.1);
+  border-color: rgba(6, 182, 212, 0.2);
+}
+
 .wallet-bar-actions { margin-left: auto; display: flex; gap: 8px; }
 
 /* ── Filters bar ───────────────────────────────────── */
