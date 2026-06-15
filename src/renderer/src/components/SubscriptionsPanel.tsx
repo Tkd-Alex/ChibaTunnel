@@ -76,8 +76,16 @@ export default function SubscriptionsPanel({
     }
   }
 
-  // Fetch provider monikers
+  const getStatusInfo = (status: number) => {
+    switch (status) {
+      case 1: return { label: t('sessions.status.active'), cls: 'badge-green' }
+      case 2: return { label: t('sessions.status.inactive_pending'), cls: 'badge-yellow' }
+      case 3: return { label: t('sessions.status.inactive'), cls: 'badge-red' }
+      default: return { label: t('common.error'), cls: 'badge-red' }
+    }
+  }
 
+  // Fetch provider monikers
   useEffect(() => {
     subscriptions.forEach(async (sub) => {
       const plan = plans.find(p => p.id === sub.planId)
@@ -99,7 +107,6 @@ export default function SubscriptionsPanel({
       if (!plan) return true
       const moniker = providerNamesCache[plan.provAddress]?.name || ''
       const name = moniker.toLowerCase()
-      // if (name.includes('test') || name.includes('staging')) return false
       return true
     })
   }, [subscriptions, plans, providerNamesCache])
@@ -230,11 +237,8 @@ export default function SubscriptionsPanel({
                     {t('subs.sub_id', { id: sub.id })} • Plan #{sub.planId}
                   </div>
                 </div>
-                <span className={`badge ${sub.status === 1 ? 'badge-green' : 'badge-red'}`} style={{ 
-                  fontSize: '10px', padding: '2px 10px', borderRadius: '4px',
-                  border: `1px solid ${sub.status === 1 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`
-                }}>
-                  {sub.status === 1 ? 'ACTIVE' : 'INACTIVE'}
+                <span className={`badge ${getStatusInfo(sub.status).cls}`} style={{ fontSize: '10px' }}>
+                  {getStatusInfo(sub.status).label}
                 </span>
               </div>
 
@@ -262,7 +266,7 @@ export default function SubscriptionsPanel({
                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                   <div style={{ minWidth: 0, flex: 1, marginRight: 20 }}>
                     <h2 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-1)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      <Activity size={28} color="var(--cyan)" /> {selectedProv?.name || 'Subscription Details'}
+                      <Activity size={28} color="var(--cyan)" /> {selectedProv?.name || t('subs.details_title')}
                     </h2>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                        <p style={{ fontSize: '12px', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis' }}>Sub ID: #{selectedSub.id} • Acc: {selectedSub.accAddress.slice(0, 20)}...</p>
@@ -273,7 +277,7 @@ export default function SubscriptionsPanel({
                        )}
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ textAlign: 'right', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '12px' }}>
                     {selectedNode ? (
                       <button
                         className="btn btn-primary"
@@ -282,8 +286,6 @@ export default function SubscriptionsPanel({
                         onClick={() => {
                           setConnectingTo(selectedNode.address)
                           onConnect(selectedSub.id, selectedNode.address)
-                          // Modal will open; re-enable button after a tick so rapid
-                          // double-clicks can't queue a second call before the modal appears.
                           setTimeout(() => setConnectingTo(null), 500)
                         }}
                       >
@@ -293,8 +295,8 @@ export default function SubscriptionsPanel({
                           : `${t('subs.connect').toUpperCase()} ${selectedNode.moniker.toUpperCase()}`}
                       </button>
                     ) : (
-                      <div className={`badge ${selectedSub.status === 1 ? 'badge-green' : 'badge-red'}`} style={{ fontSize: '14px', padding: '8px 20px', fontWeight: 700 }}>
-                        {selectedSub.status === 1 ? t('subs.active') : t('common.error')}
+                      <div className={`badge ${getStatusInfo(selectedSub.status).cls}`} style={{ fontSize: '14px', padding: '8px 20px', fontWeight: 700 }}>
+                        {getStatusInfo(selectedSub.status).label}
                       </div>
                     )}
                     {selectedSub.status === 1 && (
@@ -396,7 +398,7 @@ export default function SubscriptionsPanel({
                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                    <div style={{ padding: '16px 30px 8px', fontSize: '11px', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', display: 'flex', justifyContent: 'space-between' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Server size={12} /> {t('subs.nodes_in_plan')}</div>
-                      {!selectedNode && <span style={{ color: 'var(--cyan)', textTransform: 'none', fontWeight: 400 }}>Select a node from the list to enable connection</span>}
+                      {!selectedNode && <span style={{ color: 'var(--cyan)', textTransform: 'none', fontWeight: 400 }}>{t('subs.select_node_hint')}</span>}
                    </div>
                    <div style={{ flex: 1, overflowY: 'auto' }}>
                       <NodeTable 
@@ -410,7 +412,7 @@ export default function SubscriptionsPanel({
                  </div>
                ) : (
                  <div className="empty-state">
-                    <div className="empty-state-text">No nodes found for this subscription pool.</div>
+                    <div className="empty-state-text">{t('subs.no_nodes_for_sub')}</div>
                  </div>
                )}
             </div>
