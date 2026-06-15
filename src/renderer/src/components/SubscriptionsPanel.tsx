@@ -418,8 +418,3 @@ export default function SubscriptionsPanel({
     </div>
   )
 }
-  )}
-      </div>
-    </div>
-  )
-}
