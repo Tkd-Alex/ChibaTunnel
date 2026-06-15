@@ -452,6 +452,7 @@ export default function App() {
                 onToggleBookmark={toggleBookmark}
                 activeNodeAddress={activeConnection?.node?.address}
                 onConnect={handleConnectSubscription}
+                onUpdateSub={fetchSubscriptions}
               />
             )}
 

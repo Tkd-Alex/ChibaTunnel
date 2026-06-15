@@ -361,5 +361,24 @@
       "tun2socks": "Erforderlich für systemweite V2Ray-Unterstützung via TUN-Schnittstelle."
     },
     "wintun_missing": "Windows-Anforderung: Kopieren Sie 'wintun.dll' in denselben Ordner wie tun2socks.exe."
+  },
+  "renewal": {
+    "title": "Automatische Verlängerungsrichtlinie",
+    "policy_0": "Nicht verlängern",
+    "policy_1": "Nur wenn der Preis sinkt",
+    "policy_2": "Wenn der Preis sinkt oder gleich bleibt",
+    "policy_3": "Nur wenn der Preis unverändert bleibt",
+    "policy_4": "Nur wenn sich der Preis ändert",
+    "policy_5": "Nur wenn der Preis steigt",
+    "policy_6": "Wenn der Preis steigt oder gleich bleibt",
+    "policy_7": "Immer verlängern",
+    "desc_0": "Das Abonnement läuft am Ende der Laufzeit ab.",
+    "desc_1": "Schützt Sie vor Preiserhöhungen. Verlängert sich nur, wenn der Anbieter den Preis senkt.",
+    "desc_2": "Standardschutz. Verlängert sich nur, wenn der Anbieter den Preis nicht erhöht.",
+    "desc_3": "Verlängert sich nur, wenn der genaue Preis beibehalten wird.",
+    "desc_7": "Verlängert sich unabhängig von Preisänderungen durch den Anbieter oder das Orakel.",
+    "desc_other": "Erweiterte Richtlinie basierend auf Preisbewegungen.",
+    "update_btn": "Richtlinie aktualisieren",
+    "updating": "Aktualisiere..."
   }
 }

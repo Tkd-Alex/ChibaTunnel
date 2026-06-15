@@ -361,5 +361,24 @@
       "tun2socks": "Richiesto per il supporto V2Ray a livello di sistema via interfaccia TUN."
     },
     "wintun_missing": "Requisito Windows: posiziona 'wintun.dll' nella stessa cartella di tun2socks.exe."
+  },
+  "renewal": {
+    "title": "Politica di Rinnovo Automatico",
+    "policy_0": "Non rinnovare",
+    "policy_1": "Solo se il prezzo scende",
+    "policy_2": "Se il prezzo scende o rimane uguale",
+    "policy_3": "Solo se il prezzo è invariato",
+    "policy_4": "Solo se il prezzo cambia",
+    "policy_5": "Solo se il prezzo aumenta",
+    "policy_6": "Se il prezzo aumenta o rimane uguale",
+    "policy_7": "Rinnova sempre",
+    "desc_0": "L'abbonamento scadrà al termine del periodo.",
+    "desc_1": "Ti protegge dagli aumenti di prezzo. Rinnova solo se il provider abbassa il prezzo.",
+    "desc_2": "Protezione standard. Rinnova solo se il provider non alza il prezzo.",
+    "desc_3": "Rinnova solo se viene mantenuto il prezzo esatto.",
+    "desc_7": "Rinnova indipendentemente dalle variazioni di prezzo del provider o dell'oracolo.",
+    "desc_other": "Politica avanzata basata sull'andamento dei prezzi.",
+    "update_btn": "Aggiorna Politica",
+    "updating": "Aggiornamento..."
   }
 }

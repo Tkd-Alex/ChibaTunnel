@@ -645,6 +645,7 @@ function registerIpcHandlers(): void {
             status: s.status,
             inactiveAt: s.inactiveAt?.toISOString() ?? null,
             startAt: s.startAt?.toISOString() ?? null,
+            renewalPricePolicy: s.renewalPricePolicy
           }
         } catch { return null }
       }).filter(Boolean)
@@ -791,6 +792,28 @@ function registerIpcHandlers(): void {
       }))
     }
     return { success: true, providers }
+  })
+
+  ipcMain.handle('subscription:update', async (_e, { subscriptionId, policy }: { subscriptionId: number; policy: number }) => {
+    if (!walletState.client || !walletState.address || !walletState.privkey) return { success: false, error: 'Wallet not initialized' }
+    try {
+      console.log(`[Subscription:Update] Updating Sub #${subscriptionId} with policy ${policy}`)
+      const msg = {
+        typeUrl: '/sentinel.subscription.v3.MsgUpdateSubscriptionRequest',
+        value: {
+          from: walletState.address,
+          id: Long.fromNumber(subscriptionId, true),
+          renewalPricePolicy: policy
+        }
+      }
+      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'sentinel-dvpn-client')
+      assertIsDeliverTxSuccess(tx)
+      console.log(`[Subscription:Update] Success! TX: ${tx.transactionHash}`)
+      return { success: true, txHash: tx.transactionHash }
+    } catch (err: unknown) {
+      console.error(`[Subscription:Update] Error:`, err)
+      return { success: false, error: extractError(err) }
+    }
   })
 
   ipcMain.handle('subscription:connect', async (_e, { subscriptionId, nodeAddress }: { subscriptionId: number; nodeAddress: string }) => {

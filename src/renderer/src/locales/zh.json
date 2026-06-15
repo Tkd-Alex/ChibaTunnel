@@ -361,5 +361,24 @@
       "tun2socks": "通过 TUN 接口支持 system-wide V2Ray 所需。"
     },
     "wintun_missing": "Windows 要求：请将 'wintun.dll' 放在 tun2socks.exe 所在的文件夹中。"
+  },
+  "renewal": {
+    "title": "自动续费策略",
+    "policy_0": "不续费",
+    "policy_1": "仅当价格下降时",
+    "policy_2": "如果价格下降或保持不变",
+    "policy_3": "仅当价格未变时",
+    "policy_4": "仅当价格变化时",
+    "policy_5": "仅当价格上涨时",
+    "policy_6": "如果价格上涨或保持不变",
+    "policy_7": "总是续费",
+    "desc_0": "订阅将在期限结束时过期。",
+    "desc_1": "保护您免受价格上涨的影响。仅当提供商降价时才续费。",
+    "desc_2": "标准保护。仅当提供商不涨价时才续费。",
+    "desc_3": "仅当维持确切价格时才续费。",
+    "desc_7": "无论提供商或预言机如何调整价格，都会续费。",
+    "desc_other": "基于价格变动的高级策略。",
+    "update_btn": "更新策略",
+    "updating": "更新中..."
   }
 }

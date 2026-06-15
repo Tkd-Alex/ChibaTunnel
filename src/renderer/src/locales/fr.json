@@ -361,5 +361,24 @@
       "tun2socks": "Requis pour le support V2Ray système via interface TUN."
     },
     "wintun_missing": "Condition Windows : Placez 'wintun.dll' in le même dossier que tun2socks.exe."
+  },
+  "renewal": {
+    "title": "Politique de Renouvellement Automatique",
+    "policy_0": "Ne pas renouveler",
+    "policy_1": "Uniquement si le prix baisse",
+    "policy_2": "Si le prix baisse ou reste le même",
+    "policy_3": "Uniquement si le prix reste inchangé",
+    "policy_4": "Uniquement si le prix change",
+    "policy_5": "Uniquement si le prix augmente",
+    "policy_6": "Si le prix augmente ou reste le même",
+    "policy_7": "Toujours renouveler",
+    "desc_0": "L'abonnement expirera à la fin de la période.",
+    "desc_1": "Vous protège des augmentations de prix. Renouvelle uniquement si le fournisseur baisse le prix.",
+    "desc_2": "Protection standard. Renouvelle uniquement si le fournisseur n'augmente pas le prix.",
+    "desc_3": "Renouvelle uniquement si le prix exact est maintenu.",
+    "desc_7": "Renouvelle indépendamment des changements de prix du fournisseur ou de l'oracle.",
+    "desc_other": "Politique avancée basée sur le mouvement des prix.",
+    "update_btn": "Mettre à jour la politique",
+    "updating": "Mise à jour..."
   }
 }

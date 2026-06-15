@@ -28,6 +28,7 @@ export interface ApiSubscription {
   status: number
   inactiveAt: string | null
   startAt: string | null
+  renewalPricePolicy?: number
 }
 
 // Session decoded via Session.decode(any.value) in main, serialized to plain JS for IPC.

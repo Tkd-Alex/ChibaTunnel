@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ApiSubscription, ApiNode, ApiPlan } from '../types'
-import { Loader2, CreditCard, Calendar, Database, Play, CheckCircle2, Info, ChevronRight, Activity, Server, Shield, ExternalLink } from 'lucide-react'
+import { Loader2, CreditCard, Calendar, Database, Play, Activity, Server, Shield, ExternalLink, ChevronDown } from 'lucide-react'
 import NodeTable from './NodeTable'
 import { formatDataQuota } from '../utils'
 
@@ -17,8 +17,20 @@ interface Props {
   bookmarks: string[]
   onToggleBookmark: (address: string) => void
   onConnect: (subId: number, nodeAddr: string) => void
+  onUpdateSub: () => void
   activeNodeAddress?: string | null
 }
+
+const POLICIES = [
+  { value: 0, labelKey: 'renewal.policy_0', descKey: 'renewal.desc_0' },
+  { value: 1, labelKey: 'renewal.policy_1', descKey: 'renewal.desc_1' },
+  { value: 2, labelKey: 'renewal.policy_2', descKey: 'renewal.desc_2' },
+  { value: 3, labelKey: 'renewal.policy_3', descKey: 'renewal.desc_3' },
+  { value: 4, labelKey: 'renewal.policy_4', descKey: 'renewal.desc_other' },
+  { value: 5, labelKey: 'renewal.policy_5', descKey: 'renewal.desc_other' },
+  { value: 6, labelKey: 'renewal.policy_6', descKey: 'renewal.desc_other' },
+  { value: 7, labelKey: 'renewal.policy_7', descKey: 'renewal.desc_7' }
+]
 
 export default function SubscriptionsPanel({ 
   subscriptions, 
@@ -32,6 +44,7 @@ export default function SubscriptionsPanel({
   bookmarks,
   onToggleBookmark,
   onConnect, 
+  onUpdateSub,
   activeNodeAddress 
 }: Props) {
   const { t } = useTranslation()
@@ -39,8 +52,11 @@ export default function SubscriptionsPanel({
   const [loadingNodes, setLoadingNodes] = useState<Record<number, boolean>>({})
   const [selectedNode, setSelectedNode] = useState<ApiNode | null>(null)
   const [connectingTo, setConnectingTo] = useState<string | null>(null)
+  const [showPolicyDropdown, setShowPolicyDropdown] = useState(false)
+  const [updatingPolicy, setUpdatingPolicy] = useState(false)
 
   // Fetch provider monikers
+
   useEffect(() => {
     subscriptions.forEach(async (sub) => {
       const plan = plans.find(p => p.id === sub.planId)
@@ -271,16 +287,70 @@ export default function SubscriptionsPanel({
 
                <div style={{ display: 'flex', gap: '40px' }}>
                   <div className="detail-item">
-                    <div style={{ fontSize: '11px', color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: '4px' }}>Plan Identity</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: '4px' }}>{t('subs.plan_identity')}</div>
                     <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--cyan)' }}>Plan #{selectedSub.planId}</div>
                   </div>
                   <div className="detail-item">
-                    <div style={{ fontSize: '11px', color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: '4px' }}>Valid Until</div>
-                    <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--cyan)' }}>{selectedSub.inactiveAt ? new Date(selectedSub.inactiveAt).toLocaleDateString() : 'Never'}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: '4px' }}>{t('subs.valid_until')}</div>
+                    <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--cyan)' }}>{selectedSub.inactiveAt ? new Date(selectedSub.inactiveAt).toLocaleDateString() : t('common.never')}</div>
+                  </div>
+                  <div className="detail-item" style={{ position: 'relative' }}>
+                    <div style={{ fontSize: '11px', color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: '4px' }}>{t('renewal.title')}</div>
+                    <button 
+                      className="btn btn-secondary btn-sm" 
+                      style={{ fontSize: '12px', padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 6, opacity: updatingPolicy ? 0.5 : 1 }}
+                      onClick={() => setShowPolicyDropdown(!showPolicyDropdown)}
+                      disabled={updatingPolicy}
+                    >
+                      {updatingPolicy ? <Loader2 size={12} className="spinner" /> : null}
+                      {t(POLICIES.find(p => p.value === (selectedSub.renewalPricePolicy || 0))?.labelKey || 'renewal.policy_0')}
+                      <ChevronDown size={14} />
+                    </button>
+                    {showPolicyDropdown && (
+                      <div style={{
+                        position: 'absolute', top: '100%', left: 0, marginTop: '8px', width: '280px',
+                        background: 'var(--bg-1)', border: '1px solid var(--border)', borderRadius: '8px',
+                        boxShadow: '0 4px 20px rgba(0,0,0,0.5)', zIndex: 100, overflow: 'hidden'
+                      }}>
+                        {POLICIES.map(p => {
+                          const isCurrent = p.value === (selectedSub.renewalPricePolicy || 0)
+                          return (
+                            <div 
+                              key={p.value}
+                              onClick={async () => {
+                                setShowPolicyDropdown(false)
+                                if (isCurrent) return
+                                setUpdatingPolicy(true)
+                                try {
+                                  const res = await window.api.updateSubscription(selectedSub.id, p.value)
+                                  if (res.success) onUpdateSub()
+                                  else alert(t('common.error') + ': ' + res.error)
+                                } catch (e) { alert(String(e)) }
+                                finally { setUpdatingPolicy(false) }
+                              }}
+                              style={{ 
+                                padding: '12px 16px', cursor: 'pointer', borderBottom: '1px solid var(--bg-0)',
+                                background: isCurrent ? 'rgba(6, 182, 212, 0.1)' : 'transparent',
+                                transition: 'background 0.2s'
+                              }}
+                              onMouseOver={e => { if (!isCurrent) e.currentTarget.style.background = 'var(--bg-2)' }}
+                              onMouseOut={e => { if (!isCurrent) e.currentTarget.style.background = 'transparent' }}
+                            >
+                              <div style={{ fontSize: '12px', fontWeight: 600, color: isCurrent ? 'var(--cyan)' : 'var(--text-1)', marginBottom: '4px' }}>
+                                {t(p.labelKey)}
+                              </div>
+                              <div style={{ fontSize: '10px', color: 'var(--text-3)', lineHeight: 1.4 }}>
+                                {t(p.descKey)}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
                   <div className="detail-item">
-                    <div style={{ fontSize: '11px', color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: '4px' }}>Available Pool</div>
-                    <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--cyan)' }}>{richNodes.length} Nodes</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: '4px' }}>{t('subs.available_pool')}</div>
+                    <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--cyan)' }}>{richNodes.length} {t('common.nodes')}</div>
                   </div>
                </div>
             </div>
