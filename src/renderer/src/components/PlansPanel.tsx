@@ -137,7 +137,7 @@ export default function PlansPanel({
     const denom = confirmingPlan.prices[0]?.denom || 'udvpn'
     
     try {
-      const res = await window.api.subscribeToPlan(planId, denom)
+      const res = await window.api.subscribeToPlan(planId, denom, selectedPolicy)
       if (res.success) {
         setConfirmingPlan(null)
         onSubscribe()

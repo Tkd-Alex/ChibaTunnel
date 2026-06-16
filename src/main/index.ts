@@ -618,7 +618,7 @@ function registerIpcHandlers(): void {
         bytes: p.bytes,
         duration: p.duration ? longToNum(p.duration.seconds) : 0,
         prices: p.prices.map(price => {
-          const rawVal = (price as any).quoteValue || price.amount || (price as any).value || '0'
+          const rawVal = (price as any).quoteValue || (price as any).amount || (price as any).value || '0'
           return {
             denom: price.denom,
             amount: typeof rawVal === 'object' && rawVal !== null ? rawVal.toString() : String(rawVal)
@@ -760,8 +760,8 @@ function registerIpcHandlers(): void {
           identity: res.identity,
           website: res.website,
           description: res.description,
-          status: res.status,
-          statusAt: res.statusAt?.toISOString()
+          status: (res as any).status,
+          statusAt: (res as any).statusAt?.toISOString()
         } 
       }
     } catch (err: unknown) { return { success: false, error: extractError(err) } }
