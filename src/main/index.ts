@@ -25,7 +25,8 @@ import {
   subscriptionStart,
   subscriptionStartSession,
   RenewalPricePolicy,
-  SubscriptionEventCreateSession
+  SubscriptionEventCreateSession,
+  PageRequest
 } from '@sentinel-official/sentinel-js-sdk'
 import { DirectSecp256k1HdWallet } from '@cosmjs/proto-signing'
 import { assertIsDeliverTxSuccess } from '@cosmjs/stargate'
@@ -578,7 +579,10 @@ function registerIpcHandlers(): void {
   ipcMain.handle('sessions:fetch', async () => {
     if (!walletState.readonlyClient || !walletState.address) return { success: false, sessions: [] }
     try {
-      const r = await walletState.readonlyClient.sentinelQuery?.session.sessionsForAccount(walletState.address, undefined)
+      const r = await walletState.readonlyClient.sentinelQuery?.session.sessionsForAccount(
+        walletState.address, 
+        PageRequest.fromJSON({ limit: 100, reverse: true })
+      )
       const sessions = (r?.sessions ?? []).map(anyVal => {
         try {
           const decoded = Session.decode(anyVal.value); const bs = decoded.baseSession
@@ -808,6 +812,25 @@ function registerIpcHandlers(): void {
       const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'sentinel-dvpn-client')
       assertIsDeliverTxSuccess(tx)
       console.log(`[Subscription:Cancel] Success! TX: ${tx.transactionHash}`)
+
+      // Proactively disconnect if the active session belongs to this subscription
+      if (activeSessionId && walletState.readonlyClient) {
+        try {
+          const res = await walletState.readonlyClient.sentinelQuery?.session.session(Long.fromString(activeSessionId, true))
+          if ((res as any)?.session?.value) {
+            const decoded = Session.decode((res as any).session.value)
+            // @ts-ignore - subscriptionId exists on subscription.Session but not node.Session
+            if (decoded.subscriptionId?.toString() === subscriptionId.toString()) {
+              console.log(`[Subscription:Cancel] Active session #${activeSessionId} belongs to cancelled sub. Disconnecting locally...`)
+              mainWindow?.webContents.send('vpn:disconnected', { reason: 'subscription_cancelled' })
+              await killActiveConnections(false) // false: don't broadcast another sessionCancel
+            }
+          }
+        } catch (e) {
+          console.error('[Subscription:Cancel] Failed to check active session against cancelled sub', e)
+        }
+      }
+
       return { success: true, txHash: tx.transactionHash }
     } catch (err: unknown) {
       console.error(`[Subscription:Cancel] Error:`, err)
