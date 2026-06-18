@@ -48,7 +48,7 @@ Strictly **Cyberpunk minimal dark theme**. All visual changes must follow:
 - **WireGuard**: Linux/macOS via `wg-quick`, Windows via `wireguard.exe /installtunnelservice`. All via `sendToHelper({ command: 'wg-up' })`.
 - **V2Ray**: background daemon, SOCKS5/HTTP proxy on port 1080, stats via HTTP API `/stats/query`.
 - **tun2socks**: transparent proxy via TUN interface. Spawned and owned by `ChibaTunnelHelper`.
-- **TUN names**: Windows=`sentinel-tun`, Linux=`sentun0`, macOS=`utun10`.
+- **TUN names**: Windows=`chiba-tun`, Linux=`chibatun0`, macOS=`utun10`.
 
 # Git & Release Workflow Rules
 

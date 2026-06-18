@@ -164,9 +164,9 @@ wireguard, wintun) automatically. No manual binary management is required.
 ## 📁 Project Structure
 
 ```text
-sentinel-dvpn-client/
+chiba-tunnel/
 ├── helper/
-│   ├── chibatunnel-helper.ts      # Privileged service (all platforms)
+│   ├── chibatunnel-helper.ts   # Privileged service (all platforms)
 │   └── tsconfig.json           # Standalone TS config for pkg build
 ├── build/
 │   ├── installer.nsh           # NSIS hooks: Scheduled Task install/remove

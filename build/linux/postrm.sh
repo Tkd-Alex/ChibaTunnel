@@ -20,8 +20,8 @@ set -euo pipefail
 # Paths
 # ---------------------------------------------------------------------------
 
-HELPER_DEST="/usr/local/lib/sentinel/chibatunnel-helper"
-INSTALL_DIR="/usr/local/lib/sentinel"
+HELPER_DEST="/usr/local/lib/chibatunnel/chibatunnel-helper"
+INSTALL_DIR="/usr/local/lib/chibatunnel"
 UNIT_FILE="/etc/systemd/system/chibatunnel-helper.service"
 
 # ---------------------------------------------------------------------------

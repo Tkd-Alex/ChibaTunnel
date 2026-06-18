@@ -1,6 +1,6 @@
 ; installer.nsh
 ;
-; Custom NSIS hooks for the Sentinel installer, included by electron-builder
+; Custom NSIS hooks for the ChibaTunnel installer, included by electron-builder
 ; via the "include" option in the "nsis" section of electron-builder.json.
 ;
 ; These macros are called at the right moment by the electron-builder-generated

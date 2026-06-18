@@ -1,7 +1,7 @@
 /**
  * chibatunnel-helper.ts
  *
- * Privileged helper service for Sentinel. Runs as a Windows Service (LocalSystem)
+ * Privileged helper service for ChibaTunnel. Runs as a Windows Service (LocalSystem)
  * or a systemd service (root on Linux), providing network operations that require
  * elevated privileges without prompting UAC or sudo at runtime.
  *
@@ -27,7 +27,7 @@
  *   true exceptions — unlike a block rule which would override them.
  *
  * Kill switch — Linux:
- *   Inserts a dedicated iptables chain (SENTINEL_KS) into OUTPUT, which drops
+ *   Inserts a dedicated iptables chain (CHIBATUNNEL_KS) into OUTPUT, which drops
  *   all outbound traffic except the VPN server IP, the TUN interface, and loopback.
  *   Teardown removes the chain entirely, leaving the rest of iptables untouched.
  *
@@ -54,13 +54,13 @@ const USE_NAMED_PIPE  = process.argv.includes('--namedpipe')
 const PLATFORM        = process.platform   // 'win32' | 'linux' | 'darwin'
 
 // Windows TUN constants (Wintun adapter created by tun2socks)
-const WIN_TUN_NAME    = 'sentinel-tun'
+const WIN_TUN_NAME    = 'chiba-tun'
 const WIN_TUN_ADDRESS = '10.0.0.1'
 const WIN_TUN_NETMASK = '255.255.255.0'
 const WIN_TUN_DNS     = '1.1.1.1'
 
 // Linux TUN constants (kernel tun device created via ip tuntap)
-const LIN_TUN_NAME    = 'sentun0'
+const LIN_TUN_NAME    = 'chibatun0'
 const LIN_TUN_CIDR    = '10.0.0.1/24'
 
 // Darwin TUN constants (utun device created by tun2socks)
@@ -72,7 +72,7 @@ const TUN_POLL_INTERVAL_MS = 500
 
 // Windows Firewall kill switch rule prefix — all our rules share this prefix
 // so they can be deleted as a group.
-const KS_RULE_PREFIX = 'Sentinel-KS'
+const KS_RULE_PREFIX = 'chibatunnel-ks'
 const KS_RULE_NAMES  = [
   `${KS_RULE_PREFIX}-Allow-Server`,
   `${KS_RULE_PREFIX}-Allow-TUN`,
@@ -81,10 +81,10 @@ const KS_RULE_NAMES  = [
 ]
 
 // Linux iptables kill switch chain name.
-const KS_CHAIN = 'SENTINEL_KS'
+const KS_CHAIN = 'CHIBATUNNEL_KS'
 
 // Darwin PF (Packet Filter) anchor name for kill switch.
-const KS_PF_ANCHOR = 'com.sentinel.ks'
+const KS_PF_ANCHOR = 'com.chibatunnel.ks'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -458,7 +458,7 @@ function enableKillSwitchWindows(serverIp: string): void {
 }
 
 /**
- * Disables the Windows Firewall kill switch by removing all Sentinel-KS-*
+ * Disables the Windows Firewall kill switch by removing all chibatunnel-ks-*
  * rules and restoring the default outbound policy to ALLOW. Safe to call even
  * if the kill switch was never enabled — it attempts orphan rule cleanup.
  */
@@ -480,7 +480,7 @@ function disableKillSwitchWindows(): void {
 
 /**
  * Enables the Linux kill switch using iptables. Creates a dedicated chain
- * SENTINEL_KS and inserts it into OUTPUT. The chain drops everything except:
+ * CHIBATUNNEL_KS and inserts it into OUTPUT. The chain drops everything except:
  *   - Traffic to the V2Ray server IP
  *   - Traffic leaving via the TUN interface
  *   - Loopback (lo)
@@ -523,7 +523,7 @@ function enableKillSwitchLinux(serverIp: string, tunName: string): void {
 }
 
 /**
- * Disables the Linux kill switch by removing the SENTINEL_KS chain from OUTPUT
+ * Disables the Linux kill switch by removing the CHIBATUNNEL_KS chain from OUTPUT
  * and then flushing and deleting the chain. Safe to call even if never enabled.
  */
 function disableKillSwitchLinux(): void {
@@ -596,7 +596,7 @@ function disableKillSwitchDarwin(): void {
     // Flush the rules in our anchor.
     runCmd(`pfctl -a ${KS_PF_ANCHOR} -F all`)
     // Restore the default system ruleset (usually /etc/pf.conf) to
-    // remove the 'anchor com.sentinel.ks' reference from the main ruleset.
+    // remove the 'anchor com.chibatunnel.ks' reference from the main ruleset.
     runCmd('pfctl -f /etc/pf.conf')
   } catch (err) {
     log('WARN', `Could not teardown PF cleanly: ${err}`)
@@ -1400,7 +1400,7 @@ function shutdown(server: net.Server, reason: string): void {
  *   SIGINT    Ctrl+C in dev mode.
  */
 function main(): void {
-  log('INFO', 'Sentinel Helper starting...')
+  log('INFO', 'ChibaTunnel Helper starting...')
   const server = createServer()
 
   process.on('SIGTERM',  () => shutdown(server, 'SIGTERM'))

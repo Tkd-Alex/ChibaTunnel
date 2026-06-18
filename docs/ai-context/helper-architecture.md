@@ -43,8 +43,8 @@ JSON messages delimited by `\n`. Line-buffered on receipt (TCP may chunk data).
 ```
 
 ## TUN Interface Names (hardcoded)
-- Windows: `sentinel-tun`
-- Linux: `sentun0`
+- Windows: `chiba-tun`
+- Linux: `chibatun0`
 - macOS: `utun10`
 
 ## Per-Platform Service Installation
@@ -70,8 +70,8 @@ Default 10s timeout causes ECONNRESET before setup completes.
 
 ## Kill Switch Implementation
 - **Windows**: `netsh advfirewall set allprofiles firewallpolicy blockinbound,blockoutbound` + explicit ALLOW rules for VPN server IP, TUN interface, loopback, DHCP
-- **Linux**: dedicated `SENTINEL_KS` iptables chain in OUTPUT
-- **macOS**: `pfctl` rules loaded in-memory only (`pfctl -ef /tmp/sentinel-ks.pf`) — not written to `/etc/pf.conf` to avoid persistence after crash
+- **Linux**: dedicated `CHIBATUNNEL_KS` iptables chain in OUTPUT
+- **macOS**: `pfctl` rules loaded in-memory only (`pfctl -ef /tmp/chibatunnel-ks.pf`) — not written to `/etc/pf.conf` to avoid persistence after crash
 
 ## execPrivileged — Current Usage (post-helper)
 | Operation | Windows | Linux | macOS |

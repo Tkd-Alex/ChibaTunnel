@@ -27,11 +27,11 @@ set -euo pipefail
 
 # Adjust this to match your electron-builder productName / executableName.
 # electron-builder lowercases and replaces spaces with dashes by default.
-APP_NAME="sentinel-dvpn"
+APP_NAME="chiba-tunnel"
 RESOURCES_DIR="/opt/$APP_NAME/resources"
 
 HELPER_SRC="$RESOURCES_DIR/chibatunnel-helper"
-INSTALL_DIR="/usr/local/lib/sentinel"
+INSTALL_DIR="/usr/local/lib/chinatunnel"
 HELPER_DEST="$INSTALL_DIR/chibatunnel-helper"
 UNIT_FILE="/etc/systemd/system/chibatunnel-helper.service"
 
@@ -61,7 +61,7 @@ echo "[postinst] Installed chibatunnel-helper to $HELPER_DEST"
 cat > "$UNIT_FILE" << EOF
 [Unit]
 Description=ChibaTunnel Privileged Helper
-Documentation=https://github.com/sentinel-official/dvpn-node
+Documentation=https://github.com/tkd-alex/sentinel-dvpn-client/
 After=network.target
 StartLimitIntervalSec=60
 StartLimitBurst=5

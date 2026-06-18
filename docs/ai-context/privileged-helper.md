@@ -1,4 +1,4 @@
-# Sentinel dVPN — Privileged Helper: Full Implementation Context
+# ChibaTunnel — Privileged Helper: Full Implementation Context
 
 **Purpose**: This document transfers the complete context of the privileged helper
 architecture from a prior session. It covers every decision, implementation detail,
@@ -107,27 +107,27 @@ Default timeout: 10 s for most commands, 60 s for `start-transparent`.
 ### `start-transparent` (Windows)
 1. Detect gateway: `route print 0.0.0.0` → regex
 2. Add bypass route: `route add <serverIp> mask 255.255.255.255 <gateway> METRIC 1`
-3. Spawn tun2socks: `-device tun://sentinel-tun -proxy socks5://127.0.0.1:<socksPort>`
+3. Spawn tun2socks: `-device tun://chiba-tun -proxy socks5://127.0.0.1:<socksPort>`
    - `stdio: 'ignore'` — **critical**: prevents handle inheritance that caused the original bug
    - `detached: false` — keeps tun2socks in helper's process group
-4. Wait for `sentinel-tun` adapter: poll `netsh interface show interface` up to 20 s
-5. `netsh interface ipv4 set address name="sentinel-tun" static 10.0.0.1 255.255.255.0 none`
-6. `netsh interface ipv4 set dnsservers name="sentinel-tun" static address=1.1.1.1`
+4. Wait for `chiba-tun` adapter: poll `netsh interface show interface` up to 20 s
+5. `netsh interface ipv4 set address name="chiba-tun" static 10.0.0.1 255.255.255.0 none`
+6. `netsh interface ipv4 set dnsservers name="chiba-tun" static address=1.1.1.1`
 7. Get interface index: PowerShell `Get-NetIPInterface`
 8. `route add 0.0.0.0 mask 128.0.0.0 10.0.0.1 METRIC 2 IF <idx>`
 9. `route add 128.0.0.0 mask 128.0.0.0 10.0.0.1 METRIC 2 IF <idx>`
 10. If `killSwitch: true` → `enableKillSwitchWindows(serverIp)`
 
 ### `start-transparent` (Linux)
-TUN device: `sentun0`. Unlike Windows, the helper creates the TUN device first:
-1. `ip tuntap add dev sentun0 mode tun`
-2. `ip addr add 10.0.0.1/24 dev sentun0`
-3. `ip link set dev sentun0 up`
+TUN device: `chibatun0`. Unlike Windows, the helper creates the TUN device first:
+1. `ip tuntap add dev chibatun0 mode tun`
+2. `ip addr add 10.0.0.1/24 dev chibatun0`
+3. `ip link set dev chibatun0 up`
 4. `ip route add <serverIp> via <gateway> dev <iface>`
-5. Spawn tun2socks: `-device tun://sentun0 -proxy socks5://127.0.0.1:<socksPort>`
-6. Wait for `/sys/class/net/sentun0` to exist
-7. `ip route add 0.0.0.0/1 dev sentun0`
-8. `ip route add 128.0.0.0/1 dev sentun0`
+5. Spawn tun2socks: `-device tun://chibatun0 -proxy socks5://127.0.0.1:<socksPort>`
+6. Wait for `/sys/class/net/chibatun0` to exist
+7. `ip route add 0.0.0.0/1 dev chibatun0`
+8. `ip route add 128.0.0.0/1 dev chibatun0`
 
 ### `start-transparent` (macOS)
 TUN device: `utun9`. tun2socks creates the utun device itself.
@@ -145,14 +145,14 @@ TUN device: `utun9`. tun2socks creates the utun device itself.
 | Platform | Mechanism | Enable | Disable |
 |----------|-----------|--------|---------|
 | Windows | Windows Firewall default policy | `netsh advfirewall set allprofiles firewallpolicy allowinbound,blockoutbound` + named allow rules | Delete rules + restore `allowoutbound` |
-| Linux | iptables chain `SENTINEL_KS` | `iptables -N SENTINEL_KS`, insert into OUTPUT | `iptables -D OUTPUT -j SENTINEL_KS`, flush + delete chain |
-| macOS | PF anchor `com.sentinel.ks` | Three steps: (1) register anchor in main ruleset, (2) load rules into anchor, (3) `pfctl -e` | `pfctl -a com.sentinel.ks -F all` + `pfctl -f /etc/pf.conf` |
+| Linux | iptables chain `CHIBATUNNEL_KS` | `iptables -N CHIBATUNNEL_KS`, insert into OUTPUT | `iptables -D OUTPUT -j CHIBATUNNEL_KS`, flush + delete chain |
+| macOS | PF anchor `com.chibatunnel.ks` | Three steps: (1) register anchor in main ruleset, (2) load rules into anchor, (3) `pfctl -e` | `pfctl -a com.chibatunnel.ks -F all` + `pfctl -f /etc/pf.conf` |
 
-**Windows allow rules** (all named `Sentinel-KS-*` for easy bulk delete):
-- `Sentinel-KS-Allow-Server` — V2Ray server IP
-- `Sentinel-KS-Allow-TUN` — sentinel-tun interface
-- `Sentinel-KS-Allow-Loopback` — 127.0.0.0/8
-- `Sentinel-KS-Allow-DHCP` — UDP 67/68
+**Windows allow rules** (all named `chibatunnel-ks-*` for easy bulk delete):
+- `chibatunnel-ks-Allow-Server` — V2Ray server IP
+- `chibatunnel-ks-Allow-TUN` — chiba-tun interface
+- `chibatunnel-ks-Allow-Loopback` — 127.0.0.0/8
+- `chibatunnel-ks-Allow-DHCP` — UDP 67/68
 
 **macOS PF rules** (loaded into anchor, never written to /etc/pf.conf):
 ```
@@ -163,7 +163,7 @@ pass out quick on utun9
 ```
 
 **Critical macOS PF detail**: The anchor must be registered in the main ruleset
-first (`echo 'anchor "com.sentinel.ks"' | pfctl -f -`), otherwise the rules inside
+first (`echo 'anchor "com.chibatunnel.ks"' | pfctl -f -`), otherwise the rules inside
 the anchor are never evaluated by PF. This is step 1 of the three-step enable.
 
 ### Teardown Order (all platforms)
@@ -241,7 +241,7 @@ Called in `app.whenReady()` before `checkBinaries()`.
 
 ### Linux (deb/rpm/pacman)
 postinst.sh runs as root automatically during package install:
-- Copies `chibatunnel-helper` to `/usr/local/lib/sentinel/`
+- Copies `chibatunnel-helper` to `/usr/local/lib/chibatunnel/`
 - Writes systemd unit to `/etc/systemd/system/chibatunnel-helper.service`
 - `systemctl enable --now chibatunnel-helper`
 

@@ -107,9 +107,9 @@ specifically, preventing the routing loop.
 
 - **No modification of `/etc/pf.conf`**: Rules exist in memory only and are
   never written to disk. A system reboot restores the original PF state.
-- **Isolated namespace**: A dedicated PF anchor (`com.sentinel.ks`) contains
-  all Sentinel rules and does not interfere with any user-configured firewall.
-- **Atomic teardown**: `pfctl -a com.sentinel.ks -F all` flushes all rules in
+- **Isolated namespace**: A dedicated PF anchor (`com.chibatunnel.ks`) contains
+  all ChibaTunnel rules and does not interfere with any user-configured firewall.
+- **Atomic teardown**: `pfctl -a com.chibatunnel.ks -F all` flushes all rules in
   the anchor in a single command, with no partial-state window.
 
 This approach is used by Mullvad VPN and ProtonVPN on macOS.
@@ -122,10 +122,10 @@ kill switch has no effect.
 
 ```bash
 # Step 1: Register the anchor reference in the main ruleset.
-echo 'anchor "com.sentinel.ks"' | pfctl -f -
+echo 'anchor "com.chibatunnel.ks"' | pfctl -f -
 
 # Step 2: Load blocking rules into the anchor.
-printf '<rules>' | pfctl -a com.sentinel.ks -f -
+printf '<rules>' | pfctl -a com.chibatunnel.ks -f -
 
 # Step 3: Enable PF. pfctl -e returns exit code 1 if already enabled —
 #          this is handled gracefully (caught and logged, not re-thrown).
@@ -154,17 +154,17 @@ Rule rationale:
 
 ```bash
 # 1. Flush all rules from our anchor.
-pfctl -a com.sentinel.ks -F all
+pfctl -a com.chibatunnel.ks -F all
 
 # 2. Restore the system default ruleset, removing the anchor reference.
 pfctl -f /etc/pf.conf
 ```
 
-Step 2 reloads `/etc/pf.conf` which does not contain the `anchor "com.sentinel.ks"`
+Step 2 reloads `/etc/pf.conf` which does not contain the `anchor "com.chibatunnel.ks"`
 line — this effectively unregisters the anchor from the main ruleset. The
 system is left in its original state as if the kill switch was never activated.
 
-**Edge case**: If the user had custom PF rules active before Sentinel modified
+**Edge case**: If the user had custom PF rules active before ChibaTunnel modified
 the ruleset, those rules are also restored by `pfctl -f /etc/pf.conf` (since
 they originate from that file). This is the correct behaviour.
 
