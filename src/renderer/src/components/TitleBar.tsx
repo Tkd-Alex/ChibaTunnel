@@ -34,7 +34,32 @@ export default function TitleBar({ currentRpc, showRpc, onRpcChanged, ipInfo, on
   return (
     <div className="titlebar">
       <div className="titlebar-logo">
-        <div className="logo-mark" />
+        <div className="logo-mark">
+          <svg viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <filter id="glow-magenta" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="15" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+            </defs>
+            {/* Tunnel Grid */}
+            <g stroke="#00ccff" strokeWidth="10" opacity="0.6">
+              <line x1="172" y1="184" x2="256" y2="318" />
+              <line x1="340" y1="184" x2="256" y2="318" />
+              <line x1="190" y1="214" x2="321" y2="214" />
+              <line x1="208" y1="242" x2="303" y2="242" />
+            </g>
+            {/* Torii Gate */}
+            <g fill="#ff0055">
+              <polygon points="72,122 90,80 110,76 402,76 422,80 440,122 440,136 422,96 402,92 110,92 90,96 72,136" />
+              <rect x="148" y="168" width="216" height="16" rx="3" />
+              <rect x="148" y="184" width="24" height="252" rx="3" />
+              <rect x="340" y="184" width="24" height="252" rx="3" />
+            </g>
+            <circle cx="256" cy="318" r="12" fill="#00ccff" />
+            <circle cx="256" cy="318" r="4" fill="white" />
+          </svg>
+        </div>
         <div>
           <div className="logo-text">ChibaTunnel</div>
         </div>
