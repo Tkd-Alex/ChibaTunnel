@@ -136,7 +136,7 @@
           <span class="eyebrow-dot"></span>
           <span>dVPN · BLOCKCHAIN ENCRYPTED · OPEN SOURCE</span>
         </div>
-        <h1 class="glitch-text" data-text="CHIBATUNNEL" id="hero-heading">CHIBATUNNEL</h1>
+        <h1 class="scramble-title" data-text="CHIBATUNNEL" id="hero-heading"></h1>
         <p class="hero-sub">
           Enter the tunnel. Multi-platform, multi-language, fully decentralized.
           Connect to a global mesh of community-hosted nodes with cryptographic anonymity —
@@ -155,18 +155,6 @@
           <span class="tag" role="listitem">macOS</span>
           <span class="tag feature" role="listitem">Multilingual</span>
           <span class="tag magenta" role="listitem">Open Source</span>
-        </div>
-      </div>
-
-      <div class="hero-preview" aria-hidden="true">
-        <div class="hero-image-container">
-          <div class="hero-frame-corner tl"></div>
-          <div class="hero-frame-corner tr"></div>
-          <div class="hero-frame-corner bl"></div>
-          <div class="hero-frame-corner br"></div>
-          <img src="images/globe.png" alt="ChibaTunnel globe interface showing global node connections"
-               class="hero-screenshot" width="600" height="400" loading="eager">
-          <div class="hero-hud-label">NODE NETWORK · LIVE</div>
         </div>
       </div>
     </section>
@@ -458,7 +446,7 @@
             open-source privacy tools.
           </p>
           <div class="validator-actions">
-            <a href="https://explorer.busurnode.com/sentinel/staking/sentvaloper10unne9aclcdwfysj6ya5vzh7xwj3xht6jhfxn6"
+            <a href="https://p2pscan.com/validator/sentvaloper10unne9aclcdwfysj6ya5vzh7xwj3xht6jhfxn6"
                class="btn btn-purple btn-lg" target="_blank" rel="noopener noreferrer">
               Delegate to Tkd-Alex ↗
             </a>
@@ -583,6 +571,42 @@
         btn.style.borderColor = 'var(--magenta)';
         setTimeout(() => { btn.textContent = orig; btn.style.borderColor = ''; }, 2000);
       });
+    }
+
+    // Data Scramble Animation
+    const scrambleHeading = document.getElementById('hero-heading');
+    if (scrambleHeading) {
+      const WORD = scrambleHeading.getAttribute('data-text') || 'CHIBATUNNEL';
+      const CHARS = '!@#$%^&*01アイウエオカキクケコ▓░■□◆◇';
+      
+      WORD.split('').forEach(ch => {
+        const span = document.createElement('span');
+        span.className = 'ch';
+        span.textContent = ch;
+        scrambleHeading.appendChild(span);
+      });
+
+      function scramble() {
+        const chars = scrambleHeading.querySelectorAll('.ch');
+        let iter = 0;
+        chars.forEach(ch => ch.classList.add('scrambling'));
+        const iv = setInterval(() => {
+          chars.forEach((ch, i) => {
+            if (i < iter) {
+              ch.textContent = WORD[i];
+              ch.classList.remove('scrambling');
+            } else {
+              ch.textContent = CHARS[Math.floor(Math.random() * CHARS.length)];
+            }
+          });
+          if (++iter > WORD.length) {
+            clearInterval(iv);
+            setTimeout(scramble, 3200);
+          }
+        }, 55);
+      }
+      // Start the animation slightly after load
+      setTimeout(scramble, 500);
     }
 
     // Subtle parallax on hero image

@@ -1,4 +1,19 @@
-# ChibaTunnel
+<div align="center">
+  <img src="docs/branding/chibatunnel-wordmark.png" alt="ChibaTunnel Wordmark" width="600" />
+</div>
+
+<br/>
+
+> **Status:** Online | **Protocol:** Sentinel dVPN | **Identity:** Unknown
+
+**ChibaTunnel** is a cyberpunk-styled desktop dVPN client engineered for absolute privacy and censorship resistance. It cuts through centralized corporate firewalls by routing your traffic across a trustless, peer-to-peer node network.
+
+### ⛩️ Built for the Digital Underground ⚡
+* **The Stack:** Crafted with **Electron**, **React**, and **TypeScript** for a fluid, resource-efficient desktop experience.
+* **The Core:** Powered by the **Sentinel Protocol** ecosystem, ensuring no central logs, no single points of failure, and complete user sovereignty.
+* **The Armor:** Dual-engine routing utilizing **WireGuard** for raw speed and **V2Ray** for stealth obfuscation through restrictive networks.
+
+*An open-source gateway wrapped in electric cyan and neon magenta. Welcome to the Street.*
 
 ## ⚠️ Disclaimer
 This application is open source and was created for the Sentinel community. **100%** of the client code was created by AI. I wanted to play around a bit, but I just supervised. This shows how the power of the [sentinel-js-sdk](https://github.com/sentinel-official/sentinel-js-sdk/) combined with a tool like AI can create something amazing! A simple prompt like "create a VPN client using the SDK documented at https://sentinel-official.github.io/sentinel-js-sdk/: " is all it takes. The source of the nodes is: https://sentnodes.com/ Thanks! 💙 I'm not sure everything works perfectly, especially on Winzozz, but I'm pretty confident on Linux 😎.

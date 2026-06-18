@@ -162,13 +162,13 @@ body {
    HERO
 ══════════════════════════════════════════════════════════════════ */
 .hero {
-  display: flex; align-items: center;
-  justify-content: space-between; gap: 48px;
-  padding: 100px 5% 80px;
-  max-width: 1400px; margin: 0 auto;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  justify-content: center; gap: 48px;
+  padding: 100px 2% 80px;
+  max-width: 1000px; margin: 0 auto;
   min-height: 88vh;
 }
-.hero-content { flex: 1; max-width: 620px; }
+.hero-content { flex: 1; max-width: 900px; display: flex; flex-direction: column; align-items: center; }
 
 /* Eyebrow */
 .hero-eyebrow {
@@ -190,21 +190,17 @@ body {
 
 /* H1 */
 .hero-content h1 {
-  font-size: clamp(40px, 7vw, 76px);
-  margin-bottom: 28px;
-  color: var(--magenta);
-  text-shadow: var(--glow-magenta);
-  line-height: 1.05;
+  /* Using specific class now */
 }
 .hero-sub {
   font-size: clamp(14px, 2vw, 18px);
   color: var(--text-2); margin-bottom: 44px;
-  line-height: 1.85; max-width: 540px;
+  line-height: 1.85; max-width: 700px; margin-left: auto; margin-right: auto;
 }
-.hero-actions { display: flex; gap: 16px; flex-wrap: wrap; }
+.hero-actions { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
 .hero-platform-tags {
   display: flex; gap: 10px; margin-top: 36px;
-  flex-wrap: wrap; align-items: center;
+  flex-wrap: wrap; align-items: center; justify-content: center;
 }
 
 /* Tags */
@@ -854,52 +850,33 @@ body {
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   GLITCH TEXT
+   DATA SCRAMBLE TEXT
 ══════════════════════════════════════════════════════════════════ */
-.glitch-text { position: relative; display: inline-block; }
-.glitch-text::before,
-.glitch-text::after {
-  content: attr(data-text);
-  position: absolute; top: 0; left: 0;
-  width: 100%; height: 100%;
-  pointer-events: none;
-}
-.glitch-text::before {
-  left: 2px;
-  color: var(--cyan);
-  clip: rect(44px, 450px, 56px, 0);
-  animation: glitch-a 6s infinite linear alternate-reverse;
-  opacity: .7;
-}
-.glitch-text::after {
-  left: -2px;
+.scramble-title {
+  font-size: clamp(32px, 7vw, 76px);
+  font-weight: 800;
+  letter-spacing: .10em;
   color: var(--magenta);
-  clip: rect(44px, 450px, 56px, 0);
-  animation: glitch-b 5s infinite linear alternate-reverse;
-  opacity: .7;
+  text-shadow: 0 0 10px rgba(255,0,85,0.8), 0 0 28px rgba(255,0,85,0.4);
+  margin-bottom: 24px;
+  position: relative;
+  display: inline-block;
+  cursor: default;
 }
-@keyframes glitch-a {
-  0%   { clip: rect(12px, 9999px, 52px, 0); transform: skewX(-0.3deg); }
-  20%  { clip: rect(68px, 9999px, 30px, 0); transform: skewX(0.5deg); }
-  40%  { clip: rect(25px, 9999px, 80px, 0); transform: skewX(-0.1deg); }
-  60%  { clip: rect(55px, 9999px, 15px, 0); transform: skewX(0.2deg); }
-  80%  { clip: rect(38px, 9999px, 70px, 0); transform: skewX(-0.4deg); }
-  100% { clip: rect(67px, 9999px, 26px, 0); transform: skewX(0.1deg); }
+.scramble-title .ch {
+  display: inline-block;
+  transition: color .08s, text-shadow .08s;
 }
-@keyframes glitch-b {
-  0%   { clip: rect(65px, 9999px, 100px, 0); transform: skewX(0.2deg); }
-  20%  { clip: rect(20px, 9999px, 40px, 0); transform: skewX(-0.5deg); }
-  40%  { clip: rect(80px, 9999px, 20px, 0); transform: skewX(0.3deg); }
-  60%  { clip: rect(10px, 9999px, 60px, 0); transform: skewX(-0.2deg); }
-  80%  { clip: rect(45px, 9999px, 35px, 0); transform: skewX(0.4deg); }
-  100% { clip: rect(15px, 9999px, 13px, 0); transform: skewX(-0.1deg); }
+.scramble-title .ch.scrambling {
+  color: rgba(0,204,255,0.9);
+  text-shadow: 0 0 10px rgba(0,204,255,0.9), 0 0 30px rgba(0,204,255,0.4);
 }
 
 /* ══════════════════════════════════════════════════════════════════
    RESPONSIVE
 ══════════════════════════════════════════════════════════════════ */
 @media (max-width: 1100px) {
-  .hero { padding: 80px 5% 60px; gap: 36px; min-height: auto; }
+  .hero { padding: 80px 2% 60px; gap: 36px; min-height: auto; }
   .validator-card { padding: 48px 40px; gap: 40px; }
 }
 
