@@ -146,7 +146,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   hideSupportOption: false,
 }
 
-const store = new Store({ name: 'chiba-tunnel' })
+const store = new Store({ name: 'chibatunnel' })
 
 // Cache for wallet addresses (encrypted mnemonic -> address)
 const addressCache: Record<string, string> = {}

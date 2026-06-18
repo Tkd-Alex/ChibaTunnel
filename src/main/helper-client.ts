@@ -120,7 +120,7 @@ export function sendToHelper(
         error:
           `Helper did not respond within ${timeoutMs} ms. ` +
           'In development: make sure chibatunnel-helper is running in an elevated terminal. ' +
-          'In production: the ChibaTunnelHelper Windows Service may be stopped.',
+          'In production: the ChibaTunnelHelper Service may be stopped.',
       })
     }, timeoutMs)
 

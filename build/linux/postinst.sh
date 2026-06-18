@@ -27,11 +27,11 @@ set -euo pipefail
 
 # Adjust this to match your electron-builder productName / executableName.
 # electron-builder lowercases and replaces spaces with dashes by default.
-APP_NAME="chiba-tunnel"
+APP_NAME="chibatunnel"
 RESOURCES_DIR="/opt/$APP_NAME/resources"
 
 HELPER_SRC="$RESOURCES_DIR/chibatunnel-helper"
-INSTALL_DIR="/usr/local/lib/chinatunnel"
+INSTALL_DIR="/usr/local/lib/chibatunnel"
 HELPER_DEST="$INSTALL_DIR/chibatunnel-helper"
 UNIT_FILE="/etc/systemd/system/chibatunnel-helper.service"
 

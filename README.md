@@ -164,7 +164,7 @@ wireguard, wintun) automatically. No manual binary management is required.
 ## 📁 Project Structure
 
 ```text
-chiba-tunnel/
+chibatunnel/
 ├── helper/
 │   ├── chibatunnel-helper.ts   # Privileged service (all platforms)
 │   └── tsconfig.json           # Standalone TS config for pkg build
