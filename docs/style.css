@@ -675,8 +675,156 @@ body {
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   FOOTER
+   BILLING MODES
 ══════════════════════════════════════════════════════════════════ */
+.billing-section {
+  padding: 100px 5%; max-width: 1400px;
+  margin: 0 auto; text-align: center;
+}
+.billing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 24px; margin-top: 56px; text-align: left;
+}
+
+/* Base card */
+.billing-card {
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 40px;
+  display: flex; flex-direction: column; gap: 28px;
+  transition: transform .3s, border-color .3s, box-shadow .3s;
+  position: relative; overflow: hidden;
+}
+.billing-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  opacity: 0; transition: opacity .3s;
+}
+.billing-card:hover {
+  transform: translateY(-6px);
+  border-color: rgba(0,204,255,.35);
+  box-shadow: 0 16px 48px rgba(0,0,0,.55), var(--glow-cyan);
+}
+.billing-card:hover::before { opacity: 1; }
+
+/* Featured card (subscription) */
+.billing-card--featured {
+  border-color: rgba(255,0,85,.3);
+  box-shadow: var(--glow-magenta), 0 8px 32px rgba(0,0,0,.4);
+}
+.billing-card--featured::before {
+  background: linear-gradient(90deg, transparent, var(--magenta), transparent);
+  opacity: 1;
+}
+.billing-card--featured:hover {
+  border-color: rgba(255,0,85,.6);
+  box-shadow: 0 16px 48px rgba(0,0,0,.55), 0 0 32px rgba(255,0,85,.25);
+}
+
+/* Header row */
+.billing-card-header {
+  display: flex; align-items: flex-start;
+  gap: 16px;
+}
+.billing-icon { font-size: 32px; flex-shrink: 0; margin-top: 2px; }
+.billing-card-header > div { flex: 1; }
+.billing-title {
+  font-size: 18px; font-weight: 700;
+  letter-spacing: .08em; color: var(--text-1);
+  text-transform: uppercase; margin-bottom: 4px;
+}
+.billing-tagline {
+  font-size: 11px; color: var(--text-3);
+  letter-spacing: .1em; text-transform: uppercase;
+}
+
+/* Badges */
+.billing-badge {
+  flex-shrink: 0; align-self: flex-start;
+  font-size: 9px; font-weight: 700;
+  letter-spacing: .18em; text-transform: uppercase;
+  padding: 4px 12px; border-radius: 20px;
+  border: 1px solid;
+}
+.billing-badge.cyan {
+  color: var(--cyan); border-color: rgba(0,204,255,.3);
+  background: rgba(0,204,255,.06);
+}
+.billing-badge.magenta {
+  color: var(--magenta); border-color: rgba(255,0,85,.35);
+  background: rgba(255,0,85,.07);
+}
+
+/* Description */
+.billing-desc {
+  font-size: 13px; color: var(--text-2); line-height: 1.8;
+}
+.billing-desc strong { color: var(--text-1); }
+
+/* Perk list */
+.billing-perks {
+  list-style: none;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.billing-perks li {
+  display: flex; align-items: center; gap: 12px;
+  font-size: 12px; color: var(--text-2);
+}
+.perk-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+}
+.perk-dot.cyan    { background: var(--cyan);    box-shadow: 0 0 6px var(--cyan);    }
+.perk-dot.magenta { background: var(--magenta); box-shadow: 0 0 6px var(--magenta); }
+
+/* Flow diagram */
+.billing-flow {
+  display: flex; align-items: center;
+  gap: 8px; flex-wrap: wrap;
+  padding: 18px 20px;
+  background: var(--bg-0);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-top: auto;
+}
+.flow-step {
+  display: flex; align-items: center; gap: 8px;
+  flex-shrink: 0;
+}
+.flow-num {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 700; color: var(--text-3);
+  flex-shrink: 0;
+}
+.billing-card--featured .flow-num {
+  border-color: rgba(255,0,85,.3);
+  color: var(--magenta);
+}
+.flow-label {
+  font-size: 10px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--text-2);
+  white-space: nowrap;
+}
+.flow-arrow {
+  color: var(--text-3); font-size: 12px;
+  flex-shrink: 0;
+}
+.billing-card--featured .flow-arrow { color: rgba(255,0,85,.4); }
+
+/* Footer note */
+.billing-note {
+  margin-top: 40px; text-align: center;
+  font-size: 12px; color: var(--text-3);
+  line-height: 1.8;
+}
+.billing-note strong { color: var(--text-2); }
+
+
 .bottom-bar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 28px 5%;
@@ -814,7 +962,10 @@ body {
 }
 
 @media (max-width: 680px) {
-  .features-grid { grid-template-columns: 1fr; }
+  .billing-grid { grid-template-columns: 1fr; }
+  .billing-flow { justify-content: center; }
+
+
   .gallery-grid  { grid-template-columns: 1fr; }
   .comparison-grid { grid-template-columns: 1fr; }
   .comp-head:first-child { display: none; }

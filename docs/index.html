@@ -114,6 +114,7 @@
       </button>
       <nav class="nav-links" id="nav-links" role="navigation" aria-label="Main navigation">
         <a href="#features"  class="nav-link">Features</a>
+        <a href="#billing"   class="nav-link">Billing</a>
         <a href="#protocol"  class="nav-link">Protocol</a>
         <a href="#validator" class="nav-link">Validator</a>
         <a href="https://github.com/Tkd-Alex/sentinel-dvpn-client"
@@ -269,7 +270,109 @@
       </div>
     </section>
 
-    <!-- ── PROTOCOL ───────────────────────────────────────────────────────── -->
+    <!-- ── BILLING MODES ──────────────────────────────────────────────── -->
+    <section id="billing" class="billing-section" aria-labelledby="billing-heading">
+      <h2 class="section-title" id="billing-heading">Choose Your Billing Mode</h2>
+      <p class="section-subtitle">Two ways to pay — one fully decentralised network</p>
+
+      <div class="billing-grid">
+
+        <!-- Pay-per-use -->
+        <div class="billing-card">
+          <div class="billing-card-header">
+            <span class="billing-icon" aria-hidden="true">⚡</span>
+            <div>
+              <h3 class="billing-title">Pay Per Use</h3>
+              <p class="billing-tagline">Pay only for what you consume</p>
+            </div>
+            <span class="billing-badge cyan">Flexible</span>
+          </div>
+
+          <p class="billing-desc">
+            Connect to any available node on the network and pay in real time —
+            billed by <strong>data consumed</strong> or <strong>time connected</strong>.
+            An on-chain escrow deposit is locked at session start and released automatically when you disconnect.
+          </p>
+
+          <ul class="billing-perks">
+            <li><span class="perk-dot cyan"></span>No subscription required</li>
+            <li><span class="perk-dot cyan"></span>Per-MB or per-hour billing</li>
+            <li><span class="perk-dot cyan"></span>Escrow auto-released on disconnect</li>
+            <li><span class="perk-dot cyan"></span>Full node marketplace access</li>
+          </ul>
+
+          <div class="billing-flow" aria-label="Pay-per-use connection flow">
+            <div class="flow-step">
+              <span class="flow-num">1</span>
+              <span class="flow-label">Choose Node</span>
+            </div>
+            <span class="flow-arrow" aria-hidden="true">→</span>
+            <div class="flow-step">
+              <span class="flow-num">2</span>
+              <span class="flow-label">Escrow Deposit</span>
+            </div>
+            <span class="flow-arrow" aria-hidden="true">→</span>
+            <div class="flow-step">
+              <span class="flow-num">3</span>
+              <span class="flow-label">Tunnel Active</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Subscription -->
+        <div class="billing-card billing-card--featured">
+          <div class="billing-card-header">
+            <span class="billing-icon" aria-hidden="true">🔑</span>
+            <div>
+              <h3 class="billing-title">Subscription Plan</h3>
+              <p class="billing-tagline">One payment, unlimited switches</p>
+            </div>
+            <span class="billing-badge magenta">Best Value</span>
+          </div>
+
+          <p class="billing-desc">
+            Subscribe to a plan once and get an <strong>on-chain allocation</strong>
+            across a curated pool of nodes. Switch between nodes freely without
+            new escrow deposits — ideal for daily drivers and power users.
+          </p>
+
+          <ul class="billing-perks">
+            <li><span class="perk-dot magenta"></span>Single up-front payment</li>
+            <li><span class="perk-dot magenta"></span>Access to a full node pool</li>
+            <li><span class="perk-dot magenta"></span>Switch nodes without re-depositing</li>
+            <li><span class="perk-dot magenta"></span>On-chain allocation tracking</li>
+          </ul>
+
+          <div class="billing-flow" aria-label="Subscription connection flow">
+            <div class="flow-step">
+              <span class="flow-num">1</span>
+              <span class="flow-label">Subscribe to Plan</span>
+            </div>
+            <span class="flow-arrow" aria-hidden="true">→</span>
+            <div class="flow-step">
+              <span class="flow-num">2</span>
+              <span class="flow-label">Pick from Pool</span>
+            </div>
+            <span class="flow-arrow" aria-hidden="true">→</span>
+            <div class="flow-step">
+              <span class="flow-num">3</span>
+              <span class="flow-label">Tunnel Active</span>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /billing-grid -->
+
+      <!-- shared footer note -->
+      <p class="billing-note">
+        All payments are settled <strong>on-chain via the Sentinel Protocol</strong> —
+        no credit cards, no third parties, no chargebacks.
+        Your wallet, your rules.
+      </p>
+
+    </section>
+
+    
     <section id="protocol" class="protocol-info" aria-labelledby="protocol-heading">
       <div class="protocol-grid">
         <div class="protocol-text">
