@@ -36,7 +36,7 @@ Native **RTL (Right-to-Left)** support with full UI mirroring for Arabic and Per
 
 ### 🔧 Privileged Helper Service
 All operations requiring elevated privileges are delegated to a background service
-(`sentinel-helper`) that is installed once and runs silently thereafter.
+(`chibatunnel-helper`) that is installed once and runs silently thereafter.
 No repeated password prompts or UAC dialogs during normal use.
 
 - **Windows**: a Scheduled Task running as `SYSTEM` is configured by the installer.
@@ -77,7 +77,7 @@ graph TD
 ```mermaid
 graph TD
   Electron["Electron App\n(user-level)"]
-  Helper["sentinel-helper\n(SYSTEM / root)"]
+  Helper["chibatunnel-helper\n(SYSTEM / root)"]
   T2S["tun2socks\n(child of helper)"]
   WG["wireguard.exe\nwg-quick"]
   KS["Kill Switch\nFirewall rules"]
@@ -166,7 +166,7 @@ wireguard, wintun) automatically. No manual binary management is required.
 ```text
 sentinel-dvpn-client/
 ├── helper/
-│   ├── sentinel-helper.ts      # Privileged service (all platforms)
+│   ├── chibatunnel-helper.ts      # Privileged service (all platforms)
 │   └── tsconfig.json           # Standalone TS config for pkg build
 ├── build/
 │   ├── installer.nsh           # NSIS hooks: Scheduled Task install/remove
@@ -176,7 +176,7 @@ sentinel-dvpn-client/
 ├── src/
 │   ├── main/
 │   │   ├── index.ts            # IPC handlers, app lifecycle
-│   │   ├── helper-client.ts    # TCP client for sentinel-helper
+│   │   ├── helper-client.ts    # TCP client for chibatunnel-helper
 │   │   └── v2ray-process.ts    # V2Ray spawn with explicit binary path
 │   ├── preload/                # Secure Context Bridge
 │   └── renderer/               # React UI
@@ -201,7 +201,7 @@ graph TD
   R["Renderer\n(sandboxed, contextIsolation)"]
   P["Preload\n(Context Bridge)"]
   M["Main Process\n(Node.js)"]
-  H["sentinel-helper\n(SYSTEM / root)"]
+  H["chibatunnel-helper\n(SYSTEM / root)"]
   OS["OS Network Stack\nWireGuard / TUN"]
 
   R -->|"safe IPC only"| P

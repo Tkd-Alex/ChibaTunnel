@@ -1,4 +1,4 @@
-# SentinelHelper — Architecture Decisions
+# ChibaTunnelHelper — Architecture Decisions
 
 ## Why TCP (127.0.0.1:47391) Instead of Named Pipe
 Named Pipes created by SYSTEM-level processes have a DACL blocking connections from
@@ -58,7 +58,7 @@ JSON messages delimited by `\n`. Line-buffered on receipt (TCP may chunk data).
 ## Key Files
 | File | Purpose |
 |------|---------|
-| `helper/sentinel-helper.ts` | The privileged service (all platforms) |
+| `helper/chibatunnel-helper.ts` | The privileged service (all platforms) |
 | `src/main/helper-client.ts` | Electron-side connector (`sendToHelper`, `pingHelper`) |
 | `build/installer.nsh` | NSIS: registers schtasks, handles uninstall |
 | `build/linux/postinst` | deb/rpm: installs + enables systemd service |

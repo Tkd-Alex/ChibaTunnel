@@ -15,10 +15,10 @@
     "dist:win": "npm run build && electron-builder --win",
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:all": "npm run build && electron-builder --linux --win --mac",
-    "dev:helper": "ts-node --project helper/tsconfig.json helper/sentinel-helper.ts",
-    "build:helper:win": "tsc --project helper/tsconfig.json && pkg dist-helper/sentinel-helper.js --target node18-win-x64 --output dist-helper/sentinel-helper.exe",
-    "build:helper:linux": "tsc --project helper/tsconfig.json && pkg dist-helper/sentinel-helper.js --target node18-linux-x64 --output dist-helper/sentinel-helper",
-    "build:helper:mac": "tsc --project helper/tsconfig.json && pkg dist-helper/sentinel-helper.js --target node18-macos-x64 --output dist-helper/sentinel-helper-mac"
+    "dev:helper": "ts-node --project helper/tsconfig.json helper/chibatunnel-helper.ts",
+    "build:helper:win": "tsc --project helper/tsconfig.json && pkg dist-helper/chibatunnel-helper.js --target node18-win-x64 --output dist-helper/chibatunnel-helper.exe",
+    "build:helper:linux": "tsc --project helper/tsconfig.json && pkg dist-helper/chibatunnel-helper.js --target node18-linux-x64 --output dist-helper/chibatunnel-helper",
+    "build:helper:mac": "tsc --project helper/tsconfig.json && pkg dist-helper/chibatunnel-helper.js --target node18-macos-x64 --output dist-helper/chibatunnel-helper-mac"
   },
   "dependencies": {
     "@cosmjs/proto-signing": "^0.32.4",

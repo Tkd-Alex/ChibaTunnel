@@ -41,17 +41,17 @@ jobs:
           - os: ubuntu-latest
             platform: linux
             pkg_target: node18-linux-x64
-            helper_output: dist-helper/sentinel-helper
+            helper_output: dist-helper/chibatunnel-helper
 
           - os: windows-latest
             platform: win
             pkg_target: node18-win-x64
-            helper_output: dist-helper/sentinel-helper.exe
+            helper_output: dist-helper/chibatunnel-helper.exe
 
           - os: macos-latest
             platform: mac
             pkg_target: node18-macos-x64
-            helper_output: dist-helper/sentinel-helper-mac
+            helper_output: dist-helper/chibatunnel-helper-mac
 
     runs-on: ${{ matrix.os }}
 
@@ -290,7 +290,7 @@ jobs:
       # -----------------------------------------------------------------------
       # Build the privileged helper binary with pkg.
       #
-      # pkg compiles sentinel-helper.ts (via the pre-compiled JS in dist-helper/)
+      # pkg compiles chibatunnel-helper.ts (via the pre-compiled JS in dist-helper/)
       # into a self-contained native executable — no Node.js needed on the user's
       # machine. The output lands in dist-helper/ where electron-builder picks it
       # up via extraResources.

@@ -18,5 +18,5 @@
 4. **Low-metric routing** — used `METRIC 2/5` to prioritize VPN routes without deleting the default route
 
 ## Current Status
-This logic has been superseded by the `SentinelHelper` TCP architecture (see `helper-architecture.md`).
+This logic has been superseded by the `ChibaTunnelHelper` TCP architecture (see `helper-architecture.md`).
 The robust PID capture and wait loop patterns from `e8f1043` are preserved inside `handleStartTransparent`.

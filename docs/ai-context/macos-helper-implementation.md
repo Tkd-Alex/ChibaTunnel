@@ -1,6 +1,6 @@
 # macOS Privileged Helper — Implementation Reference
 
-**Scope**: Technical decisions made in the `sentinel-helper` service for macOS
+**Scope**: Technical decisions made in the `chibatunnel-helper` service for macOS
 transparent proxy (V2Ray + tun2socks) and kill switch support.
 **Status**: Implemented and reviewed. All choices below are final unless noted.
 
@@ -8,8 +8,8 @@ transparent proxy (V2Ray + tun2socks) and kill switch support.
 
 ## Architecture Overview
 
-The sentinel-helper runs as a **LaunchDaemon** under `root` on macOS, loaded
-from `/Library/LaunchDaemons/com.sentinel.helper.plist`. The Electron app
+The chibatunnel-helper runs as a **LaunchDaemon** under `root` on macOS, loaded
+from `/Library/LaunchDaemons/com.chibatunnel.helper.plist`. The Electron app
 communicates with it via **TCP on 127.0.0.1:47391** using newline-delimited
 JSON messages.
 
@@ -210,7 +210,7 @@ restore normal routing. This is the desired behaviour for a kill switch.
 
 ## 6. LaunchDaemon Service
 
-**Plist location**: `/Library/LaunchDaemons/com.sentinel.helper.plist`
+**Plist location**: `/Library/LaunchDaemons/com.chibatunnel.helper.plist`
 
 **Key properties**:
 - `RunAtLoad: true` — starts at system boot before user login

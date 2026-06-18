@@ -20,9 +20,9 @@ set -euo pipefail
 # Paths
 # ---------------------------------------------------------------------------
 
-HELPER_DEST="/usr/local/lib/sentinel/sentinel-helper"
+HELPER_DEST="/usr/local/lib/sentinel/chibatunnel-helper"
 INSTALL_DIR="/usr/local/lib/sentinel"
-UNIT_FILE="/etc/systemd/system/sentinel-helper.service"
+UNIT_FILE="/etc/systemd/system/chibatunnel-helper.service"
 
 # ---------------------------------------------------------------------------
 # Debian upgrade guard
@@ -46,12 +46,12 @@ fi
 
 if command -v systemctl &>/dev/null; then
   # Stop: ignore error if the service is already stopped.
-  systemctl stop sentinel-helper 2>/dev/null || true
+  systemctl stop chibatunnel-helper 2>/dev/null || true
 
   # Disable: ignore error if unit file is already gone.
-  systemctl disable sentinel-helper 2>/dev/null || true
+  systemctl disable chibatunnel-helper 2>/dev/null || true
 
-  echo "[postrm] sentinel-helper service stopped and disabled."
+  echo "[postrm] chibatunnel-helper service stopped and disabled."
 fi
 
 # ---------------------------------------------------------------------------

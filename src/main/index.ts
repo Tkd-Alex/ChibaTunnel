@@ -250,14 +250,14 @@ async function installDarwinHelper(): Promise<void> {
     ? process.resourcesPath
     : path.join(__dirname, '..', '..', 'dist-helper')
 
-  const helperSrc  = path.join(resourcesPath, 'sentinel-helper-mac')
+  const helperSrc  = path.join(resourcesPath, 'chibatunnel-helper-mac')
   const installDir = '/usr/local/lib/sentinel'
-  const helperDest = `${installDir}/sentinel-helper-mac`
-  const plistPath  = '/Library/LaunchDaemons/com.sentinel.helper.plist'
+  const helperDest = `${installDir}/chibatunnel-helper-mac`
+  const plistPath  = '/Library/LaunchDaemons/com.chibatunnel.helper.plist'
 
   const stamp    = Date.now()
-  const tmpBin   = `/tmp/sentinel-helper-${stamp}`
-  const tmpPlist = `/tmp/sentinel-helper-${stamp}.plist`
+  const tmpBin   = `/tmp/chibatunnel-helper-${stamp}`
+  const tmpPlist = `/tmp/chibatunnel-helper-${stamp}.plist`
 
   fs.copyFileSync(helperSrc, tmpBin)
   fs.chmodSync(tmpBin, 0o755)
@@ -268,7 +268,7 @@ async function installDarwinHelper(): Promise<void> {
     '<plist version="1.0">',
     '<dict>',
     '    <key>Label</key>',
-    '    <string>com.sentinel.helper</string>',
+    '    <string>com.chibatunnel.helper</string>',
     '    <key>ProgramArguments</key>',
     '    <array>',
     `        <string>${helperDest}</string>`,
@@ -292,7 +292,7 @@ async function installDarwinHelper(): Promise<void> {
       `chmod 644 ${plistPath}`,
       `chown root:wheel ${plistPath}`,
       `launchctl load -w ${plistPath} || true`,
-      `launchctl start com.sentinel.helper`,
+      `launchctl start com.chibatunnel.helper`,
     ])
     if (result.code !== 0) throw new Error(`macOS Helper install failed: ${result.stderr}`)
   } finally {
@@ -306,13 +306,13 @@ async function installLinuxHelper(): Promise<void> {
     ? process.resourcesPath
     : path.join(__dirname, '..', '..', 'dist-helper')
 
-  const helperSrc  = path.join(resourcesPath, 'sentinel-helper')
+  const helperSrc  = path.join(resourcesPath, 'chibatunnel-helper')
   const installDir = '/usr/local/lib/sentinel'
-  const helperDest = `${installDir}/sentinel-helper`
+  const helperDest = `${installDir}/chibatunnel-helper`
 
   const stamp    = Date.now()
-  const tmpBin   = `/tmp/sentinel-helper-${stamp}`
-  const tmpUnit  = `/tmp/sentinel-helper-${stamp}.service`
+  const tmpBin   = `/tmp/chibatunnel-helper-${stamp}`
+  const tmpUnit  = `/tmp/chibatunnel-helper-${stamp}.service`
 
   fs.copyFileSync(helperSrc, tmpBin)
   fs.chmodSync(tmpBin, 0o755)
@@ -337,10 +337,10 @@ async function installLinuxHelper(): Promise<void> {
       `mkdir -p ${installDir}`,
       `cp ${tmpBin} ${helperDest}`,
       `chmod 755 ${helperDest}`,
-      `cp ${tmpUnit} /etc/systemd/system/sentinel-helper.service`,
+      `cp ${tmpUnit} /etc/systemd/system/chibatunnel-helper.service`,
       `systemctl daemon-reload`,
-      `systemctl enable sentinel-helper`,
-      `systemctl start sentinel-helper`,
+      `systemctl enable chibatunnel-helper`,
+      `systemctl start chibatunnel-helper`,
     ])
     if (result.code !== 0) throw new Error(`Linux Helper install failed: ${result.stderr}`)
   } finally {
@@ -1476,7 +1476,7 @@ function patchConfigFileForDns(configFile: string): void {
 }
 
 /**
- * Brings up a WireGuard tunnel by delegating to the sentinel-helper service.
+ * Brings up a WireGuard tunnel by delegating to the chibatunnel-helper service.
  * On Windows the helper runs wireguard.exe /installtunnelservice (SYSTEM privilege).
  * On Linux/macOS the helper runs wg-quick up (root privilege).
  *
@@ -1544,7 +1544,7 @@ async function wgQuickUp(configFile: string): Promise<{ success: boolean; error?
 }
 
 /**
- * Tears down a WireGuard tunnel by delegating to the sentinel-helper service.
+ * Tears down a WireGuard tunnel by delegating to the chibatunnel-helper service.
  * On Windows the helper runs wireguard.exe /uninstalltunnelservice.
  * On Linux/macOS the helper runs wg-quick down.
  *

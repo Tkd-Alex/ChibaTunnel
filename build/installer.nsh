@@ -13,29 +13,29 @@
 ; without any additional UAC prompts.
 ;
 ; Service details:
-;   Name:        SentinelHelper
-;   Binary:      $INSTDIR\resources\sentinel-helper.exe --service
+;   Name:        ChibaTunnelHelper
+;   Binary:      $INSTDIR\resources\chibatunnel-helper.exe --service
 ;   Start type:  auto (starts with Windows, before user login)
-;   Display:     Sentinel Privileged Helper
+;   Display:     ChibaTunnel Privileged Helper
 
 !macro customInstall
   ; Remove previous task if it exists (idempotent update)
-  nsExec::ExecToLog 'schtasks /delete /tn "SentinelHelper" /f'
+  nsExec::ExecToLog 'schtasks /delete /tn "ChibaTunnelHelper" /f'
 
   ; Create scheduled task: run at system startup, as SYSTEM, without user login
-  nsExec::ExecToLog 'schtasks /create /tn "SentinelHelper" \
-    /tr "\"$INSTDIR\resources\sentinel-helper.exe\" --service" \
+  nsExec::ExecToLog 'schtasks /create /tn "ChibaTunnelHelper" \
+    /tr "\"$INSTDIR\resources\chibatunnel-helper.exe\" --service" \
     /sc onstart \
     /ru SYSTEM \
     /rl HIGHEST \
     /f'
 
   ; Start immediately without waiting for the next reboot
-  nsExec::ExecToLog 'schtasks /run /tn "SentinelHelper"'
+  nsExec::ExecToLog 'schtasks /run /tn "ChibaTunnelHelper"'
 !macroend
 
 
 !macro customUnInstall
-  nsExec::ExecToLog 'schtasks /end /tn "SentinelHelper"'
-  nsExec::ExecToLog 'schtasks /delete /tn "SentinelHelper" /f'
+  nsExec::ExecToLog 'schtasks /end /tn "ChibaTunnelHelper"'
+  nsExec::ExecToLog 'schtasks /delete /tn "ChibaTunnelHelper" /f'
 !macroend

@@ -19,7 +19,7 @@ as tun2socks was alive. Node never received EOF → the `exec()` callback never 
 → `await` hung forever.
 
 **The fix**: Move all privileged operations into a separate long-lived process
-(`sentinel-helper`) that owns tun2socks in its own process tree, with
+(`chibatunnel-helper`) that owns tun2socks in its own process tree, with
 `stdio: 'ignore'` on all spawned daemons. Electron communicates with the helper
 via TCP instead of process pipes.
 
@@ -32,7 +32,7 @@ Electron (user-level process)
   │
   │  TCP 127.0.0.1:47391  (newline-delimited JSON)
   │
-sentinel-helper (privileged long-lived process)
+chibatunnel-helper (privileged long-lived process)
   │
   ├── tun2socks (owned here, stdio:'ignore')
   ├── wireguard.exe /installtunnelservice (Windows)
@@ -60,7 +60,7 @@ Port: **47391**.
 
 | File | Location | Purpose |
 |------|----------|---------|
-| `sentinel-helper.ts` | `helper/` | The privileged service — all platforms |
+| `chibatunnel-helper.ts` | `helper/` | The privileged service — all platforms |
 | `helper-client.ts` | `src/main/` | Electron-side TCP client — `sendToHelper()`, `pingHelper()` |
 | `v2ray-process.ts` | `src/main/` | Replaces V2Ray SDK `connect()` with explicit binary path |
 | `installer.nsh` | `build/` | NSIS hooks: schtasks create/delete on install/uninstall |
@@ -102,7 +102,7 @@ Default timeout: 10 s for most commands, 60 s for `start-transparent`.
 
 ---
 
-## 5. sentinel-helper.ts — Supported Commands Detail
+## 5. chibatunnel-helper.ts — Supported Commands Detail
 
 ### `start-transparent` (Windows)
 1. Detect gateway: `route print 0.0.0.0` → regex
@@ -234,25 +234,25 @@ Called in `app.whenReady()` before `checkBinaries()`.
 
 ### Windows
 1. `ensureWindowsHelper()` checks `pingHelper(3000)`
-2. If dead: checks `schtasks /query /tn "SentinelHelper"`
+2. If dead: checks `schtasks /query /tn "ChibaTunnelHelper"`
 3. If task missing: calls `execPrivileged(["schtasks /create ..."])` → one UAC prompt
-4. If task exists: calls `schtasks /run /tn "SentinelHelper"` (no UAC needed)
+4. If task exists: calls `schtasks /run /tn "ChibaTunnelHelper"` (no UAC needed)
 5. Polls `pingHelper()` for up to 5 s
 
 ### Linux (deb/rpm/pacman)
 postinst.sh runs as root automatically during package install:
-- Copies `sentinel-helper` to `/usr/local/lib/sentinel/`
-- Writes systemd unit to `/etc/systemd/system/sentinel-helper.service`
-- `systemctl enable --now sentinel-helper`
+- Copies `chibatunnel-helper` to `/usr/local/lib/sentinel/`
+- Writes systemd unit to `/etc/systemd/system/chibatunnel-helper.service`
+- `systemctl enable --now chibatunnel-helper`
 
 ### Linux (AppImage)
 1. `ensureLinuxHelper()` checks `pingHelper(3000)`
-2. Checks `systemctl status sentinel-helper` (exit 3 = stopped, exit 4 = not found)
-3. If stopped: `execPrivileged(['systemctl start sentinel-helper'])`
+2. Checks `systemctl status chibatunnel-helper` (exit 3 = stopped, exit 4 = not found)
+3. If stopped: `execPrivileged(['systemctl start chibatunnel-helper'])`
 4. If not found: `installLinuxHelper()` which calls `execPrivileged([...])` with:
    - Copy binary from `/tmp/` (not directly from FUSE mount — root can't read AppImage FUSE mount)
    - Write systemd unit via `printf`
-   - `systemctl daemon-reload && systemctl enable --now sentinel-helper`
+   - `systemctl daemon-reload && systemctl enable --now chibatunnel-helper`
 
 ### macOS
 Known bug in installDarwinHelper: using `join('\\n')` produces literal `\n` strings.
@@ -260,19 +260,19 @@ Known bug in installDarwinHelper: using `join('\\n')` produces literal `\n` stri
 
 **Fix**: Write plist XML to `/tmp` from Node.js (no shell quoting), then copy with privileges:
 ```typescript
-const tmpPlist = `/tmp/sentinel-helper-${Date.now()}.plist`
+const tmpPlist = `/tmp/chibatunnel-helper-${Date.now()}.plist`
 fs.writeFileSync(tmpPlist, plistXml, 'utf8')  // join('\n') not '\\n'
 await execPrivileged([
   `cp ${tmpPlist} ${plistPath}`,
   `chmod 644 ${plistPath}`,
   `chown root:wheel ${plistPath}`,
   `launchctl load -w ${plistPath} || true`,
-  `launchctl start com.sentinel.helper`,
+  `launchctl start com.chibatunnel.helper`,
 ])
 ```
 
-Also: `helperSrc` should be `sentinel-helper` (not `sentinel-helper-mac`) because
-electron-builder.json maps `"from": "dist-helper/sentinel-helper-mac"` → `"to": "sentinel-helper"`.
+Also: `helperSrc` should be `chibatunnel-helper` (not `chibatunnel-helper-mac`) because
+electron-builder.json maps `"from": "dist-helper/chibatunnel-helper-mac"` → `"to": "chibatunnel-helper"`.
 
 ---
 
@@ -310,17 +310,17 @@ activeV2Ray = null
 
 ### package.json scripts
 ```json
-"dev:helper":         "ts-node --project helper/tsconfig.json helper/sentinel-helper.ts",
-"build:helper:win":   "tsc --project helper/tsconfig.json && pkg dist-helper/sentinel-helper.js --target node18-win-x64 --output dist-helper/sentinel-helper.exe",
-"build:helper:linux": "tsc --project helper/tsconfig.json && pkg dist-helper/sentinel-helper.js --target node18-linux-x64 --output dist-helper/sentinel-helper",
-"build:helper:mac":   "tsc --project helper/tsconfig.json && pkg dist-helper/sentinel-helper.js --target node18-macos-x64 --output dist-helper/sentinel-helper-mac"
+"dev:helper":         "ts-node --project helper/tsconfig.json helper/chibatunnel-helper.ts",
+"build:helper:win":   "tsc --project helper/tsconfig.json && pkg dist-helper/chibatunnel-helper.js --target node18-win-x64 --output dist-helper/chibatunnel-helper.exe",
+"build:helper:linux": "tsc --project helper/tsconfig.json && pkg dist-helper/chibatunnel-helper.js --target node18-linux-x64 --output dist-helper/chibatunnel-helper",
+"build:helper:mac":   "tsc --project helper/tsconfig.json && pkg dist-helper/chibatunnel-helper.js --target node18-macos-x64 --output dist-helper/chibatunnel-helper-mac"
 ```
 
 ### electron-builder.json (relevant sections)
 ```json
-"win":   { "extraResources": [{ "from": "dist-helper/sentinel-helper.exe", "to": "sentinel-helper.exe" }, { "from": "build/bins/win/", "to": "bin/" }] },
-"linux": { "extraResources": [{ "from": "dist-helper/sentinel-helper",     "to": "sentinel-helper"     }, { "from": "build/bins/linux/", "to": "bin/" }] },
-"mac":   { "extraResources": [{ "from": "dist-helper/sentinel-helper-mac", "to": "sentinel-helper"     }, { "from": "build/bins/mac/",  "to": "bin/" }] },
+"win":   { "extraResources": [{ "from": "dist-helper/chibatunnel-helper.exe", "to": "chibatunnel-helper.exe" }, { "from": "build/bins/win/", "to": "bin/" }] },
+"linux": { "extraResources": [{ "from": "dist-helper/chibatunnel-helper",     "to": "chibatunnel-helper"     }, { "from": "build/bins/linux/", "to": "bin/" }] },
+"mac":   { "extraResources": [{ "from": "dist-helper/chibatunnel-helper-mac", "to": "chibatunnel-helper"     }, { "from": "build/bins/mac/",  "to": "bin/" }] },
 "deb":   { "depends": ["wireguard-tools"] },
 "rpm":   { "requires": ["wireguard-tools"] },
 "pacman":{ "depends":  ["wireguard-tools"] }
@@ -366,4 +366,4 @@ instead of hanging.
 | `launchctl bootstrap` migration (macOS 13+) | Low | `launchctl load` soft-deprecated. Migration: `launchctl bootstrap system <plist>` |
 | Traffic stats via helper for wg show (Windows) | Done | `get-wg-stats` command implemented |
 | macOS transparent proxy testing | Pending | User implementing, not fully tested end-to-end |
-| wg-up / wg-down in helper | Implemented, untested | Written in sentinel-helper-wg-additions.ts |
+| wg-up / wg-down in helper | Implemented, untested | Written in chibatunnel-helper-wg-additions.ts |

@@ -1,5 +1,5 @@
 /**
- * sentinel-helper.ts
+ * chibatunnel-helper.ts
  *
  * Privileged helper service for Sentinel. Runs as a Windows Service (LocalSystem)
  * or a systemd service (root on Linux), providing network operations that require
@@ -7,7 +7,7 @@
  *
  * Communication model:
  *   TCP on 127.0.0.1:HELPER_PORT. Newline-delimited JSON messages in both directions.
- *   On Windows, the --namedpipe flag switches to \\.\pipe\sentinel-helper instead.
+ *   On Windows, the --namedpipe flag switches to \\.\pipe\chibatunnel-helper instead.
  *
  * Runtime modes:
  *   --service     Production. Started by the Windows SCM or systemd.
@@ -32,8 +32,8 @@
  *   Teardown removes the chain entirely, leaving the rest of iptables untouched.
  *
  * Build (CI produces platform-specific binaries via pkg):
- *   Windows: pkg dist-helper/sentinel-helper.js --target node18-win-x64   --output dist-helper/sentinel-helper.exe
- *   Linux:   pkg dist-helper/sentinel-helper.js --target node18-linux-x64 --output dist-helper/sentinel-helper
+ *   Windows: pkg dist-helper/chibatunnel-helper.js --target node18-win-x64   --output dist-helper/chibatunnel-helper.exe
+ *   Linux:   pkg dist-helper/chibatunnel-helper.js --target node18-linux-x64 --output dist-helper/chibatunnel-helper
  */
 
 import net  from 'net'
@@ -46,7 +46,7 @@ import { execSync, spawn, ChildProcess } from 'child_process'
 
 const HELPER_HOST = '127.0.0.1'
 const HELPER_PORT = 47391
-const PIPE_PATH   = '\\\\.\\pipe\\sentinel-helper'   // Windows only
+const PIPE_PATH   = '\\\\.\\pipe\\chibatunnel-helper'   // Windows only
 const MAX_CONNECTIONS = 4
 
 const IS_SERVICE_MODE = process.argv.includes('--service')
@@ -167,7 +167,7 @@ let killSwitchActive = false
 function log(level: 'INFO' | 'WARN' | 'ERROR', msg: string, data?: unknown): void {
   const ts    = new Date().toISOString()
   const extra = data !== undefined ? ' ' + JSON.stringify(data) : ''
-  console.log(`[${ts}] [${level}] [SentinelHelper] ${msg}${extra}`)
+  console.log(`[${ts}] [${level}] [ChibaTunnelHelper] ${msg}${extra}`)
 }
 
 // ---------------------------------------------------------------------------
