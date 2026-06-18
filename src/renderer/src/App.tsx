@@ -72,6 +72,8 @@ export default function App() {
   const [plansLoading, setPlansLoading] = useState(false)
   const [subscriptions, setSubscriptions] = useState<ApiSubscription[]>([])
   const [subsLoading, setSubsLoading]     = useState(false)
+  const [sessions, setSessions]         = useState<any[]>([])
+  const [sessionsLoading, setSessionsLoading] = useState(false)
 
   const [planNodesCache, setPlanNodesCache]         = useState<Record<number, ApiNode[]>>({})
   const [providerNamesCache, setProviderNamesCache] = useState<Record<string, string>>({})
@@ -139,6 +141,15 @@ export default function App() {
     finally { setSubsLoading(false) }
   }, [])
 
+  const fetchSessions = useCallback(async () => {
+    setSessionsLoading(true)
+    try {
+      const res = await window.api.fetchSessions()
+      if (res.success) setSessions((res.sessions ?? []).filter((s: any) => typeof s.id === 'number'))
+    } catch (e) { console.error(e) }
+    finally { setSessionsLoading(false) }
+  }, [])
+
   useEffect(() => {
     async function boot() {
       const startTime = Date.now()
@@ -164,12 +175,34 @@ export default function App() {
         const res = await window.api.loadStoredWallet()
         if (res.success) {
           setCurrentRpc((res as { rpc?: string }).rpc ?? (rpc as string))
+          
           // Fetch main data in background while splash is showing
-          await Promise.all([
-            fetchNodes(),
-            fetchPlans(),
-            fetchSubscriptions()
+          const [nRes, pRes, sRes, sessRes] = await Promise.all([
+            window.api.fetchNodes(),
+            window.api.fetchPlans(),
+            window.api.fetchSubscriptions(),
+            window.api.fetchSessions()
           ])
+
+          if ((nRes as any).success) setNodes((nRes as any).nodes)
+          if ((pRes as any).success) {
+            setPlans((pRes as any).plans)
+            // Heavy Background Scan (Plans analysis)
+            const planIds = (pRes as any).plans.map((p: any) => p.id)
+            const uniqueProviders = Array.from(new Set((pRes as any).plans.map((p: any) => p.provAddress)))
+            window.api.fetchProvidersBatch(uniqueProviders).then((res: any) => {
+              if (res.success) setProviderNamesCache(prev => ({ ...prev, ...res.providers }))
+            })
+            window.api.scanPlanNodes(planIds).then((res: any) => {
+              if (res.success) {
+                setPlanNodesCache(prev => ({ ...prev, ...res.nodesMap }))
+                setScannedOnce(true)
+              }
+            })
+          }
+          if ((sRes as any).success) setSubscriptions((sRes as any).subscriptions)
+          if ((sessRes as any).success) setSessions(((sessRes as any).sessions ?? []).filter((s: any) => typeof s.id === 'number'))
+
           nextScreen = 'main'
         }
       }
@@ -179,7 +212,7 @@ export default function App() {
       setTimeout(() => setScreen(nextScreen), remaining)
     }
     boot()
-  }, [refreshIp, fetchNodes, fetchPlans, fetchSubscriptions])
+  }, [refreshIp]) // Removed fetch dependencies to avoid re-triggering boot
 
   useEffect(() => { 
     // This is now handled in boot() for the initial load, 

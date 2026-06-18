@@ -123,6 +123,22 @@ export default function NodeTable({ nodes, onSelect, activeNodeAddress, bookmark
     return 0
   }), [nodes, sortKey, sortDir])
 
+  const [visibleCount, setVisibleCount] = useState(50)
+
+  // Reset visible count when sort or filter changes
+  React.useEffect(() => {
+    setVisibleCount(50)
+  }, [sorted])
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, clientHeight, scrollHeight } = e.currentTarget
+    if (scrollHeight - scrollTop <= clientHeight * 1.5) {
+      if (visibleCount < sorted.length) {
+        setVisibleCount(prev => Math.min(prev + 50, sorted.length))
+      }
+    }
+  }
+
   if (!nodes.length) return (
     <div className="empty-state">
       <div className="empty-state-icon">◎</div>
@@ -130,8 +146,10 @@ export default function NodeTable({ nodes, onSelect, activeNodeAddress, bookmark
     </div>
   )
 
+  const visibleNodes = sorted.slice(0, visibleCount)
+
   return (
-    <div className="nodes-table-wrapper">
+    <div className="nodes-table-wrapper" onScroll={handleScroll}>
       <table className="nodes-table">
         <thead>
           <tr>
@@ -149,7 +167,7 @@ export default function NodeTable({ nodes, onSelect, activeNodeAddress, bookmark
           </tr>
         </thead>
         <tbody>
-          {sorted.map(node => (
+          {visibleNodes.map(node => (
             <NodeRow 
               key={node.address}
               node={node}
