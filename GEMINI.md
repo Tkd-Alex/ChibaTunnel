@@ -1,4 +1,4 @@
-# Sentinel dVPN Client — Core Rules
+# ChibaTunnel — Core Rules
 
 **These rules take absolute precedence over any other instructions.**
 

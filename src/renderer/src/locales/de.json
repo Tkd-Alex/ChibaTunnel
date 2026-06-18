@@ -316,7 +316,7 @@
     "per_hr": "Pro Stunde",
     "indicative_prices": "Richtpreise aus dem API-Cache.",
     "support_project": "Projektentwicklung unterstützen",
-    "support_desc": "Fügen Sie dieser Transaktion 10% ({{amount}} DVPN) hinzu, um das Sentinel dVPN Client-Projekt zu unterstützen. Ihr Beitrag hilft uns, diese App zu warten und zu verbessern!",
+    "support_desc": "Fügen Sie dieser Transaktion 10% ({{amount}} DVPN) hinzu, um das ChibaTunnel-Projekt zu unterstützen. Ihr Beitrag hilft uns, diese App zu warten und zu verbessern!",
     "subscription_type": "Abonnement-Typ",
     "gigabytes": "Gigabyte",
     "hours": "Stunden",

@@ -1,7 +1,7 @@
 {
-  "appId": "co.sentinel.dvpn-client",
-  "productName": "Sentinel dVPN",
-  "copyright": "Copyright © 2026 Sentinel",
+  "appId": "co.chibatunnel-client",
+  "productName": "ChibaTunnel",
+  "copyright": "Copyright © 2026 ChibaTunnel | Tkd-Alex",
   "directories": {
     "buildResources": "build",
     "output": "dist"

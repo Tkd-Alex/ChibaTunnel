@@ -36,8 +36,7 @@ export default function TitleBar({ currentRpc, showRpc, onRpcChanged, ipInfo, on
       <div className="titlebar-logo">
         <div className="logo-mark" />
         <div>
-          <div className="logo-text">SENTINEL dVPN</div>
-          <div className="logo-sub">DECENTRALIZED VIRTUAL PRIVATE NETWORK</div>
+          <div className="logo-text">ChibaTunnel</div>
         </div>
       </div>
 

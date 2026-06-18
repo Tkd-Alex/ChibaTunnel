@@ -1,4 +1,4 @@
-# Sentinel dVPN Desktop Client
+# ChibaTunnel
 
 ## ⚠️ Disclaimer
 This application is open source and was created for the Sentinel community. **100%** of the client code was created by AI. I wanted to play around a bit, but I just supervised. This shows how the power of the [sentinel-js-sdk](https://github.com/sentinel-official/sentinel-js-sdk/) combined with a tool like AI can create something amazing! A simple prompt like "create a VPN client using the SDK documented at https://sentinel-official.github.io/sentinel-js-sdk/: " is all it takes. The source of the nodes is: https://sentnodes.com/ Thanks! 💙 I'm not sure everything works perfectly, especially on Winzozz, but I'm pretty confident on Linux 😎.

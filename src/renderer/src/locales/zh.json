@@ -316,7 +316,7 @@
     "per_hr": "每小时",
     "indicative_prices": "API 缓存提供的参考价格。",
     "support_project": "支持项目开发",
-    "support_desc": "为此交易增加 10% ({{amount}} DVPN) 以支持 Sentinel dVPN Client 项目。您的贡献将帮助我们维护和改进此应用！",
+    "support_desc": "为此交易增加 10% ({{amount}} DVPN) 以支持 ChibaTunnel 项目。您的贡献将帮助我们维护和改进此应用！",
     "subscription_type": "订阅类型",
     "gigabytes": "GB",
     "hours": "小时",
