@@ -1324,11 +1324,19 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
       })
       const hd = JSON.parse(Buffer.from(result.data, 'base64').toString('utf8')); await v2ray.parseConfig(hd, result.addrs)
       const configAny = v2ray.config as any
-      if (configAny && configAny.routing?.balancers?.[0]) {
-        configAny.observatory = {
-          subjectSelector: [...configAny.routing.balancers[0].selector],
-          probeInterval: '30s',
-          probeUrl: 'https://www.google.com/generate_204'
+      if (configAny) {
+        // Fix V2Ray v5 sniffing panic on QUIC traffic by disabling sniffing
+        const proxyInbound = configAny.inbounds?.find((ib: any) => ib.tag === 'proxy')
+        if (proxyInbound?.sniffing) {
+          proxyInbound.sniffing.enabled = false
+        }
+
+        if (configAny.routing?.balancers?.[0]) {
+          configAny.observatory = {
+            subjectSelector: [...configAny.routing.balancers[0].selector],
+            probeInterval: '30s',
+            probeUrl: 'https://www.google.com/generate_204'
+          }
         }
       }
       const shareLinks = v2ray.buildShareLinks(`chibatunnel-${nodeAddress.slice(-8)}`)
