@@ -4,7 +4,11 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()]
+    plugins: [externalizeDepsPlugin()],
+    define: {
+      'process.env.PROJECT_WALLET_ADDRESS': JSON.stringify(process.env.PROJECT_WALLET_ADDRESS || ''),
+      'process.env.PROJECT_DONATION_MEMO': JSON.stringify(process.env.PROJECT_DONATION_MEMO || '')
+    }
   },
   preload: {
     plugins: [externalizeDepsPlugin()]
