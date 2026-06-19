@@ -440,7 +440,7 @@ function registerIpcHandlers(): void {
     wallets.push({ label, encrypted })
     store.set(STORE_KEY_WALLETS, wallets)
     store.set(STORE_KEY_ACTIVE_W, wallets.length - 1)
-    return { success: true, address: result.address, label }
+    return { success: true, address: result.address, label, rpc: result.rpc }
   })
 
   ipcMain.handle('wallet:switch', async (_e, index: number) => {

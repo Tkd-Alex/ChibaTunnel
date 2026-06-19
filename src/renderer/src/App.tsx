@@ -497,7 +497,17 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'sessions' && <SessionPanel nodes={nodes} subscriptions={subscriptions} plans={plans} onConnectSession={handleConnectSession} />}
+            {activeTab === 'sessions' && (
+              <SessionPanel 
+                nodes={nodes} 
+                subscriptions={subscriptions} 
+                plans={plans} 
+                initialSessions={sessions}
+                loadingSessions={sessionsLoading}
+                onRefreshSessions={fetchSessions}
+                onConnectSession={handleConnectSession} 
+              />
+            )}
 
             {activeTab === 'manage' && (
               <div className="manage-tab-layout">

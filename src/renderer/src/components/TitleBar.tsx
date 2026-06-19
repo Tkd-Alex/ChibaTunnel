@@ -97,9 +97,9 @@ export default function TitleBar({ currentRpc, showRpc, onRpcChanged, ipInfo, on
       </div>
 
       {/* RPC selector */}
-      {showRpc && currentRpc && onRpcChanged && (
+      {showRpc && onRpcChanged && (
         <div style={{ marginLeft: 'auto', marginRight: 12 }}>
-          <RpcSelector currentRpc={currentRpc} onChanged={onRpcChanged} />
+          <RpcSelector currentRpc={currentRpc || ''} onChanged={onRpcChanged} />
         </div>
       )}
 

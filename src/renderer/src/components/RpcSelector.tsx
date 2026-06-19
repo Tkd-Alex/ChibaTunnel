@@ -28,8 +28,10 @@ export default function RpcSelector({ currentRpc, onChanged }: Props) {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  const safeRpc = currentRpc || (list[0]?.url ?? 'https://rpc.sentinel.co:443')
+
   async function handleSelect(url: string) {
-    if (url === currentRpc) { setOpen(false); return }
+    if (url === safeRpc) { setOpen(false); return }
     setBusy(true)
     try {
       await window.api.setRpc(url)
@@ -40,7 +42,7 @@ export default function RpcSelector({ currentRpc, onChanged }: Props) {
     }
   }
 
-  const current = list.find(r => r.url === currentRpc)
+  const current = list.find(r => r.url === safeRpc)
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
@@ -52,7 +54,7 @@ export default function RpcSelector({ currentRpc, onChanged }: Props) {
       >
         {busy
           ? <><div className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }} /> {t('rpc.switching')}</>
-          : <><span className="rpc-dot" />RPC: {current?.label ?? currentRpc.replace('https://', '').split(':')[0]}</>
+          : <><span className="rpc-dot" />RPC: {current?.label ?? safeRpc.replace('https://', '').split(':')[0]}</>
         }
         <span style={{ marginLeft: 4, opacity: 0.5, display: 'inline-flex' }}>{open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}</span>
       </button>
@@ -63,7 +65,7 @@ export default function RpcSelector({ currentRpc, onChanged }: Props) {
           {list.map(r => (
             <button
               key={r.url}
-              className={`rpc-option ${r.url === currentRpc ? 'active' : ''}`}
+              className={`rpc-option ${r.url === safeRpc ? 'active' : ''}`}
               onClick={() => handleSelect(r.url)}
             >
               <div className="rpc-option-label" style={{ display: 'flex', alignItems: 'center' }}>
