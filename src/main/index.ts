@@ -1323,6 +1323,14 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
         const err: any = new Error(`[handshake] ${extractError(e)}`); err.response = e.response; throw err
       })
       const hd = JSON.parse(Buffer.from(result.data, 'base64').toString('utf8')); await v2ray.parseConfig(hd, result.addrs)
+      const configAny = v2ray.config as any
+      if (configAny && configAny.routing?.balancers?.[0]) {
+        configAny.observatory = {
+          subjectSelector: [...configAny.routing.balancers[0].selector],
+          probeInterval: '30s',
+          probeUrl: 'https://www.google.com/generate_204'
+        }
+      }
       const shareLinks = v2ray.buildShareLinks(`chibatunnel-${nodeAddress.slice(-8)}`)
       const qrCodes = await Promise.all(shareLinks.map(link => QRCode.toDataURL(link, { width: 280, margin: 1, color: { dark: '#34d399', light: '#060810' } })))
       const inbounds = (v2ray.config?.inbounds ?? []).filter((ib: any) => ib.protocol !== 'dokodemo-door').map((ib: any) => ({ protocol: ib.protocol, listen: ib.listen, port: ib.port }))

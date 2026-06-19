@@ -54,6 +54,9 @@ jobs:
             helper_output: dist-helper/chibatunnel-helper-mac
 
     runs-on: ${{ matrix.os }}
+    env:
+      PROJECT_WALLET_ADDRESS: ${{ secrets.PROJECT_WALLET_ADDRESS }}
+      PROJECT_DONATION_MEMO: ${{ secrets.PROJECT_DONATION_MEMO }}
 
     steps:
       - name: Checkout
@@ -329,6 +332,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-          PROJECT_WALLET_ADDRESS: ${{ secrets.PROJECT_WALLET_ADDRESS }}
-          PROJECT_DONATION_MEMO: ${{ secrets.PROJECT_DONATION_MEMO }}
         run: npx electron-builder --${{ matrix.platform }} --publish always
