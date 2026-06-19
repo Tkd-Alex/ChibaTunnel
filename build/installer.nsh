@@ -18,6 +18,17 @@
 ;   Start type:  auto (starts with Windows, before user login)
 ;   Display:     ChibaTunnel Privileged Helper
 
+!macro customInit
+  ; Stop the task and kill running helper processes to release file locks before installation starts
+  nsExec::ExecToLog 'schtasks /end /tn "ChibaTunnelHelper"'
+  nsExec::ExecToLog 'taskkill /f /im chibatunnel-helper.exe'
+  nsExec::ExecToLog 'taskkill /f /im tun2socks.exe'
+  nsExec::ExecToLog 'taskkill /f /im v2ray.exe'
+  nsExec::ExecToLog 'taskkill /f /im wireguard.exe'
+  nsExec::ExecToLog 'taskkill /f /im wg.exe'
+!macroend
+
+
 !macro customInstall
   ; Remove previous task if it exists (idempotent update)
   nsExec::ExecToLog 'schtasks /delete /tn "ChibaTunnelHelper" /f'
@@ -37,5 +48,10 @@
 
 !macro customUnInstall
   nsExec::ExecToLog 'schtasks /end /tn "ChibaTunnelHelper"'
+  nsExec::ExecToLog 'taskkill /f /im chibatunnel-helper.exe'
+  nsExec::ExecToLog 'taskkill /f /im tun2socks.exe'
+  nsExec::ExecToLog 'taskkill /f /im v2ray.exe'
+  nsExec::ExecToLog 'taskkill /f /im wireguard.exe'
+  nsExec::ExecToLog 'taskkill /f /im wg.exe'
   nsExec::ExecToLog 'schtasks /delete /tn "ChibaTunnelHelper" /f'
 !macroend
