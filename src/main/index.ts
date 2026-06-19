@@ -1118,9 +1118,15 @@ async function setupTransparentV2Ray(v2ray: V2Ray): Promise<{ success: boolean; 
       if (process.platform === 'win32') activeTunInterface = 'chiba-tun'
       else if (process.platform === 'darwin') activeTunInterface = 'utun9'
       else activeTunInterface = 'chibatun0'
+      return { success: true }
+    } else {
+      console.error('[setupTransparentV2Ray] Helper failed to start transparent proxy:', helperResponse)
+      return { success: false, error: helperResponse.error || 'Unknown helper error' }
     }
-    return { success: helperResponse.status === "ok" }
-  } catch (err: any) { return { success: false, error: `Transparent setup failed: ${err.message}` } }
+  } catch (err: any) {
+    console.error('[setupTransparentV2Ray] Exception during transparent proxy setup:', err)
+    return { success: false, error: `Transparent setup failed: ${err.message}` }
+  }
 }
 
 function extractError(err: unknown): string {

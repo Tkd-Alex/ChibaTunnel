@@ -38,6 +38,7 @@
 
 import net  from 'net'
 import path from 'path'
+import fs   from 'fs'
 import { execSync, spawn, ChildProcess } from 'child_process'
 
 // ---------------------------------------------------------------------------
@@ -167,7 +168,16 @@ let killSwitchActive = false
 function log(level: 'INFO' | 'WARN' | 'ERROR', msg: string, data?: unknown): void {
   const ts    = new Date().toISOString()
   const extra = data !== undefined ? ' ' + JSON.stringify(data) : ''
-  console.log(`[${ts}] [${level}] [ChibaTunnelHelper] ${msg}${extra}`)
+  const line  = `[${ts}] [${level}] [ChibaTunnelHelper] ${msg}${extra}`
+  console.log(line)
+
+  try {
+    const logDir = PLATFORM === 'win32' ? 'C:\\Windows\\Temp' : '/tmp'
+    const logPath = path.join(logDir, 'chibatunnel-helper.log')
+    fs.appendFileSync(logPath, line + '\n', 'utf8')
+  } catch (_) {
+    // Fail-safe
+  }
 }
 
 // ---------------------------------------------------------------------------
