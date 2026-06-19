@@ -189,7 +189,7 @@ export default function App() {
             setPlans((pRes as any).plans)
             // Heavy Background Scan (Plans analysis)
             const planIds = (pRes as any).plans.map((p: any) => p.id)
-            const uniqueProviders = Array.from(new Set((pRes as any).plans.map((p: any) => p.provAddress)))
+            const uniqueProviders = Array.from(new Set((pRes as any).plans.map((p: any) => p.provAddress))) as string[]
             window.api.fetchProvidersBatch(uniqueProviders).then((res: any) => {
               if (res.success) setProviderNamesCache(prev => ({ ...prev, ...res.providers }))
             })
