@@ -1,7 +1,7 @@
 {
-  "appId": "co.sentinel.dvpn-client",
-  "productName": "Sentinel dVPN",
-  "copyright": "Copyright © 2026 Sentinel",
+  "appId": "co.chibatunnel-client",
+  "productName": "ChibaTunnel",
+  "copyright": "Copyright © 2026 ChibaTunnel | Tkd-Alex",
   "directories": {
     "buildResources": "build",
     "output": "dist"
@@ -12,7 +12,7 @@
     "target": ["deb", "AppImage", "pacman", "rpm"],
     "icon": "build/icon.png",
     "extraResources": [
-      {"from": "dist-helper/sentinel-helper", "to": "sentinel-helper"},
+      {"from": "dist-helper/chibatunnel-helper", "to": "chibatunnel-helper"},
       {"from": "build/bins/linux/", "to": "bin/" }
     ]
   },
@@ -21,7 +21,7 @@
     "category": "public.app-category.utilities",
     "icon": "build/icon.png",
     "extraResources": [
-      {"from": "dist-helper/sentinel-helper-mac", "to": "sentinel-helper-mac"},
+      {"from": "dist-helper/chibatunnel-helper-mac", "to": "chibatunnel-helper-mac"},
       {"from": "build/bins/mac/", "to": "bin/" }
     ]
   },
@@ -29,7 +29,7 @@
     "target": ["nsis"],
     "icon": "build/icon.ico",
     "extraResources": [
-      {"from": "dist-helper/sentinel-helper.exe", "to": "sentinel-helper.exe"},
+      {"from": "dist-helper/chibatunnel-helper.exe", "to": "chibatunnel-helper.exe"},
       {"from": "build/bins/win/", "to": "bin/" }
     ]
   },

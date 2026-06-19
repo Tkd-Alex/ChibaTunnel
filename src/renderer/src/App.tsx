@@ -15,6 +15,7 @@ import WalletManager      from './components/WalletManager'
 import ConfirmModal       from './components/ConfirmModal'
 import PlansPanel         from './components/PlansPanel'
 import SubscriptionsPanel from './components/SubscriptionsPanel'
+import SplashScreen       from './components/SplashScreen'
 import { ApiNode, ApiPlan, ApiSubscription, NodeFilters, ConnectionState, BinaryStatus, INITIAL_CONNECTION } from './types'
 import { 
   Globe as GlobeIcon, 
@@ -71,6 +72,8 @@ export default function App() {
   const [plansLoading, setPlansLoading] = useState(false)
   const [subscriptions, setSubscriptions] = useState<ApiSubscription[]>([])
   const [subsLoading, setSubsLoading]     = useState(false)
+  const [sessions, setSessions]         = useState<any[]>([])
+  const [sessionsLoading, setSessionsLoading] = useState(false)
 
   const [planNodesCache, setPlanNodesCache]         = useState<Record<number, ApiNode[]>>({})
   const [providerNamesCache, setProviderNamesCache] = useState<Record<string, string>>({})
@@ -138,36 +141,82 @@ export default function App() {
     finally { setSubsLoading(false) }
   }, [])
 
+  const fetchSessions = useCallback(async () => {
+    setSessionsLoading(true)
+    try {
+      const res = await window.api.fetchSessions()
+      if (res.success) setSessions((res.sessions ?? []).filter((s: any) => typeof s.id === 'number'))
+    } catch (e) { console.error(e) }
+    finally { setSessionsLoading(false) }
+  }, [])
+
   useEffect(() => {
     async function boot() {
+      const startTime = Date.now()
       refreshIp()
-      const rpc  = await window.api.getCurrentRpc() as string
-      setCurrentRpc(rpc)
-      const bins = await window.api.checkBinaries() as BinaryStatus
-      setBinaries(bins)
-      if (!bins.wireguard || !bins.v2ray) setShowBinaryCheck(true)
-      const bms = await window.api.listBookmarks() as string[]
-      setBookmarks(bms)
-      const has = await window.api.hasMnemonic()
-      if (has) {
+      
+      const rpcPromise  = window.api.getCurrentRpc()
+      const binsPromise = window.api.checkBinaries()
+      const bmsPromise  = window.api.listBookmarks()
+      const hasMnemonicPromise = window.api.hasMnemonic()
+
+      const [rpc, bins, bms, hasMnemonic] = await Promise.all([
+        rpcPromise, binsPromise, bmsPromise, hasMnemonicPromise
+      ])
+
+      setCurrentRpc(rpc as string)
+      setBinaries(bins as BinaryStatus)
+      if (!(bins as BinaryStatus).wireguard || !(bins as BinaryStatus).v2ray) setShowBinaryCheck(true)
+      setBookmarks(bms as string[])
+
+      let nextScreen: AppScreen = 'setup'
+      
+      if (hasMnemonic) {
         const res = await window.api.loadStoredWallet()
-        if (res.success) { 
-          setCurrentRpc((res as { rpc?: string }).rpc ?? rpc)
-          setScreen('main')
-          return 
+        if (res.success) {
+          setCurrentRpc((res as { rpc?: string }).rpc ?? (rpc as string))
+          
+          // Fetch main data in background while splash is showing
+          const [nRes, pRes, sRes, sessRes] = await Promise.all([
+            window.api.fetchNodes(),
+            window.api.fetchPlans(),
+            window.api.fetchSubscriptions(),
+            window.api.fetchSessions()
+          ])
+
+          if ((nRes as any).success) setNodes((nRes as any).nodes)
+          if ((pRes as any).success) {
+            setPlans((pRes as any).plans)
+            // Heavy Background Scan (Plans analysis)
+            const planIds = (pRes as any).plans.map((p: any) => p.id)
+            const uniqueProviders = Array.from(new Set((pRes as any).plans.map((p: any) => p.provAddress)))
+            window.api.fetchProvidersBatch(uniqueProviders).then((res: any) => {
+              if (res.success) setProviderNamesCache(prev => ({ ...prev, ...res.providers }))
+            })
+            window.api.scanPlanNodes(planIds).then((res: any) => {
+              if (res.success) {
+                setPlanNodesCache(prev => ({ ...prev, ...res.nodesMap }))
+                setScannedOnce(true)
+              }
+            })
+          }
+          if ((sRes as any).success) setSubscriptions((sRes as any).subscriptions)
+          if ((sessRes as any).success) setSessions(((sessRes as any).sessions ?? []).filter((s: any) => typeof s.id === 'number'))
+
+          nextScreen = 'main'
         }
       }
-      setScreen('setup')
+
+      const elapsed = Date.now() - startTime
+      const remaining = Math.max(0, 2500 - elapsed)
+      setTimeout(() => setScreen(nextScreen), remaining)
     }
     boot()
-  }, [refreshIp])
+  }, [refreshIp]) // Removed fetch dependencies to avoid re-triggering boot
 
   useEffect(() => { 
-    if (screen === 'main') {
-      fetchNodes()
-      fetchPlans()
-      fetchSubscriptions()
-    } 
+    // This is now handled in boot() for the initial load, 
+    // but kept for reference if screen state changes later
   }, [screen, fetchNodes, fetchPlans, fetchSubscriptions])
 
   useEffect(() => {
@@ -300,15 +349,7 @@ export default function App() {
     }
   }, [activeConnection])
 
-  if (screen === 'loading') return (
-    <div className="app-shell" dir={isRtl ? 'rtl' : 'ltr'}>
-      <TitleBar />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
-        <div className="spinner" style={{ width: 36, height: 36 }} />
-        <div style={{ fontSize: 11, color: 'var(--text-3)', letterSpacing: '0.2em' }}>{t('common.loading')}</div>
-      </div>
-    </div>
-  )
+  if (screen === 'loading') return <SplashScreen />
 
   if (screen === 'setup') return (
     <div className="app-shell" dir={isRtl ? 'rtl' : 'ltr'}>
@@ -456,7 +497,17 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'sessions' && <SessionPanel nodes={nodes} subscriptions={subscriptions} plans={plans} onConnectSession={handleConnectSession} />}
+            {activeTab === 'sessions' && (
+              <SessionPanel 
+                nodes={nodes} 
+                subscriptions={subscriptions} 
+                plans={plans} 
+                initialSessions={sessions}
+                loadingSessions={sessionsLoading}
+                onRefreshSessions={fetchSessions}
+                onConnectSession={handleConnectSession} 
+              />
+            )}
 
             {activeTab === 'manage' && (
               <div className="manage-tab-layout">

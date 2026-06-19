@@ -69,7 +69,7 @@ function ConnectedDetails({ conn, onDisconnect }: { conn: ConnectionState; onDis
           {isWg ? (
             <>
               <div className="cd-row">
-                <span>{t('node_modal.interface')}</span><span style={{ color: 'var(--text-1)' }}><code>{sys?.wgInterface || 'sentinel0'}</code></span>
+                <span>{t('node_modal.interface')}</span><span style={{ color: 'var(--text-1)' }}><code>{sys?.wgInterface || 'chibatunnel0'}</code></span>
               </div>
               <div className="cd-row">
                 <span>{t('node_modal.driver')}</span><span style={{ color: 'var(--text-2)', fontSize: 10 }}>WireGuard (Kernel)</span>

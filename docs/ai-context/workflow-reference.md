@@ -38,6 +38,6 @@ git push origin v1.x.x
 
 ## electron-builder Build Order (Windows)
 ```bash
-npm run build:helper:win    # compile sentinel-helper.exe first
+npm run build:helper:win    # compile chibatunnel-helper.exe first
 npm run dist:win            # then build + package Electron app
 ```

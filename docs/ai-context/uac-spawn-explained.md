@@ -19,4 +19,4 @@ The elevated PowerShell spawns `tun2socks` in a different integrity level. Retri
 **Pattern B — Helper EXE with `requireAdministrator` manifest** (Tailscale): small EXE with manifest triggers UAC automatically on spawn. EXE exposes a Named Pipe. GUI communicates over it. The elevated process is long-lived, not temporary.
 
 ## Our Solution
-`SentinelHelper` implements Pattern B via **TCP localhost** (port 47391) instead of Named Pipe, to avoid DACL integrity restrictions in dev mode. See `helper-architecture.md`.
+`ChibaTunnelHelper` implements Pattern B via **TCP localhost** (port 47391) instead of Named Pipe, to avoid DACL integrity restrictions in dev mode. See `helper-architecture.md`.

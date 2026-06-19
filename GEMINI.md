@@ -1,4 +1,4 @@
-# Sentinel dVPN Client — Core Rules
+# ChibaTunnel — Core Rules
 
 **These rules take absolute precedence over any other instructions.**
 
@@ -9,7 +9,7 @@
 3. **No placeholders** — never use `// ... rest of code` or similar. Every replacement must be complete, mentally tested, and syntactically correct.
 4. **Secret protection** — Mnemonic and Private Key (Cosmos) live EXCLUSIVELY in `src/main/index.ts`. Never send to Renderer via IPC. Storage uses `safeStorage` (OS Keychain). No plain-text fallbacks.
 5. **i18n sync** — every string, label, placeholder, or error message added or modified MUST be updated in ALL locale files: `en.json`, `it.json`, `ru.json`, `fa.json`, `ar.json`, `zh.json`, `es.json`, `de.json`, `fr.json` in `src/renderer/src/locales/`. No hardcoded text in components — always use `useTranslation`.
-6. **Privileged commands** — never use hardcoded `sudo` requiring terminal input. Use `execPrivileged` (macOS: `osascript`, Linux: `pkexec`/`gksudo`). Group multiple commands into a single execution. On Windows/Linux transparent mode and WireGuard: delegate to `SentinelHelper` via `sendToHelper()`.
+6. **Privileged commands** — never use hardcoded `sudo` requiring terminal input. Use `execPrivileged` (macOS: `osascript`, Linux: `pkexec`/`gksudo`). Group multiple commands into a single execution. On Windows/Linux transparent mode and WireGuard: delegate to `ChibaTunnelHelper` via `sendToHelper()`.
 
 ## Project Architecture
 
@@ -21,12 +21,12 @@
 - `src/renderer/src/App.tsx` — root component: router, global connection state, traffic polling
 - `src/renderer/src/components/` — modular UI components
 - `src/renderer/src/styles/globals.css` — global Cyberpunk style
-- `helper/sentinel-helper.ts` — privileged helper service (TCP 127.0.0.1:47391)
+- `helper/chibatunnel-helper.ts` — privileged helper service (TCP 127.0.0.1:47391)
 - `src/main/helper-client.ts` — `sendToHelper()` / `pingHelper()`
 
 ### Data Flow
 Renderer → async IPC calls (e.g. `window.api.connectNode`) → Main process → push events back (`vpn:status`, `traffic:update`).
-Transparent mode and WireGuard operations → `sendToHelper()` → SentinelHelper → response.
+Transparent mode and WireGuard operations → `sendToHelper()` → ChibaTunnelHelper → response.
 
 ## Aesthetics & UX
 
@@ -47,8 +47,8 @@ Strictly **Cyberpunk minimal dark theme**. All visual changes must follow:
 
 - **WireGuard**: Linux/macOS via `wg-quick`, Windows via `wireguard.exe /installtunnelservice`. All via `sendToHelper({ command: 'wg-up' })`.
 - **V2Ray**: background daemon, SOCKS5/HTTP proxy on port 1080, stats via HTTP API `/stats/query`.
-- **tun2socks**: transparent proxy via TUN interface. Spawned and owned by `SentinelHelper`.
-- **TUN names**: Windows=`sentinel-tun`, Linux=`sentun0`, macOS=`utun10`.
+- **tun2socks**: transparent proxy via TUN interface. Spawned and owned by `ChibaTunnelHelper`.
+- **TUN names**: Windows=`chiba-tun`, Linux=`chibatun0`, macOS=`utun10`.
 
 # Git & Release Workflow Rules
 

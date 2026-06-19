@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChibaTunnel — Text Animation Proposals</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:      #0d0019;
+  --m:       #ff0055;
+  --c:       #00ccff;
+  --font:    'JetBrains Mono', monospace;
+}
+
+body {
+  background: var(--bg);
+  font-family: var(--font);
+  color: #ede8f5;
+  min-height: 100vh;
+  padding: 48px 24px 80px;
+}
+
+/* Grid bg */
+body::before {
+  content: '';
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background-image:
+    linear-gradient(rgba(255,0,85,.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,204,255,.015) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+header {
+  position: relative; z-index: 1;
+  text-align: center; margin-bottom: 72px;
+}
+header h1 {
+  font-size: 11px; letter-spacing: .28em;
+  text-transform: uppercase; color: rgba(255,0,85,.5);
+  margin-bottom: 8px;
+}
+header p {
+  font-size: 11px; color: rgba(255,255,255,.22);
+  letter-spacing: .1em;
+}
+
+/* ── Cards ──────────────────────────────────────── */
+.cards {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column;
+  gap: 2px; max-width: 900px; margin: 0 auto;
+}
+
+.card {
+  background: rgba(18,0,34,.9);
+  border: 1px solid rgba(42,0,68,.8);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color .25s;
+}
+.card:hover { border-color: rgba(255,0,85,.4); }
+
+.card-header {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  padding: 14px 28px;
+  border-bottom: 1px solid rgba(42,0,68,.6);
+  cursor: pointer; user-select: none;
+}
+.card-num {
+  font-size: 10px; letter-spacing: .22em;
+  color: rgba(255,0,85,.5); text-transform: uppercase;
+}
+.card-name {
+  font-size: 12px; letter-spacing: .18em;
+  color: rgba(255,255,255,.55); text-transform: uppercase;
+}
+.card-tag {
+  font-size: 9px; padding: 3px 10px;
+  border: 1px solid rgba(0,204,255,.3);
+  border-radius: 20px; color: rgba(0,204,255,.7);
+  letter-spacing: .14em; text-transform: uppercase;
+}
+
+/* Stage where animation lives */
+.card-stage {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 180px; padding: 32px 24px;
+  position: relative; overflow: hidden;
+}
+
+/* Code snippet (collapsed by default) */
+.card-code {
+  max-height: 0; overflow: hidden;
+  transition: max-height .4s ease;
+  border-top: 0 solid rgba(42,0,68,.6);
+}
+.card-code.open {
+  max-height: 600px;
+  border-top: 1px solid rgba(42,0,68,.6);
+}
+.card-code pre {
+  padding: 20px 28px;
+  font-size: 11px; line-height: 1.75;
+  color: rgba(255,255,255,.45);
+  white-space: pre-wrap; word-break: break-all;
+}
+.card-code .k { color: rgba(255,0,85,.8); }
+.card-code .v { color: rgba(0,204,255,.8); }
+.card-code .c { color: rgba(255,255,255,.25); }
+
+.toggle-code {
+  background: none; border: none;
+  font-family: var(--font); font-size: 9px;
+  letter-spacing: .16em; text-transform: uppercase;
+  color: rgba(0,204,255,.45); cursor: pointer;
+  padding: 10px 28px;
+  transition: color .2s;
+}
+.toggle-code:hover { color: rgba(0,204,255,.9); }
+
+/* ════════════════════════════════════════════════════
+   PROPOSAL 1 — NEON TUNNEL REVEAL
+   Letters appear one-by-one from the vanishing point,
+   scaling from 0 and fading in with a cyan→magenta
+   colour sweep across the word.
+════════════════════════════════════════════════════ */
+.p1-title {
+  font-size: clamp(32px, 6vw, 62px);
+  font-weight: 800;
+  letter-spacing: .10em;
+  display: flex; gap: .02em;
+}
+.p1-title .ch {
+  display: inline-block;
+  color: #fff;
+  text-shadow:
+    0 0 6px  rgba(255,0,85,.9),
+    0 0 18px rgba(255,0,85,.5),
+    0 0 40px rgba(255,0,85,.2);
+  animation: p1-enter 0.6s cubic-bezier(.22,1,.36,1) both,
+             p1-colorwave 4s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+@keyframes p1-enter {
+  from { opacity: 0; transform: scale(0.4) translateY(12px); filter: blur(8px); }
+  to   { opacity: 1; transform: scale(1)   translateY(0);    filter: blur(0);   }
+}
+@keyframes p1-colorwave {
+  0%,100% {
+    color: #fff;
+    text-shadow: 0 0 6px rgba(255,0,85,.9), 0 0 20px rgba(255,0,85,.5);
+  }
+  50% {
+    color: #b0eeff;
+    text-shadow: 0 0 6px rgba(0,204,255,.9), 0 0 24px rgba(0,204,255,.6);
+  }
+}
+
+/* ════════════════════════════════════════════════════
+   PROPOSAL 2 — DATA SCRAMBLE
+   Each letter randomises through ASCII noise before
+   snapping to its final character. Classic cyberpunk
+   "decryption" effect — pure JS + CSS.
+════════════════════════════════════════════════════ */
+.p2-title {
+  font-size: clamp(32px, 6vw, 62px);
+  font-weight: 800;
+  letter-spacing: .10em;
+  color: var(--m);
+  text-shadow:
+    0 0 8px  rgba(255,0,85,.8),
+    0 0 24px rgba(255,0,85,.4);
+  cursor: default;
+}
+.p2-title .ch {
+  display: inline-block;
+  transition: color .08s;
+}
+.p2-title .ch.scrambling {
+  color: rgba(0,204,255,.9);
+  text-shadow: 0 0 8px rgba(0,204,255,.9);
+}
+
+/* ════════════════════════════════════════════════════
+   PROPOSAL 3 — VOLTAGE FLICKER
+   The whole word is always visible but fires irregular
+   voltage-spike flickers — brightness/opacity bursts
+   with a subtle horizontal skew. Feels like a neon
+   tube with a bad ballast.
+════════════════════════════════════════════════════ */
+.p3-title {
+  font-size: clamp(32px, 6vw, 62px);
+  font-weight: 800;
+  letter-spacing: .10em;
+  color: var(--m);
+  text-shadow:
+    0 0 6px  rgba(255,0,85,1),
+    0 0 18px rgba(255,0,85,.6),
+    0 0 40px rgba(255,0,85,.25);
+  animation: p3-voltage 3.2s ease-in-out infinite;
+  position: relative;
+}
+.p3-title::before {
+  content: attr(data-text);
+  position: absolute; inset: 0;
+  color: var(--c);
+  text-shadow: 0 0 8px rgba(0,204,255,.8);
+  clip-path: inset(0 100% 0 0);
+  animation: p3-scanbar 3.2s ease-in-out infinite;
+}
+@keyframes p3-voltage {
+  0%,100% { opacity:1;    filter: brightness(1);   skewX(0deg); }
+  6%       { opacity:.82; filter: brightness(2.2);  transform: skewX(-1.5deg); }
+  7%       { opacity:1;   filter: brightness(1);    transform: skewX(0deg); }
+  14%      { opacity:.9;  filter: brightness(1.8);  transform: skewX(.8deg); }
+  15%      { opacity:1;   filter: brightness(1);    transform: skewX(0deg); }
+  52%      { opacity:.95; filter: brightness(1.6);  transform: skewX(-.5deg); }
+  53%      { opacity:1;   filter: brightness(1);    transform: skewX(0deg); }
+  88%      { opacity:.7;  filter: brightness(2.5);  transform: skewX(1deg); }
+  89%      { opacity:1;   filter: brightness(1);    transform: skewX(0deg); }
+}
+@keyframes p3-scanbar {
+  0%      { clip-path: inset(0 100% 0 0); }
+  40%,60% { clip-path: inset(0 0% 0 0);   }
+  100%    { clip-path: inset(0 100% 0 0); }
+}
+
+/* ════════════════════════════════════════════════════
+   PROPOSAL 4 — BINARY STREAM BUILD
+   The title renders character-by-character as if being
+   typed by a terminal — but each character is preceded
+   by a burst of 0/1 noise that resolves to the letter.
+   Loops with a pause. Pure CSS typing via steps().
+════════════════════════════════════════════════════ */
+.p4-wrap {
+  position: relative;
+  display: inline-block;
+}
+.p4-title {
+  font-size: clamp(28px, 5.5vw, 58px);
+  font-weight: 800;
+  letter-spacing: .10em;
+  color: var(--c);
+  text-shadow:
+    0 0 6px  rgba(0,204,255,.9),
+    0 0 20px rgba(0,204,255,.5),
+    0 0 44px rgba(0,204,255,.2);
+  white-space: nowrap;
+  overflow: hidden;
+  width: 0;
+  animation: p4-type 2.8s steps(11, end) 0.5s infinite;
+  border-right: 3px solid var(--m);
+}
+@keyframes p4-type {
+  0%        { width: 0;    border-color: var(--m); }
+  45%,85%   { width: 12.5ch; border-color: var(--m); }
+  90%       { width: 12.5ch; border-color: transparent; }
+  95%,100%  { width: 0;    border-color: transparent; }
+}
+/* Binary rain overlay (decorative) */
+.p4-noise {
+  position: absolute; top: -8px; left: 0; right: 0;
+  font-size: 9px; color: rgba(0,204,255,.18);
+  letter-spacing: .05em; pointer-events: none;
+  animation: p4-noise-anim 0.12s steps(1) infinite;
+  line-height: 1;
+}
+@keyframes p4-noise-anim {
+  0%   { content: '01101 10010 11001'; opacity: .4; }
+  25%  { opacity: .15; }
+  50%  { opacity: .35; }
+  75%  { opacity: .1; }
+  100% { opacity: .3; }
+}
+
+/* ════════════════════════════════════════════════════
+   PROPOSAL 5 — CHROMATIC SPLIT
+   The word is rendered in three layers (R, G, B) that
+   normally overlap perfectly. On a 5s loop, they briefly
+   drift apart in different directions — simulating a
+   CRT or VHS chromatic aberration event — then snap back.
+════════════════════════════════════════════════════ */
+.p5-title {
+  font-size: clamp(32px, 6vw, 62px);
+  font-weight: 800;
+  letter-spacing: .10em;
+  position: relative;
+  display: inline-block;
+  color: transparent; /* base invisible */
+  user-select: none;
+}
+/* White base (visible during rest) */
+.p5-title::before {
+  content: attr(data-text);
+  position: absolute; inset: 0;
+  color: #fff;
+  text-shadow: none;
+  animation: p5-base 5s ease-in-out infinite;
+}
+/* Magenta layer */
+.p5-r {
+  position: absolute; inset: 0;
+  content: attr(data-text);
+  color: var(--m);
+  mix-blend-mode: screen;
+  animation: p5-red 5s ease-in-out infinite;
+  text-shadow: 0 0 12px rgba(255,0,85,.7);
+}
+/* Cyan layer */
+.p5-c {
+  position: absolute; inset: 0;
+  color: var(--c);
+  mix-blend-mode: screen;
+  animation: p5-cyan 5s ease-in-out infinite;
+  text-shadow: 0 0 12px rgba(0,204,255,.7);
+}
+/* Green layer */
+.p5-g {
+  position: absolute; inset: 0;
+  color: #00ff9f;
+  mix-blend-mode: screen;
+  animation: p5-green 5s ease-in-out infinite;
+  text-shadow: 0 0 12px rgba(0,255,159,.5);
+}
+
+@keyframes p5-base {
+  0%,72%,100% { opacity: 1;   transform: translate(0,0); }
+  74%          { opacity: .3;  transform: translate(0,0); }
+  78%          { opacity: 1;   transform: translate(0,0); }
+}
+@keyframes p5-red {
+  0%,72%,100% { transform: translate(0,0);     opacity: 0; }
+  73%          { transform: translate(-4px,1px); opacity: 1; }
+  74%          { transform: translate(-6px,-1px);opacity: 1; }
+  76%          { transform: translate(-2px,2px); opacity: 1; }
+  78%          { transform: translate(0,0);      opacity: 0; }
+}
+@keyframes p5-cyan {
+  0%,72%,100% { transform: translate(0,0);    opacity: 0; }
+  73%          { transform: translate(4px,1px); opacity: 1; }
+  74%          { transform: translate(5px,-2px);opacity: 1; }
+  76%          { transform: translate(2px,1px); opacity: 1; }
+  78%          { transform: translate(0,0);     opacity: 0; }
+}
+@keyframes p5-green {
+  0%,72%,100% { transform: translate(0,0);     opacity: 0; }
+  73%          { transform: translate(1px,-3px); opacity: .7; }
+  74%          { transform: translate(-1px,3px); opacity: .7; }
+  76%          { transform: translate(0,-1px);   opacity: .7; }
+  78%          { transform: translate(0,0);      opacity: 0; }
+}
+
+/* ── Bottom pick bar ────────────────────────────── */
+.pick-bar {
+  position: relative; z-index: 1;
+  max-width: 900px; margin: 40px auto 0;
+  display: flex; align-items: center;
+  justify-content: space-between; gap: 12px;
+  flex-wrap: wrap;
+}
+.pick-bar p {
+  font-size: 10px; letter-spacing: .18em;
+  color: rgba(255,255,255,.2); text-transform: uppercase;
+}
+.pick-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.pick-btn {
+  font-family: var(--font); font-size: 10px;
+  letter-spacing: .14em; text-transform: uppercase;
+  padding: 8px 18px;
+  background: rgba(255,0,85,.06);
+  border: 1px solid rgba(255,0,85,.3);
+  border-radius: 4px; color: rgba(255,0,85,.7);
+  cursor: pointer; transition: all .18s;
+}
+.pick-btn:hover, .pick-btn.active {
+  background: rgba(255,0,85,.15);
+  border-color: rgba(255,0,85,.7);
+  color: #ff0055;
+  box-shadow: 0 0 12px rgba(255,0,85,.3);
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⛩ ChibaTunnel — Text Animation Proposals</h1>
+  <p>Click "View Code" on each card to copy the CSS</p>
+</header>
+
+<div class="cards">
+
+  <!-- ══ PROPOSAL 1 ══ -->
+  <div class="card">
+    <div class="card-header" onclick="toggleCode(1)">
+      <span class="card-num">01</span>
+      <span class="card-name">Neon Tunnel Reveal</span>
+      <span class="card-tag">scale · blur · colorwave</span>
+    </div>
+    <div class="card-stage">
+      <h1 class="p1-title" id="p1"></h1>
+    </div>
+    <button class="toggle-code" onclick="toggleCode(1)">{ View CSS }</button>
+    <div class="card-code" id="code-1">
+      <pre><span class="c">/* Each letter gets a staggered delay via JS inline style */</span>
+<span class="k">.p1-title .ch</span> {
+  <span class="k">animation</span>:
+    <span class="v">p1-enter 0.6s cubic-bezier(.22,1,.36,1) both</span>,
+    <span class="v">p1-colorwave 4s ease-in-out infinite</span>;
+}
+
+<span class="k">@keyframes</span> p1-enter {
+  from { opacity: 0; transform: <span class="v">scale(0.4) translateY(12px)</span>; filter: <span class="v">blur(8px)</span>; }
+  to   { opacity: 1; transform: <span class="v">scale(1) translateY(0)</span>;    filter: <span class="v">blur(0)</span>;   }
+}
+<span class="k">@keyframes</span> p1-colorwave {
+  0%,100% {
+    color: #fff;
+    text-shadow: 0 0 6px <span class="v">rgba(255,0,85,.9)</span>, 0 0 20px <span class="v">rgba(255,0,85,.5)</span>;
+  }
+  50% {
+    color: #b0eeff;
+    text-shadow: 0 0 6px <span class="v">rgba(0,204,255,.9)</span>, 0 0 24px <span class="v">rgba(0,204,255,.6)</span>;
+  }
+}</pre>
+    </div>
+  </div>
+
+  <!-- ══ PROPOSAL 2 ══ -->
+  <div class="card">
+    <div class="card-header" onclick="toggleCode(2)">
+      <span class="card-num">02</span>
+      <span class="card-name">Data Scramble</span>
+      <span class="card-tag">ascii noise · decryption</span>
+    </div>
+    <div class="card-stage">
+      <h1 class="p2-title" id="p2"></h1>
+    </div>
+    <button class="toggle-code" onclick="toggleCode(2)">{ View CSS }</button>
+    <div class="card-code" id="code-2">
+      <pre><span class="c">/* JS randomises each char through ASCII before resolving.
+   Trigger on mount + loop every 5s. */</span>
+<span class="k">const</span> CHARS = <span class="v">'!@#$%^&*01アイウエオカキ'</span>;
+
+<span class="k">function</span> scramble(el, finalText) {
+  let iter = 0;
+  const interval = setInterval(() => {
+    el.querySelectorAll(<span class="v">'.ch'</span>).forEach((ch, i) => {
+      if (i < iter) {
+        ch.textContent = finalText[i];
+        ch.classList.remove(<span class="v">'scrambling'</span>);
+      } else {
+        ch.textContent = CHARS[Math.floor(Math.random()*CHARS.length)];
+        ch.classList.add(<span class="v">'scrambling'</span>);
+      }
+    });
+    if (++iter > finalText.length) clearInterval(interval);
+  }, 60);
+}
+
+<span class="c">/* CSS for scrambling state */</span>
+<span class="k">.ch.scrambling</span> {
+  color: <span class="v">rgba(0,204,255,.9)</span>;
+  text-shadow: 0 0 8px <span class="v">rgba(0,204,255,.9)</span>;
+}</pre>
+    </div>
+  </div>
+
+  <!-- ══ PROPOSAL 3 ══ -->
+  <div class="card">
+    <div class="card-header" onclick="toggleCode(3)">
+      <span class="card-num">03</span>
+      <span class="card-name">Voltage Flicker</span>
+      <span class="card-tag">neon · bad ballast · scanbar</span>
+    </div>
+    <div class="card-stage">
+      <h1 class="p3-title" data-text="CHIBATUNNEL">CHIBATUNNEL</h1>
+    </div>
+    <button class="toggle-code" onclick="toggleCode(3)">{ View CSS }</button>
+    <div class="card-code" id="code-3">
+      <pre><span class="k">.p3-title</span> {
+  animation: <span class="v">p3-voltage 3.2s ease-in-out infinite</span>;
+}
+<span class="k">.p3-title::before</span> {
+  content: attr(data-text); <span class="c">/* cyan ghost layer */</span>
+  color: var(--cyan);
+  clip-path: inset(0 100% 0 0);
+  animation: <span class="v">p3-scanbar 3.2s ease-in-out infinite</span>;
+}
+<span class="k">@keyframes</span> p3-voltage {
+  0%,100% { opacity:1;   filter:brightness(1);   transform:skewX(0deg);    }
+  6%      { opacity:.82; filter:brightness(2.2);  transform:skewX(-1.5deg); }
+  7%      { opacity:1;   filter:brightness(1);    transform:skewX(0deg);    }
+  14%     { opacity:.9;  filter:brightness(1.8);  transform:skewX(.8deg);   }
+  88%     { opacity:.7;  filter:brightness(2.5);  transform:skewX(1deg);    }
+}
+<span class="k">@keyframes</span> p3-scanbar {
+  0%      { clip-path: inset(0 100% 0 0); }
+  40%,60% { clip-path: inset(0 0% 0 0);   } <span class="c">/* cyan sweep */</span>
+  100%    { clip-path: inset(0 100% 0 0); }
+}</pre>
+    </div>
+  </div>
+
+  <!-- ══ PROPOSAL 4 ══ -->
+  <div class="card">
+    <div class="card-header" onclick="toggleCode(4)">
+      <span class="card-num">04</span>
+      <span class="card-name">Binary Stream Build</span>
+      <span class="card-tag">terminal · typing · cursor</span>
+    </div>
+    <div class="card-stage">
+      <div class="p4-wrap">
+        <div class="p4-noise" id="p4noise">010110010011010110</div>
+        <h1 class="p4-title">CHIBATUNNEL</h1>
+      </div>
+    </div>
+    <button class="toggle-code" onclick="toggleCode(4)">{ View CSS }</button>
+    <div class="card-code" id="code-4">
+      <pre><span class="k">.p4-title</span> {
+  color: var(--cyan);
+  white-space: nowrap; overflow: hidden;
+  width: 0; <span class="c">/* animates to full width */</span>
+  border-right: 3px solid var(--magenta); <span class="c">/* cursor */</span>
+  animation: <span class="v">p4-type 2.8s steps(11, end) 0.5s infinite</span>;
+}
+<span class="k">@keyframes</span> p4-type {
+  0%       { width: 0;     border-color: var(--magenta); }
+  45%,85%  { width: 12.5ch; border-color: var(--magenta); }
+  90%      { width: 12.5ch; border-color: transparent; } <span class="c">/* cursor blink off */</span>
+  95%,100% { width: 0;     border-color: transparent; }
+}
+
+<span class="c">/* Binary noise above — randomised via JS interval */</span>
+<span class="k">.p4-noise</span> {
+  position: absolute; top: -8px;
+  font-size: 9px; color: <span class="v">rgba(0,204,255,.18)</span>;
+}</pre>
+    </div>
+  </div>
+
+  <!-- ══ PROPOSAL 5 ══ -->
+  <div class="card">
+    <div class="card-header" onclick="toggleCode(5)">
+      <span class="card-num">05</span>
+      <span class="card-name">Chromatic Split</span>
+      <span class="card-tag">CRT · VHS · aberration</span>
+    </div>
+    <div class="card-stage">
+      <h1 class="p5-title" data-text="CHIBATUNNEL">
+        CHIBATUNNEL
+        <span class="p5-r">CHIBATUNNEL</span>
+        <span class="p5-c">CHIBATUNNEL</span>
+        <span class="p5-g">CHIBATUNNEL</span>
+      </h1>
+    </div>
+    <button class="toggle-code" onclick="toggleCode(5)">{ View CSS }</button>
+    <div class="card-code" id="code-5">
+      <pre><span class="c">/* Three colour layers drift apart briefly on a 5s loop.
+   mix-blend-mode: screen makes overlaps blend to white. */</span>
+
+<span class="k">.p5-title</span>       { color: transparent; position: relative; }
+<span class="k">.p5-title::before</span> { content: attr(data-text); color: #fff; } <span class="c">/* white base */</span>
+<span class="k">.p5-r</span>            { color: var(--magenta); mix-blend-mode: screen; }
+<span class="k">.p5-c</span>            { color: var(--cyan);    mix-blend-mode: screen; }
+<span class="k">.p5-g</span>            { color: #00ff9f;        mix-blend-mode: screen; }
+
+<span class="k">@keyframes</span> p5-red {
+  0%,72%,100% { transform: translate(0,0);      opacity: 0; }
+  73%         { transform: translate(-4px,1px);  opacity: 1; }
+  74%         { transform: translate(-6px,-1px); opacity: 1; }
+  78%         { transform: translate(0,0);       opacity: 0; }
+}
+<span class="c">/* p5-cyan mirrors right; p5-green drifts up/down */</span></pre>
+    </div>
+  </div>
+
+</div><!-- /cards -->
+
+<div class="pick-bar">
+  <p>Which one?</p>
+  <div class="pick-btns">
+    <button class="pick-btn" onclick="pick(this,1)">01 · Tunnel Reveal</button>
+    <button class="pick-btn" onclick="pick(this,2)">02 · Scramble</button>
+    <button class="pick-btn" onclick="pick(this,3)">03 · Voltage</button>
+    <button class="pick-btn" onclick="pick(this,4)">04 · Binary Build</button>
+    <button class="pick-btn" onclick="pick(this,5)">05 · Chromatic</button>
+  </div>
+</div>
+
+<script>
+/* ── Build P1 letters with staggered delay ── */
+const p1 = document.getElementById('p1');
+'CHIBATUNNEL'.split('').forEach((ch, i) => {
+  const span = document.createElement('span');
+  span.className = 'ch';
+  span.textContent = ch === ' ' ? '\u00a0' : ch;
+  span.style.animationDelay = `${i * 0.06}s, ${i * 0.06 + 0.6}s`;
+  p1.appendChild(span);
+});
+
+/* ── Build P2 letters ── */
+const p2 = document.getElementById('p2');
+const WORD = 'CHIBATUNNEL';
+const CHARS = '!@#$%^&*01アイウエオカキクケコ▓░■□◆◇';
+WORD.split('').forEach(ch => {
+  const span = document.createElement('span');
+  span.className = 'ch';
+  span.textContent = ch;
+  p2.appendChild(span);
+});
+
+function scramble() {
+  const chars = p2.querySelectorAll('.ch');
+  let iter = 0;
+  chars.forEach(ch => ch.classList.add('scrambling'));
+  const iv = setInterval(() => {
+    chars.forEach((ch, i) => {
+      if (i < iter) {
+        ch.textContent = WORD[i];
+        ch.classList.remove('scrambling');
+      } else {
+        ch.textContent = CHARS[Math.floor(Math.random() * CHARS.length)];
+      }
+    });
+    if (++iter > WORD.length) {
+      clearInterval(iv);
+      setTimeout(scramble, 3200);
+    }
+  }, 55);
+}
+scramble();
+
+/* ── P4 binary noise randomiser ── */
+const noiseEl = document.getElementById('p4noise');
+const noiseChars = '01';
+function updateNoise() {
+  noiseEl.textContent = Array.from({length: 22},
+    () => noiseChars[Math.floor(Math.random()*2)]).join('');
+}
+setInterval(updateNoise, 90);
+
+/* ── Toggle code panels ── */
+function toggleCode(n) {
+  const el = document.getElementById('code-' + n);
+  el.classList.toggle('open');
+}
+
+/* ── Pick buttons ── */
+function pick(btn, n) {
+  document.querySelectorAll('.pick-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+</script>
+</body>
+</html>

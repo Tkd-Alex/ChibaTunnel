@@ -65,12 +65,12 @@ const STORE_KEY_BINARIES = 'binaryPaths'
 const WIREGUARD_GUIDES: Record<string, string> = {
   win32:
     'wireguard.exe is missing from the application resources. ' +
-    'Please reinstall Sentinel dVPN.',
+    'Please reinstall ChibaTunnel.',
 
   darwin:
     'wireguard-tools is required for WireGuard mode. Install it with:\n\n' +
     '  brew install wireguard-tools\n\n' +
-    'Then restart Sentinel.',
+    'Then restart ChibaTunnel.',
 
   linux_appimage:
     'wireguard-tools is required for WireGuard mode. ' +
@@ -78,7 +78,7 @@ const WIREGUARD_GUIDES: Record<string, string> = {
     '  Ubuntu/Debian:  sudo apt install wireguard-tools\n' +
     '  Fedora/RHEL:    sudo dnf install wireguard-tools\n' +
     '  Arch:           sudo pacman -S wireguard-tools\n\n' +
-    'Then restart Sentinel.',
+    'Then restart ChibaTunnel.',
 
   linux_package:
     'wireguard-tools was removed from your system. Reinstall it:\n\n' +
@@ -146,7 +146,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   hideSupportOption: false,
 }
 
-const store = new Store({ name: 'sentinel-dvpn' })
+const store = new Store({ name: 'chibatunnel' })
 
 // Cache for wallet addresses (encrypted mnemonic -> address)
 const addressCache: Record<string, string> = {}
@@ -225,7 +225,7 @@ function ensureBinariesUnquarantined(): void {
 }
 
 app.whenReady().then(async () => {
-  electronApp.setAppUserModelId('com.sentinel.dvpn-client')
+  electronApp.setAppUserModelId('com.chibatunnel')
   app.on('browser-window-created', (_, w) => optimizer.watchWindowShortcuts(w))
   registerIpcHandlers()
 
@@ -250,14 +250,14 @@ async function installDarwinHelper(): Promise<void> {
     ? process.resourcesPath
     : path.join(__dirname, '..', '..', 'dist-helper')
 
-  const helperSrc  = path.join(resourcesPath, 'sentinel-helper-mac')
-  const installDir = '/usr/local/lib/sentinel'
-  const helperDest = `${installDir}/sentinel-helper-mac`
-  const plistPath  = '/Library/LaunchDaemons/com.sentinel.helper.plist'
+  const helperSrc  = path.join(resourcesPath, 'chibatunnel-helper-mac')
+  const installDir = '/usr/local/lib/chibatunnel'
+  const helperDest = `${installDir}/chibatunnel-helper-mac`
+  const plistPath  = '/Library/LaunchDaemons/com.chibatunnel.helper.plist'
 
   const stamp    = Date.now()
-  const tmpBin   = `/tmp/sentinel-helper-${stamp}`
-  const tmpPlist = `/tmp/sentinel-helper-${stamp}.plist`
+  const tmpBin   = `/tmp/chibatunnel-helper-${stamp}`
+  const tmpPlist = `/tmp/chibatunnel-helper-${stamp}.plist`
 
   fs.copyFileSync(helperSrc, tmpBin)
   fs.chmodSync(tmpBin, 0o755)
@@ -268,7 +268,7 @@ async function installDarwinHelper(): Promise<void> {
     '<plist version="1.0">',
     '<dict>',
     '    <key>Label</key>',
-    '    <string>com.sentinel.helper</string>',
+    '    <string>com.chibatunnel.helper</string>',
     '    <key>ProgramArguments</key>',
     '    <array>',
     `        <string>${helperDest}</string>`,
@@ -292,7 +292,7 @@ async function installDarwinHelper(): Promise<void> {
       `chmod 644 ${plistPath}`,
       `chown root:wheel ${plistPath}`,
       `launchctl load -w ${plistPath} || true`,
-      `launchctl start com.sentinel.helper`,
+      `launchctl start com.chibatunnel.helper`,
     ])
     if (result.code !== 0) throw new Error(`macOS Helper install failed: ${result.stderr}`)
   } finally {
@@ -306,20 +306,20 @@ async function installLinuxHelper(): Promise<void> {
     ? process.resourcesPath
     : path.join(__dirname, '..', '..', 'dist-helper')
 
-  const helperSrc  = path.join(resourcesPath, 'sentinel-helper')
-  const installDir = '/usr/local/lib/sentinel'
-  const helperDest = `${installDir}/sentinel-helper`
+  const helperSrc  = path.join(resourcesPath, 'chibatunnel-helper')
+  const installDir = '/usr/local/lib/chibatunnel'
+  const helperDest = `${installDir}/chibatunnel-helper`
 
   const stamp    = Date.now()
-  const tmpBin   = `/tmp/sentinel-helper-${stamp}`
-  const tmpUnit  = `/tmp/sentinel-helper-${stamp}.service`
+  const tmpBin   = `/tmp/chibatunnel-helper-${stamp}`
+  const tmpUnit  = `/tmp/chibatunnel-helper-${stamp}.service`
 
   fs.copyFileSync(helperSrc, tmpBin)
   fs.chmodSync(tmpBin, 0o755)
 
   const unitContent = [
     '[Unit]',
-    'Description=Sentinel Privileged Helper',
+    'Description=ChibaTunnel Privileged Helper',
     'After=network.target',
     '[Service]',
     'Type=simple',
@@ -337,10 +337,10 @@ async function installLinuxHelper(): Promise<void> {
       `mkdir -p ${installDir}`,
       `cp ${tmpBin} ${helperDest}`,
       `chmod 755 ${helperDest}`,
-      `cp ${tmpUnit} /etc/systemd/system/sentinel-helper.service`,
+      `cp ${tmpUnit} /etc/systemd/system/chibatunnel-helper.service`,
       `systemctl daemon-reload`,
-      `systemctl enable sentinel-helper`,
-      `systemctl start sentinel-helper`,
+      `systemctl enable chibatunnel-helper`,
+      `systemctl start chibatunnel-helper`,
     ])
     if (result.code !== 0) throw new Error(`Linux Helper install failed: ${result.stderr}`)
   } finally {
@@ -440,7 +440,7 @@ function registerIpcHandlers(): void {
     wallets.push({ label, encrypted })
     store.set(STORE_KEY_WALLETS, wallets)
     store.set(STORE_KEY_ACTIVE_W, wallets.length - 1)
-    return { success: true, address: result.address, label }
+    return { success: true, address: result.address, label, rpc: result.rpc }
   })
 
   ipcMain.handle('wallet:switch', async (_e, index: number) => {
@@ -607,7 +607,7 @@ function registerIpcHandlers(): void {
     if (!walletState.client || !walletState.address) return { success: false, error: 'Wallet not initialized' }
     try {
       const msg = sessionCancel({ from: walletState.address, id: Long.fromNumber(sessionId, true) })
-      const tx  = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'sentinel-dvpn-client')
+      const tx  = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
       assertIsDeliverTxSuccess(tx); return { success: true }
     } catch (err: unknown) { return { success: false, error: extractError(err) } }
   })
@@ -667,7 +667,7 @@ function registerIpcHandlers(): void {
         denom: denom,
         renewalPricePolicy: policy
       })
-      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'sentinel-dvpn-client')
+      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
       assertIsDeliverTxSuccess(tx)
       console.log(`[Plan:Subscribe] Success! TX: ${tx.transactionHash}`)
       return { success: true, txHash: tx.transactionHash }
@@ -809,7 +809,7 @@ function registerIpcHandlers(): void {
           id: Long.fromNumber(subscriptionId, true)
         }
       }
-      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'sentinel-dvpn-client')
+      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
       assertIsDeliverTxSuccess(tx)
       console.log(`[Subscription:Cancel] Success! TX: ${tx.transactionHash}`)
 
@@ -850,7 +850,7 @@ function registerIpcHandlers(): void {
           renewalPricePolicy: policy
         }
       }
-      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'sentinel-dvpn-client')
+      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
       assertIsDeliverTxSuccess(tx)
       console.log(`[Subscription:Update] Success! TX: ${tx.transactionHash}`)
       return { success: true, txHash: tx.transactionHash }
@@ -872,7 +872,7 @@ function registerIpcHandlers(): void {
         id: Long.fromNumber(subscriptionId, true),
         nodeAddress: nodeAddress
       })
-      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'sentinel-dvpn-client')
+      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
       assertIsDeliverTxSuccess(tx)
 
       mainWindow?.webContents.send('vpn:status', { step: 'extracting_tx' })
@@ -1016,7 +1016,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('network:getPublicIp', async () => {
     const fetchIp = async () => {
       const res = await fetch('https://ipapi.co/json/', {
-        headers: { 'User-Agent': 'sentinel-dvpn-client' },
+        headers: { 'User-Agent': 'Chiba Tunnel (Sentinel dVPN Desktop Client)' },
         signal: AbortSignal.timeout(5000)
       })
       return await res.json() as any
@@ -1072,7 +1072,7 @@ function registerIpcHandlers(): void {
 function getNextTunInterface(): string {
   const plat = process.platform
   for (let i = 0; i < 10; i++) {
-    const ifName = plat === 'darwin' ? `utun${i}` : `sentinel-tun${i}`
+    const ifName = plat === 'darwin' ? `utun${i}` : `chiba-tun${i}`
     try {
       if (plat === 'darwin') {
         execSync(`ifconfig ${ifName}`, { stdio: 'ignore' })
@@ -1083,7 +1083,7 @@ function getNextTunInterface(): string {
       return ifName
     }
   }
-  return plat === 'darwin' ? 'utun9' : 'sentinel-tun9'
+  return plat === 'darwin' ? 'utun9' : 'chiba-tun9'
 }
 
 async function setupTransparentV2Ray(v2ray: V2Ray): Promise<{ success: boolean; error?: string }> {
@@ -1115,9 +1115,9 @@ async function setupTransparentV2Ray(v2ray: V2Ray): Promise<{ success: boolean; 
 
     if (helperResponse.status === "ok") {
       activeTun2Socks = helperResponse.pid as number
-      if (process.platform === 'win32') activeTunInterface = 'sentinel-tun'
+      if (process.platform === 'win32') activeTunInterface = 'chiba-tun'
       else if (process.platform === 'darwin') activeTunInterface = 'utun9'
-      else activeTunInterface = 'sentun0'
+      else activeTunInterface = 'chibatun0'
     }
     return { success: helperResponse.status === "ok" }
   } catch (err: any) { return { success: false, error: `Transparent setup failed: ${err.message}` } }
@@ -1171,12 +1171,12 @@ async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabyt
       from: walletState.address!, nodeAddress: args.nodeAddress,
       gigabytes: args.subscriptionType === 'gigabytes' ? Long.fromNumber(Math.max(1, args.amount), true) : undefined,
       hours: args.subscriptionType === 'hours' ? Long.fromNumber(Math.max(1, args.amount), true) : undefined,
-      maxPrice: udvpnPrice, fee: 'auto', memo: 'sentinel-dvpn-client'
+      maxPrice: udvpnPrice, fee: 'auto', memo: 'Chiba Tunnel (Sentinel dVPN Desktop Client)'
     }
 
     mainWindow?.webContents.send('vpn:status', { step: 'signing_tx' })
     mainWindow?.webContents.send('vpn:status', { step: 'broadcasting_tx' })
-    const tx = await walletState.client!.signAndBroadcast(walletState.address!, [nodeStartSession(txArgs)], 'auto', 'sentinel-dvpn-client')
+    const tx = await walletState.client!.signAndBroadcast(walletState.address!, [nodeStartSession(txArgs)], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
     assertIsDeliverTxSuccess(tx)
 
     mainWindow?.webContents.send('vpn:status', { step: 'extracting_tx' })
@@ -1220,7 +1220,7 @@ async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabyt
 function getNextWgInterface(): string {
   const plat = process.platform
   for (let i = 0; i < 10; i++) {
-    const ifName = `sentinel${i}`
+    const ifName = `chibatunnel${i}`
     try {
       if (plat === 'win32') {
         // On Windows, check if the WireGuard tunnel service already exists (non-privileged check)
@@ -1233,7 +1233,7 @@ function getNextWgInterface(): string {
       return ifName
     }
   }
-  return 'sentinel9'
+  return 'chibatunnel9'
 }
 
 async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolean, amount?: number, subType?: 'gigabytes' | 'hours') {
@@ -1311,7 +1311,7 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
       if (!configStr) return { success: false, error: 'WireGuard: config null' }
       if (settings.splitTunnel && settings.splitRoutes) configStr = configStr.replace(/AllowedIPs\s*=\s*.+/g, `AllowedIPs = ${settings.splitRoutes}`)
       const qrCode = await QRCode.toDataURL(configStr, { width: 300, margin: 2, color: { dark: '#000000', light: '#ffffff' } })
-      const ifName = getNextWgInterface(); const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `sentinel-${ifName}-`))
+      const ifName = getNextWgInterface(); const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `chibatunnel-${ifName}-`))
       activeWgConfigFile = path.join(tmpDir, `${ifName}.conf`); fs.writeFileSync(activeWgConfigFile, configStr, { mode: 0o600 }); activeWgInstance = wg
       return finalize({ success: true, vpnType: 'wireguard', sessionId: activeSessionId, configStr, qrCode })
     }
@@ -1323,7 +1323,7 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
         const err: any = new Error(`[handshake] ${extractError(e)}`); err.response = e.response; throw err
       })
       const hd = JSON.parse(Buffer.from(result.data, 'base64').toString('utf8')); await v2ray.parseConfig(hd, result.addrs)
-      const shareLinks = v2ray.buildShareLinks(`sentinel-${nodeAddress.slice(-8)}`)
+      const shareLinks = v2ray.buildShareLinks(`chibatunnel-${nodeAddress.slice(-8)}`)
       const qrCodes = await Promise.all(shareLinks.map(link => QRCode.toDataURL(link, { width: 280, margin: 1, color: { dark: '#34d399', light: '#060810' } })))
       const inbounds = (v2ray.config?.inbounds ?? []).filter((ib: any) => ib.protocol !== 'dokodemo-door').map((ib: any) => ({ protocol: ib.protocol, listen: ib.listen, port: ib.port }))
       activeV2Ray = v2ray; return finalize({ success: true, vpnType: 'v2ray', sessionId: activeSessionId, shareLinks, qrCodes, inbounds })
@@ -1423,8 +1423,8 @@ async function execPrivileged(cmds: string[]): Promise<{ code: number; stdout: s
   } else if (plat === 'win32') {
     const tmpDir = app.getPath('temp')
     const reqId = crypto.randomBytes(4).toString('hex')
-    const psPath = path.join(tmpDir, `sentinel-priv-${reqId}.ps1`)
-    const logPath = path.join(tmpDir, `sentinel-priv-${reqId}.log`)
+    const psPath = path.join(tmpDir, `chibatunnel-priv-${reqId}.ps1`)
+    const logPath = path.join(tmpDir, `chibatunnel-priv-${reqId}.log`)
 
     const psLines = [
       `$ErrorActionPreference = "Continue"`,
@@ -1476,7 +1476,7 @@ function patchConfigFileForDns(configFile: string): void {
 }
 
 /**
- * Brings up a WireGuard tunnel by delegating to the sentinel-helper service.
+ * Brings up a WireGuard tunnel by delegating to the chibatunnel-helper service.
  * On Windows the helper runs wireguard.exe /installtunnelservice (SYSTEM privilege).
  * On Linux/macOS the helper runs wg-quick up (root privilege).
  *
@@ -1544,7 +1544,7 @@ async function wgQuickUp(configFile: string): Promise<{ success: boolean; error?
 }
 
 /**
- * Tears down a WireGuard tunnel by delegating to the sentinel-helper service.
+ * Tears down a WireGuard tunnel by delegating to the chibatunnel-helper service.
  * On Windows the helper runs wireguard.exe /uninstalltunnelservice.
  * On Linux/macOS the helper runs wg-quick down.
  *
@@ -1930,7 +1930,7 @@ async function killActiveConnections(sendEndSession = true) {
           walletState.address,
           [sessionCancel({ from: walletState.address, id: Long.fromString(activeSessionId, true) })],
           'auto',
-          'sentinel-dvpn-client'
+          'chibatunnel'
         )
       } catch (err) {
         console.warn('[killActiveConnections] Failed to cancel session on-chain:', err)
@@ -1982,7 +1982,7 @@ export async function spawnV2Ray(
   }
 
   // Write config to a temp directory — same pattern as the SDK.
-  const tempDir    = fs.mkdtempSync(path.join(os.tmpdir(), 'sentinel-v2ray-'))
+  const tempDir    = fs.mkdtempSync(path.join(os.tmpdir(), 'chibatunnel-v2ray-'))
   const configFile = path.join(tempDir, `v2ray_${crypto.randomBytes(8).toString('hex')}.json`)
   v2ray.writeConfig(configFile)
   console.log('[V2Ray] Config written to:', configFile)
