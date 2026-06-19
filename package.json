@@ -5,7 +5,7 @@
   "productName": "chibatunnel",
   "main": "out/main/index.js",
   "author": "Tkd-Alex <alex.tkd.alex@gmail.com>",
-  "homepage": "https://tkd-alex.github.io/sentinel-dvpn-client",
+  "homepage": "https://chibatunnel.xyz",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",

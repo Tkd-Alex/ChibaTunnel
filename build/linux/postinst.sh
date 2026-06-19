@@ -61,7 +61,7 @@ echo "[postinst] Installed chibatunnel-helper to $HELPER_DEST"
 cat > "$UNIT_FILE" << EOF
 [Unit]
 Description=ChibaTunnel Privileged Helper
-Documentation=https://github.com/tkd-alex/sentinel-dvpn-client/
+Documentation=https://github.com/Tkd-Alex/ChibaTunnel/
 After=network.target
 StartLimitIntervalSec=60
 StartLimitBurst=5
