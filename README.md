@@ -1,4 +1,19 @@
-# Sentinel dVPN Desktop Client
+<div align="center">
+  <img src="docs/branding/chibatunnel-wordmark.png" alt="ChibaTunnel Wordmark" width="600" />
+</div>
+
+<br/>
+
+> **Status:** Online | **Protocol:** Sentinel dVPN | **Identity:** Unknown
+
+**ChibaTunnel** is a cyberpunk-styled desktop dVPN client engineered for absolute privacy and censorship resistance. It cuts through centralized corporate firewalls by routing your traffic across a trustless, peer-to-peer node network.
+
+### ⛩️ Built for the Digital Underground ⚡
+* **The Stack:** Crafted with **Electron**, **React**, and **TypeScript** for a fluid, resource-efficient desktop experience.
+* **The Core:** Powered by the **Sentinel Protocol** ecosystem, ensuring no central logs, no single points of failure, and complete user sovereignty.
+* **The Armor:** Dual-engine routing utilizing **WireGuard** for raw speed and **V2Ray** for stealth obfuscation through restrictive networks.
+
+*An open-source gateway wrapped in electric cyan and neon magenta. Welcome to the Street.*
 
 ## ⚠️ Disclaimer
 This application is open source and was created for the Sentinel community. **100%** of the client code was created by AI. I wanted to play around a bit, but I just supervised. This shows how the power of the [sentinel-js-sdk](https://github.com/sentinel-official/sentinel-js-sdk/) combined with a tool like AI can create something amazing! A simple prompt like "create a VPN client using the SDK documented at https://sentinel-official.github.io/sentinel-js-sdk/: " is all it takes. The source of the nodes is: https://sentnodes.com/ Thanks! 💙 I'm not sure everything works perfectly, especially on Winzozz, but I'm pretty confident on Linux 😎.
@@ -36,7 +51,7 @@ Native **RTL (Right-to-Left)** support with full UI mirroring for Arabic and Per
 
 ### 🔧 Privileged Helper Service
 All operations requiring elevated privileges are delegated to a background service
-(`sentinel-helper`) that is installed once and runs silently thereafter.
+(`chibatunnel-helper`) that is installed once and runs silently thereafter.
 No repeated password prompts or UAC dialogs during normal use.
 
 - **Windows**: a Scheduled Task running as `SYSTEM` is configured by the installer.
@@ -50,17 +65,26 @@ No repeated password prompts or UAC dialogs during normal use.
 ### Connection Lifecycle
 
 ```mermaid
-graph LR
-  A[Choose Node] --> B[Subscribe on-chain]
-  B --> C[Handshake with node]
-  C --> D[Generate config]
-  D --> E{VPN type?}
-  E -->|WireGuard| F[wg-up via Helper]
-  E -->|V2Ray standard| G[spawn v2ray]
-  E -->|V2Ray transparent| G
-  G --> H[start-transparent via Helper]
-  F --> I[Tunnel active]
-  H --> I
+graph TD
+  subgraph Pay-Per-Use
+    A1[Choose Node] --> B1[Start Session & Escrow Deposit]
+  end
+  
+  subgraph Plan Subscription
+    A2[Choose Plan] --> B2[Subscribe to Plan]
+    B2 --> C2[Select Node from Pool]
+    C2 --> D2[Start Session from Allocation]
+  end
+
+  B1 --> E[Handshake with Node]
+  D2 --> E
+  
+  E --> F[Generate Config]
+  F --> G{VPN Type?}
+  G -->|WireGuard| H[wg-up via Helper]
+  G -->|V2Ray| I[spawn v2ray / tun2socks]
+  H --> J[Tunnel Active]
+  I --> J
 ```
 
 ### Privileged Operations Flow
@@ -68,7 +92,7 @@ graph LR
 ```mermaid
 graph TD
   Electron["Electron App\n(user-level)"]
-  Helper["sentinel-helper\n(SYSTEM / root)"]
+  Helper["chibatunnel-helper\n(SYSTEM / root)"]
   T2S["tun2socks\n(child of helper)"]
   WG["wireguard.exe\nwg-quick"]
   KS["Kill Switch\nFirewall rules"]
@@ -155,9 +179,9 @@ wireguard, wintun) automatically. No manual binary management is required.
 ## 📁 Project Structure
 
 ```text
-sentinel-dvpn-client/
+chibatunnel/
 ├── helper/
-│   ├── sentinel-helper.ts      # Privileged service (all platforms)
+│   ├── chibatunnel-helper.ts   # Privileged service (all platforms)
 │   └── tsconfig.json           # Standalone TS config for pkg build
 ├── build/
 │   ├── installer.nsh           # NSIS hooks: Scheduled Task install/remove
@@ -167,7 +191,7 @@ sentinel-dvpn-client/
 ├── src/
 │   ├── main/
 │   │   ├── index.ts            # IPC handlers, app lifecycle
-│   │   ├── helper-client.ts    # TCP client for sentinel-helper
+│   │   ├── helper-client.ts    # TCP client for chibatunnel-helper
 │   │   └── v2ray-process.ts    # V2Ray spawn with explicit binary path
 │   ├── preload/                # Secure Context Bridge
 │   └── renderer/               # React UI
@@ -192,7 +216,7 @@ graph TD
   R["Renderer\n(sandboxed, contextIsolation)"]
   P["Preload\n(Context Bridge)"]
   M["Main Process\n(Node.js)"]
-  H["sentinel-helper\n(SYSTEM / root)"]
+  H["chibatunnel-helper\n(SYSTEM / root)"]
   OS["OS Network Stack\nWireGuard / TUN"]
 
   R -->|"safe IPC only"| P

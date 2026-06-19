@@ -1,5 +1,7 @@
 {
   "common": {
+    "selected": "SELEZIONATO",
+    "never": "Mai",
     "loading": "INIZIALIZZAZIONE...",
     "fetching_nodes": "Recupero nodi...",
     "refresh": "Aggiorna",
@@ -37,8 +39,56 @@
   "tabs": {
     "globe": "Globo",
     "nodes": "Nodi",
+    "plans": "Piani",
+    "my_subs": "Abbonamenti",
     "sessions": "Sessioni",
     "manage": "Gestione"
+  },
+  "plans": {
+    "analyzing": "Analisi dei piani di rete...",
+    "filtering": "Filtraggio dei piani attivi con nodi disponibili.",
+    "no_nodes_found": "Nessun piano attivo con nodi trovato.",
+    "try_changing_rpc": "Prova a cambiare RPC o ad aggiornare la lista.",
+    "retry_scan": "Riprova Scansione di Rete",
+    "search_placeholder": "Cerca provider o ID...",
+    "show_private": "Mostra Piani Privati",
+    "details_title": "Dettagli Piano",
+    "subscribe_for": "ISCRIVITI PER {{amount}} {{denom}}",
+    "available": "Disponibile",
+    "no_nodes_for_plan": "Nessun nodo trovato per questo piano.",
+    "select_plan_hint": "Seleziona un piano per visualizzare le sue caratteristiche e i nodi disponibili.",
+    "title": "Piani di Abbonamento",
+    "by": "da",
+    "nodes": "nodi",
+    "days": "giorni",
+    "subscribe": "Abbonati",
+    "fetching": "Recupero piani...",
+    "details": "Dettagli",
+    "price_per_month": "{{amount}} / mese",
+    "no_plans": "Nessun piano attivo trovato.",
+    "confirm_sub_title": "Sottoscrivere il Piano?",
+    "confirm_sub_msg": "Sei sicuro di voler sottoscrivere il Piano #{{id}}? Questo trasmetterà una transazione on-chain.",
+    "subscribe_success": "Transazione di sottoscrizione inviata con successo!"
+  },
+  "subs": {
+    "plan_identity": "Identità Piano",
+    "valid_until": "Valido Fino Al",
+    "available_pool": "Pool Disponibile",
+    "select_node_hint": "Seleziona un nodo dalla lista per abilitare la connessione",
+    "no_nodes_for_sub": "Nessun nodo trovato per questo pool di abbonamento.",
+    "select_sub_hint": "Seleziona un abbonamento per gestire l'accesso e connetterti ai nodi.",
+    "details_title": "Dettagli Abbonamento",
+    "title": "I miei Abbonamenti",
+    "active": "Attivo",
+    "expires": "Scade",
+    "quota": "Quota",
+    "connect": "Connetti",
+    "no_subs": "Nessun abbonamento attivo trovato.",
+    "nodes_in_plan": "Nodi disponibili nel piano",
+    "connected": "connesso",
+    "renew": "Rinnova",
+    "cancel": "Annulla",
+    "sub_id": "Sub #{{id}}"
   },
   "filters": {
     "title": "Filtri Globo",
@@ -266,7 +316,7 @@
     "per_hr": "Per Ora",
     "indicative_prices": "Prezzi indicativi dalla cache API.",
     "support_project": "Supporta lo sviluppo del progetto",
-    "support_desc": "Aggiungi il 10% ({{amount}} DVPN) a questa transazione per supportare il progetto Sentinel dVPN Client. Il tuo contributo ci aiuta a mantenere e migliorare questa app!",
+    "support_desc": "Aggiungi il 10% ({{amount}} DVPN) a questa transazione per supportare il progetto ChibaTunnel. Il tuo contributo ci aiuta a mantenere e migliorare questa app!",
     "subscription_type": "Tipo Sottoscrizione",
     "gigabytes": "Gigabyte",
     "hours": "Ore",
@@ -311,5 +361,24 @@
       "tun2socks": "Richiesto per il supporto V2Ray a livello di sistema via interfaccia TUN."
     },
     "wintun_missing": "Requisito Windows: posiziona 'wintun.dll' nella stessa cartella di tun2socks.exe."
+  },
+  "renewal": {
+    "title": "Politica di Rinnovo Automatico",
+    "policy_0": "Non rinnovare",
+    "policy_1": "Solo se il prezzo scende",
+    "policy_2": "Se il prezzo scende o rimane uguale",
+    "policy_3": "Solo se il prezzo è invariato",
+    "policy_4": "Solo se il prezzo cambia",
+    "policy_5": "Solo se il prezzo aumenta",
+    "policy_6": "Se il prezzo aumenta o rimane uguale",
+    "policy_7": "Rinnova sempre",
+    "desc_0": "L'abbonamento scadrà al termine del periodo.",
+    "desc_1": "Ti protegge dagli aumenti di prezzo. Rinnova solo se il provider abbassa il prezzo.",
+    "desc_2": "Protezione standard. Rinnova solo se il provider non alza il prezzo.",
+    "desc_3": "Rinnova solo se viene mantenuto il prezzo esatto.",
+    "desc_7": "Rinnova indipendentemente dalle variazioni di prezzo del provider o dell'oracolo.",
+    "desc_other": "Politica avanzata basata sull'andamento dei prezzi.",
+    "update_btn": "Aggiorna Politica",
+    "updating": "Aggiornamento..."
   }
 }

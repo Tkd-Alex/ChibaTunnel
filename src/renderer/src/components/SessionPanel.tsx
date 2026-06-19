@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChainSession, ApiNode } from '../types'
+import { ChainSession, ApiNode, ApiSubscription, ApiPlan } from '../types'
 import { countryToIsoCode } from '../utils'
 import ConfirmModal from './ConfirmModal'
 
-import { Hexagon, ArrowDown, ArrowUp, X, Play } from 'lucide-react'
+import { Hexagon, ArrowDown, ArrowUp, X, Play, Receipt, CreditCard } from 'lucide-react'
 
 function fmtBytes(s?: string | null): string {
   const n = parseInt(s ?? '0', 10)
@@ -93,17 +93,41 @@ function UsageProgress({ session }: { session: ChainSession }) {
 
 interface Props {
   nodes?: ApiNode[]
+  subscriptions?: ApiSubscription[]
+  plans?: ApiPlan[]
+  initialSessions?: ChainSession[]
+  loadingSessions?: boolean
+  onRefreshSessions?: () => void
   onConnectSession?: (nodeAddress: string, sessionId: number) => void
 }
 
-export default function SessionPanel({ nodes = [], onConnectSession }: Props) {
+export default function SessionPanel({ 
+  nodes = [], 
+  subscriptions = [], 
+  plans = [], 
+  initialSessions = [],
+  loadingSessions = false,
+  onRefreshSessions,
+  onConnectSession 
+}: Props) {
   const { t } = useTranslation()
-  const [sessions,   setSessions]   = useState<ChainSession[]>([])
-  const [loading,    setLoading]    = useState(false)
-  const [error,      setError]      = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [cancelling, setCancelling] = useState<number | null>(null)
   const [connecting, setConnecting] = useState<number | null>(null)
   const [confirmId, setConfirmId]   = useState<number | null>(null)
+  
+  // Create a local wrapper around the passed sessions if we need to remove them optimistically
+  const [localSessions, setLocalSessions] = useState<ChainSession[]>(initialSessions)
+
+  useEffect(() => {
+    setLocalSessions(initialSessions)
+  }, [initialSessions])
+
+  function getSessionType(s: ChainSession): 'sub' | 'direct' {
+    const hasPrice = s.price && parseInt(s.price.quoteValue) > 0;
+    if (!hasPrice) return 'sub';
+    return 'direct';
+  }
 
   function statusInfo(s: number): { label: string; cls: string } {
     switch (s) {
@@ -114,17 +138,12 @@ export default function SessionPanel({ nodes = [], onConnectSession }: Props) {
     }
   }
 
-  const load = useCallback(async () => {
-    setLoading(true); setError(null)
-    try {
-      const res = await window.api.fetchSessions() as { success: boolean; sessions: ChainSession[]; error?: string }
-      if (res.success) setSessions((res.sessions ?? []).filter(s => typeof s.id === 'number'))
-      else setError(t('sessions.fetch_error'))
-    } catch (e) { setError(String(e)) }
-    finally { setLoading(false) }
-  }, [t])
-
-  useEffect(() => { load() }, [load])
+  const load = useCallback(() => {
+    if (onRefreshSessions) {
+      setError(null)
+      onRefreshSessions()
+    }
+  }, [onRefreshSessions])
 
   useEffect(() => {
     const unsub = window.api.onWalletChanged(() => {
@@ -138,12 +157,16 @@ export default function SessionPanel({ nodes = [], onConnectSession }: Props) {
     setConfirmId(null); setCancelling(id)
     try {
       const res = await window.api.cancelSession(id) as { success: boolean; error?: string }
-      if (res.success) setSessions(s => s.filter(x => x.id !== id))
-      else setError(`${t('sessions.fetch_error')} #${id}: ${res.error}`)
+      if (res.success) {
+        setLocalSessions(s => s.filter(x => x.id !== id))
+        if (onRefreshSessions) onRefreshSessions()
+      } else {
+        setError(`${t('sessions.fetch_error')} #${id}: ${res.error}`)
+      }
     } finally { setCancelling(null) }
   }
 
-  const sessionToEnd = sessions.find(s => s.id === confirmId)
+  const sessionToEnd = localSessions.find(s => s.id === confirmId)
 
   return (
     <div className="panel-container">
@@ -169,26 +192,26 @@ export default function SessionPanel({ nodes = [], onConnectSession }: Props) {
       <div className="panel-header">
         <div>
           <div className="panel-title">{t('sessions.title')}</div>
-          <div className="panel-sub">{t('sessions.sub', { active: sessions.filter(s => s.status === 1).length, inactive: sessions.filter(s => s.status !== 1).length })}</div>
+          <div className="panel-sub">{t('sessions.sub', { active: localSessions.filter(s => s.status === 1).length, inactive: localSessions.filter(s => s.status !== 1).length })}</div>
         </div>
-        <button className="btn btn-secondary btn-sm" onClick={load} disabled={loading}>{loading ? <><div className="spinner" style={{ width: 11, height: 11 }} /> {t('common.loading_simple')}</> : `↻ ${t('common.refresh')}`}</button>
+        <button className="btn btn-secondary btn-sm" onClick={load} disabled={loadingSessions}>{loadingSessions ? <><div className="spinner" style={{ width: 11, height: 11 }} /> {t('common.loading_simple')}</> : `↻ ${t('common.refresh')}`}</button>
       </div>
 
       {error && <div className="error-box"><div className="error-label">{t('common.error')}</div>{error}</div>}
 
-      {loading && sessions.length === 0 ? (
+      {loadingSessions && localSessions.length === 0 ? (
         <div className="empty-state">
           <div className="spinner" style={{ width: 32, height: 32 }} />
           <div className="empty-state-text">{t('sessions.fetching')}</div>
         </div>
-      ) : !loading && !error && sessions.length === 0 ? (
+      ) : !loadingSessions && !error && localSessions.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon"><Hexagon size={48} opacity={0.2} /></div>
           <div className="empty-state-text">{t('sessions.no_sessions')}</div>
         </div>
       ) : null}
 
-      {sessions.length > 0 && (
+      {localSessions.length > 0 && (
         <div className="sessions-table-wrapper">
           <table className="sessions-table">
             <thead>
@@ -197,12 +220,32 @@ export default function SessionPanel({ nodes = [], onConnectSession }: Props) {
               </tr>
             </thead>
             <tbody>
-              {sessions.map(s => {
+              {localSessions.map(s => {
                 const st = statusInfo(s.status); const busy = cancelling === s.id; const isHourly = s.maxDurationSecs > 0
                 const node = nodes.find(n => n.address === s.nodeAddress)
+                const type = getSessionType(s)
                 return (
                   <tr key={s.id}>
-                    <td style={{ color: 'var(--cyan)', fontWeight: 700 }}>#{s.id}</td>
+                    <td style={{ color: 'var(--cyan)', fontWeight: 700 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <span>#{s.id}</span>
+                        <span style={{ 
+                          fontSize: '8px', 
+                          padding: '1px 4px', 
+                          width: 'fit-content',
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: 4,
+                          borderRadius: '4px',
+                          background: type === 'sub' ? 'rgba(6, 182, 212, 0.1)' : 'rgba(156, 163, 175, 0.1)',
+                          color: type === 'sub' ? 'var(--cyan)' : 'var(--text-3)',
+                          border: `1px solid ${type === 'sub' ? 'rgba(6, 182, 212, 0.2)' : 'rgba(156, 163, 175, 0.2)'}`
+                        }}>
+                          {type === 'sub' ? <CreditCard size={8} /> : <Receipt size={8} />}
+                          {type === 'sub' ? 'SUB' : 'DIRECT'}
+                        </span>
+                      </div>
+                    </td>
                     <td><span className={`tag ${st.cls}`}>{st.label}</span></td>
                     <td>
                       {node ? (

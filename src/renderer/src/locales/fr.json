@@ -1,5 +1,7 @@
 {
   "common": {
+    "selected": "SÉLECTIONNÉ",
+    "never": "Jamais",
     "loading": "INITIALISATION...",
     "fetching_nodes": "Récupération des nœuds...",
     "refresh": "Actualiser",
@@ -37,8 +39,56 @@
   "tabs": {
     "globe": "Globe",
     "nodes": "Nœuds",
+    "plans": "Plans",
+    "my_subs": "Mes Abos",
     "sessions": "Sessions",
     "manage": "Gérer"
+  },
+  "plans": {
+    "analyzing": "Analyse des forfaits réseau...",
+    "filtering": "Filtrage des forfaits actifs avec nœuds disponibles.",
+    "no_nodes_found": "Aucun forfait actif avec nœuds trouvé.",
+    "try_changing_rpc": "Essayez de changer de RPC ou d'actualiser la liste.",
+    "retry_scan": "Réessayer l'analyse du réseau",
+    "search_placeholder": "Rechercher un fournisseur ou un ID...",
+    "show_private": "Afficher les forfaits privés",
+    "details_title": "Détails du forfait",
+    "subscribe_for": "S'ABONNER POUR {{amount}} {{denom}}",
+    "available": "Disponible",
+    "no_nodes_for_plan": "Aucun nœud trouvé pour ce forfait.",
+    "select_plan_hint": "Sélectionnez un forfait pour voir ses caractéristiques et les nœuds disponibles.",
+    "title": "Plans d'abonnement",
+    "by": "par",
+    "nodes": "nœuds",
+    "days": "jours",
+    "subscribe": "S'abonner",
+    "fetching": "Récupération des plans...",
+    "details": "Détails",
+    "price_per_month": "{{amount}} / mois",
+    "no_plans": "Aucun plan actif trouvé.",
+    "confirm_sub_title": "S'abonner au plan ?",
+    "confirm_sub_msg": "Êtes-vous sûr de vouloir vous abonner au Plan #{{id}} ? Cela diffusera une transaction sur la chaîne.",
+    "subscribe_success": "Transaction d'abonnement envoyée avec succès !"
+  },
+  "subs": {
+    "plan_identity": "Identité du forfait",
+    "valid_until": "Valable jusqu'au",
+    "available_pool": "Pool disponible",
+    "select_node_hint": "Sélectionnez un nœud dans la liste pour activer la connexion",
+    "no_nodes_for_sub": "Aucun nœud trouvé pour ce pool d'abonnement.",
+    "select_sub_hint": "Sélectionnez un abonnement pour gérer votre accès et vous connecter aux nœuds.",
+    "details_title": "Détails de l'abonnement",
+    "title": "Mes Abonnements",
+    "active": "Actif",
+    "expires": "Expire le",
+    "quota": "Quota",
+    "connect": "Connecter",
+    "no_subs": "Aucun abonnement actif trouvé.",
+    "nodes_in_plan": "Nœuds disponibles dans le plan",
+    "connected": "connecté",
+    "renew": "Renouveler",
+    "cancel": "Annuler",
+    "sub_id": "Abo #{{id}}"
   },
   "filters": {
     "title": "Filtres du Globe",
@@ -266,7 +316,7 @@
     "per_hr": "Par Heure",
     "indicative_prices": "Prix indicatifs du cache API.",
     "support_project": "Soutenir le développement du projet",
-    "support_desc": "Ajoutez 10% ({{amount}} DVPN) à cette transaction per soutenir le projet Sentinel dVPN Client. Votre contribution nous aide à maintenir et améliorer cette application !",
+    "support_desc": "Ajoutez 10% ({{amount}} DVPN) à cette transaction per soutenir le projet ChibaTunnel. Votre contribution nous aide à maintenir et améliorer cette application !",
     "subscription_type": "Type d'abonnement",
     "gigabytes": "Gigaoctets",
     "hours": "Heures",
@@ -311,5 +361,24 @@
       "tun2socks": "Requis pour le support V2Ray système via interface TUN."
     },
     "wintun_missing": "Condition Windows : Placez 'wintun.dll' in le même dossier que tun2socks.exe."
+  },
+  "renewal": {
+    "title": "Politique de Renouvellement Automatique",
+    "policy_0": "Ne pas renouveler",
+    "policy_1": "Uniquement si le prix baisse",
+    "policy_2": "Si le prix baisse ou reste le même",
+    "policy_3": "Uniquement si le prix reste inchangé",
+    "policy_4": "Uniquement si le prix change",
+    "policy_5": "Uniquement si le prix augmente",
+    "policy_6": "Si le prix augmente ou reste le même",
+    "policy_7": "Toujours renouveler",
+    "desc_0": "L'abonnement expirera à la fin de la période.",
+    "desc_1": "Vous protège des augmentations de prix. Renouvelle uniquement si le fournisseur baisse le prix.",
+    "desc_2": "Protection standard. Renouvelle uniquement si le fournisseur n'augmente pas le prix.",
+    "desc_3": "Renouvelle uniquement si le prix exact est maintenu.",
+    "desc_7": "Renouvelle indépendamment des changements de prix du fournisseur ou de l'oracle.",
+    "desc_other": "Politique avancée basée sur le mouvement des prix.",
+    "update_btn": "Mettre à jour la politique",
+    "updating": "Mise à jour..."
   }
 }

@@ -1,5 +1,7 @@
 {
   "common": {
+    "selected": "AUSGEWÄHLT",
+    "never": "Niemals",
     "loading": "INITIALISIERUNG...",
     "fetching_nodes": "Knoten werden abgerufen...",
     "refresh": "Aktualisieren",
@@ -37,8 +39,56 @@
   "tabs": {
     "globe": "Globus",
     "nodes": "Knoten",
+    "plans": "Pläne",
+    "my_subs": "Meine Abos",
     "sessions": "Sitzungen",
     "manage": "Verwalten"
+  },
+  "plans": {
+    "analyzing": "Netzwerkpläne werden analysiert...",
+    "filtering": "Filterung nach aktiven Plänen mit verfügbaren Knoten.",
+    "no_nodes_found": "Keine aktiven Pläne mit Knoten gefunden.",
+    "try_changing_rpc": "Versuche, den RPC zu ändern oder die Liste zu aktualisieren.",
+    "retry_scan": "Netzwerk-Scan wiederholen",
+    "search_placeholder": "Anbieter oder ID suchen...",
+    "show_private": "Private Pläne anzeigen",
+    "details_title": "Plan-Details",
+    "subscribe_for": "ABONNIEREN FÜR {{amount}} {{denom}}",
+    "available": "Verfügbar",
+    "no_nodes_for_plan": "Keine Knoten für diesen Plan gefunden.",
+    "select_plan_hint": "Wähle einen Plan, um seine Eigenschaften und verfügbaren Knoten anzuzeigen.",
+    "title": "Abonnement-Pläne",
+    "by": "von",
+    "nodes": "Knoten",
+    "days": "Tage",
+    "subscribe": "Abonnieren",
+    "fetching": "Pläne werden abgerufen...",
+    "details": "Details",
+    "price_per_month": "{{amount}} / Monat",
+    "no_plans": "Keine aktiven Pläne gefunden.",
+    "confirm_sub_title": "Plan abonnieren?",
+    "confirm_sub_msg": "Sind Sie sicher, dass Sie Plan #{{id}} abonnieren möchten? Dies wird eine On-Chain-Transaktion senden.",
+    "subscribe_success": "Abonnement-Transaktion erfolgreich gesendet!"
+  },
+  "subs": {
+    "plan_identity": "Plan-Identität",
+    "valid_until": "Gültig bis",
+    "available_pool": "Verfügbarer Pool",
+    "select_node_hint": "Wähle einen Knoten aus der Liste, um die Verbindung zu aktivieren",
+    "no_nodes_for_sub": "Keine Knoten für diesen Abonnement-Pool gefunden.",
+    "select_sub_hint": "Wähle ein Abonnement, um deinen Zugang zu verwalten und dich mit Knoten zu verbinden.",
+    "details_title": "Abonnement-Details",
+    "title": "Meine Abonnements",
+    "active": "Aktiv",
+    "expires": "Läuft ab",
+    "quota": "Kontingent",
+    "connect": "Verbinden",
+    "no_subs": "Keine aktiven Abonnements gefunden.",
+    "nodes_in_plan": "Verfügbare Knoten im Plan",
+    "connected": "verbunden",
+    "renew": "Erneuern",
+    "cancel": "Abbrechen",
+    "sub_id": "Abo #{{id}}"
   },
   "filters": {
     "title": "Globus-Filter",
@@ -266,7 +316,7 @@
     "per_hr": "Pro Stunde",
     "indicative_prices": "Richtpreise aus dem API-Cache.",
     "support_project": "Projektentwicklung unterstützen",
-    "support_desc": "Fügen Sie dieser Transaktion 10% ({{amount}} DVPN) hinzu, um das Sentinel dVPN Client-Projekt zu unterstützen. Ihr Beitrag hilft uns, diese App zu warten und zu verbessern!",
+    "support_desc": "Fügen Sie dieser Transaktion 10% ({{amount}} DVPN) hinzu, um das ChibaTunnel-Projekt zu unterstützen. Ihr Beitrag hilft uns, diese App zu warten und zu verbessern!",
     "subscription_type": "Abonnement-Typ",
     "gigabytes": "Gigabyte",
     "hours": "Stunden",
@@ -311,5 +361,24 @@
       "tun2socks": "Erforderlich für systemweite V2Ray-Unterstützung via TUN-Schnittstelle."
     },
     "wintun_missing": "Windows-Anforderung: Kopieren Sie 'wintun.dll' in denselben Ordner wie tun2socks.exe."
+  },
+  "renewal": {
+    "title": "Automatische Verlängerungsrichtlinie",
+    "policy_0": "Nicht verlängern",
+    "policy_1": "Nur wenn der Preis sinkt",
+    "policy_2": "Wenn der Preis sinkt oder gleich bleibt",
+    "policy_3": "Nur wenn der Preis unverändert bleibt",
+    "policy_4": "Nur wenn sich der Preis ändert",
+    "policy_5": "Nur wenn der Preis steigt",
+    "policy_6": "Wenn der Preis steigt oder gleich bleibt",
+    "policy_7": "Immer verlängern",
+    "desc_0": "Das Abonnement läuft am Ende der Laufzeit ab.",
+    "desc_1": "Schützt Sie vor Preiserhöhungen. Verlängert sich nur, wenn der Anbieter den Preis senkt.",
+    "desc_2": "Standardschutz. Verlängert sich nur, wenn der Anbieter den Preis nicht erhöht.",
+    "desc_3": "Verlängert sich nur, wenn der genaue Preis beibehalten wird.",
+    "desc_7": "Verlängert sich unabhängig von Preisänderungen durch den Anbieter oder das Orakel.",
+    "desc_other": "Erweiterte Richtlinie basierend auf Preisbewegungen.",
+    "update_btn": "Richtlinie aktualisieren",
+    "updating": "Aktualisiere..."
   }
 }

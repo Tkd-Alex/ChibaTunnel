@@ -20,5 +20,5 @@ Adding `stdio: 'ignore'` + `detached: true` to `spawn` broke UAC entirely.
 4. Use `shell: true` in `spawn` on Windows — more robust for UAC elevation
 
 ## Current Status
-This entire `execPrivileged` approach for transparent mode is **superseded** by `SentinelHelper`.
+This entire `execPrivileged` approach for transparent mode is **superseded** by `ChibaTunnelHelper`.
 `execPrivileged` now only handles WireGuard one-shot commands on Windows and macOS.

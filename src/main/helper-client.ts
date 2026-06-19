@@ -1,7 +1,7 @@
 /**
  * helper-client.ts
  *
- * Electron main-process client for the sentinel-helper Windows Service.
+ * Electron main-process client for the chibatunnel-helper Windows Service.
  * Provides a single async function, sendToHelper(), that opens a Named Pipe
  * connection, sends a JSON command, waits for the JSON response, and closes
  * the connection. The call is fully typed and includes a configurable timeout
@@ -26,8 +26,8 @@ import net from 'net'
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Must exactly match PIPE_PATH in sentinel-helper.ts. */
-const PIPE_PATH = '\\\\.\\pipe\\sentinel-helper'
+/** Must exactly match PIPE_PATH in chibatunnel-helper.ts. */
+const PIPE_PATH = '\\\\.\\pipe\\chibatunnel-helper'
 
 const HELPER_HOST = '127.0.0.1'
 const HELPER_PORT = 47391
@@ -70,7 +70,7 @@ export interface HelperResponse {
 // ---------------------------------------------------------------------------
 
 /**
- * Opens a Named Pipe connection to the sentinel-helper service, sends `command`
+ * Opens a Named Pipe connection to the chibatunnel-helper service, sends `command`
  * as a newline-terminated JSON string, reads the single-line JSON response, and
  * returns a parsed HelperResponse. The pipe connection is closed after each call.
  *
@@ -119,8 +119,8 @@ export function sendToHelper(
         status: 'error',
         error:
           `Helper did not respond within ${timeoutMs} ms. ` +
-          'In development: make sure sentinel-helper is running in an elevated terminal. ' +
-          'In production: the SentinelHelper Windows Service may be stopped.',
+          'In development: make sure chibatunnel-helper is running in an elevated terminal. ' +
+          'In production: the ChibaTunnelHelper Service may be stopped.',
       })
     }, timeoutMs)
 
@@ -178,14 +178,14 @@ export function sendToHelper(
         finish({
           status: 'error',
           error:
-            'Named Pipe not found. The SentinelHelper service is not running. ' +
+            'Named Pipe not found. The ChibaTunnelHelper service is not running. ' +
             'In development: start it with "npm run dev:helper" in an elevated terminal.',
         })
       } if (err.code === 'ECONNREFUSED') {
         finish({
           status: 'error',
           error:
-            'Connection refused on 127.0.0.1:47391. The SentinelHelper service is not running. ' +
+            'Connection refused on 127.0.0.1:47391. The ChibaTunnelHelper service is not running. ' +
             'In development: start it with "npm run dev:helper" in an elevated terminal.',
         })
       } else {

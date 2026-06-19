@@ -13,7 +13,10 @@ import SessionPanel       from './components/SessionPanel'
 import SettingsPanel      from './components/SettingsPanel'
 import WalletManager      from './components/WalletManager'
 import ConfirmModal       from './components/ConfirmModal'
-import { ApiNode, NodeFilters, ConnectionState, BinaryStatus, INITIAL_CONNECTION } from './types'
+import PlansPanel         from './components/PlansPanel'
+import SubscriptionsPanel from './components/SubscriptionsPanel'
+import SplashScreen       from './components/SplashScreen'
+import { ApiNode, ApiPlan, ApiSubscription, NodeFilters, ConnectionState, BinaryStatus, INITIAL_CONNECTION } from './types'
 import { 
   Globe as GlobeIcon, 
   Hexagon, 
@@ -27,11 +30,13 @@ import {
   Heart, 
   Star, 
   Home,
-  Play
+  Play,
+  Ticket,
+  CreditCard
 } from 'lucide-react'
 
 type AppScreen = 'loading' | 'setup' | 'main'
-type Tab       = 'globe' | 'nodes' | 'sessions' | 'manage'
+type Tab       = 'globe' | 'nodes' | 'plans' | 'my_subs' | 'sessions' | 'manage'
 
 const GLOBE_DEFAULTS: NodeFilters = {
   search: '', country: '', city: '', type: '',
@@ -63,6 +68,17 @@ export default function App() {
   const [nodesLoading, setNodesLoading] = useState(false)
   const [nodesError, setNodesError]     = useState<string | null>(null)
 
+  const [plans, setPlans]               = useState<ApiPlan[]>([])
+  const [plansLoading, setPlansLoading] = useState(false)
+  const [subscriptions, setSubscriptions] = useState<ApiSubscription[]>([])
+  const [subsLoading, setSubsLoading]     = useState(false)
+  const [sessions, setSessions]         = useState<any[]>([])
+  const [sessionsLoading, setSessionsLoading] = useState(false)
+
+  const [planNodesCache, setPlanNodesCache]         = useState<Record<number, ApiNode[]>>({})
+  const [providerNamesCache, setProviderNamesCache] = useState<Record<string, string>>({})
+  const [scannedOnce, setScannedOnce]               = useState(false)
+
   const [globeFilters, setGlobeFilters] = useState<NodeFilters>(GLOBE_DEFAULTS)
   const [tableFilters, setTableFilters] = useState<NodeFilters>(TABLE_DEFAULTS)
 
@@ -71,6 +87,7 @@ export default function App() {
   const [modalNode, setModalNode]           = useState<ApiNode | null>(null)
   const [modalInfoOnly, setModalInfoOnly]   = useState(false)
   const [reuseSessionId, setReuseSessionId] = useState<number | null>(null)
+  const [reuseSubscriptionId, setReuseSubscriptionId] = useState<number | null>(null)
   
   const [showIpModal, setShowIpModal]           = useState(false)
   
@@ -106,31 +123,101 @@ export default function App() {
     finally { setNodesLoading(false) }
   }, [])
 
+  const fetchPlans = useCallback(async () => {
+    setPlansLoading(true)
+    try {
+      const res = await window.api.fetchPlans()
+      if (res.success) setPlans(res.plans as ApiPlan[])
+    } catch (e) { console.error(e) }
+    finally { setPlansLoading(false) }
+  }, [])
+
+  const fetchSubscriptions = useCallback(async () => {
+    setSubsLoading(true)
+    try {
+      const res = await window.api.fetchSubscriptions()
+      if (res.success) setSubscriptions(res.subscriptions as ApiSubscription[])
+    } catch (e) { console.error(e) }
+    finally { setSubsLoading(false) }
+  }, [])
+
+  const fetchSessions = useCallback(async () => {
+    setSessionsLoading(true)
+    try {
+      const res = await window.api.fetchSessions()
+      if (res.success) setSessions((res.sessions ?? []).filter((s: any) => typeof s.id === 'number'))
+    } catch (e) { console.error(e) }
+    finally { setSessionsLoading(false) }
+  }, [])
+
   useEffect(() => {
     async function boot() {
+      const startTime = Date.now()
       refreshIp()
-      const rpc  = await window.api.getCurrentRpc() as string
-      setCurrentRpc(rpc)
-      const bins = await window.api.checkBinaries() as BinaryStatus
-      setBinaries(bins)
-      if (!bins.wireguard || !bins.v2ray) setShowBinaryCheck(true)
-      const bms = await window.api.listBookmarks() as string[]
-      setBookmarks(bms)
-      const has = await window.api.hasMnemonic()
-      if (has) {
+      
+      const rpcPromise  = window.api.getCurrentRpc()
+      const binsPromise = window.api.checkBinaries()
+      const bmsPromise  = window.api.listBookmarks()
+      const hasMnemonicPromise = window.api.hasMnemonic()
+
+      const [rpc, bins, bms, hasMnemonic] = await Promise.all([
+        rpcPromise, binsPromise, bmsPromise, hasMnemonicPromise
+      ])
+
+      setCurrentRpc(rpc as string)
+      setBinaries(bins as BinaryStatus)
+      if (!(bins as BinaryStatus).wireguard || !(bins as BinaryStatus).v2ray) setShowBinaryCheck(true)
+      setBookmarks(bms as string[])
+
+      let nextScreen: AppScreen = 'setup'
+      
+      if (hasMnemonic) {
         const res = await window.api.loadStoredWallet()
-        if (res.success) { 
-          setCurrentRpc((res as { rpc?: string }).rpc ?? rpc)
-          setScreen('main')
-          return 
+        if (res.success) {
+          setCurrentRpc((res as { rpc?: string }).rpc ?? (rpc as string))
+          
+          // Fetch main data in background while splash is showing
+          const [nRes, pRes, sRes, sessRes] = await Promise.all([
+            window.api.fetchNodes(),
+            window.api.fetchPlans(),
+            window.api.fetchSubscriptions(),
+            window.api.fetchSessions()
+          ])
+
+          if ((nRes as any).success) setNodes((nRes as any).nodes)
+          if ((pRes as any).success) {
+            setPlans((pRes as any).plans)
+            // Heavy Background Scan (Plans analysis)
+            const planIds = (pRes as any).plans.map((p: any) => p.id)
+            const uniqueProviders = Array.from(new Set((pRes as any).plans.map((p: any) => p.provAddress))) as string[]
+            window.api.fetchProvidersBatch(uniqueProviders).then((res: any) => {
+              if (res.success) setProviderNamesCache(prev => ({ ...prev, ...res.providers }))
+            })
+            window.api.scanPlanNodes(planIds).then((res: any) => {
+              if (res.success) {
+                setPlanNodesCache(prev => ({ ...prev, ...res.nodesMap }))
+                setScannedOnce(true)
+              }
+            })
+          }
+          if ((sRes as any).success) setSubscriptions((sRes as any).subscriptions)
+          if ((sessRes as any).success) setSessions(((sessRes as any).sessions ?? []).filter((s: any) => typeof s.id === 'number'))
+
+          nextScreen = 'main'
         }
       }
-      setScreen('setup')
+
+      const elapsed = Date.now() - startTime
+      const remaining = Math.max(0, 2500 - elapsed)
+      setTimeout(() => setScreen(nextScreen), remaining)
     }
     boot()
-  }, [refreshIp])
+  }, [refreshIp]) // Removed fetch dependencies to avoid re-triggering boot
 
-  useEffect(() => { if (screen === 'main') fetchNodes() }, [screen, fetchNodes])
+  useEffect(() => { 
+    // This is now handled in boot() for the initial load, 
+    // but kept for reference if screen state changes later
+  }, [screen, fetchNodes, fetchPlans, fetchSubscriptions])
 
   useEffect(() => {
     const u1 = window.api.onVpnStatus((d: any) => {
@@ -233,9 +320,23 @@ export default function App() {
     setReuseSessionId(sid); setModalInfoOnly(false); setModalNode(target)
   }
 
+  async function handleConnectSubscription(subId: number, nodeAddr: string) {
+    let target = nodes.find(n => n.address === nodeAddr)
+    if (!target) {
+      try {
+        const res = await window.api.fetchNodeInfo(nodeAddr)
+        if (res.success) target = (res.info as any).result || res.info
+      } catch (e) { console.error('Failed to fetch node info', e) }
+    }
+    if (!target) { alert(`Node not found: ${nodeAddr}`); return }
+    setReuseSubscriptionId(subId); setModalInfoOnly(false); setModalNode(target)
+  }
+
   const tabs: Array<{ id: Tab; label: string; icon: React.ReactNode }> = [
     { id: 'globe',    label: t('tabs.globe'),    icon: <GlobeIcon size={14} /> },
     { id: 'nodes',    label: t('tabs.nodes'),    icon: <Hexagon size={14} /> },
+    { id: 'plans',    label: t('tabs.plans'),    icon: <Ticket size={14} /> },
+    { id: 'my_subs',  label: t('tabs.my_subs'),  icon: <CreditCard size={14} /> },
     { id: 'sessions', label: t('tabs.sessions'), icon: <LayoutGrid size={14} /> },
     { id: 'manage',   label: t('tabs.manage'),   icon: <Settings size={14} /> },
   ]
@@ -248,15 +349,7 @@ export default function App() {
     }
   }, [activeConnection])
 
-  if (screen === 'loading') return (
-    <div className="app-shell" dir={isRtl ? 'rtl' : 'ltr'}>
-      <TitleBar />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20 }}>
-        <div className="spinner" style={{ width: 36, height: 36 }} />
-        <div style={{ fontSize: 11, color: 'var(--text-3)', letterSpacing: '0.2em' }}>{t('common.loading')}</div>
-      </div>
-    </div>
-  )
+  if (screen === 'loading') return <SplashScreen />
 
   if (screen === 'setup') return (
     <div className="app-shell" dir={isRtl ? 'rtl' : 'ltr'}>
@@ -367,7 +460,54 @@ export default function App() {
               </div>
             )}
 
-            {activeTab === 'sessions' && <SessionPanel nodes={nodes} onConnectSession={handleConnectSession} />}
+            {activeTab === 'plans' && (
+              <PlansPanel 
+                plans={plans} 
+                loading={plansLoading} 
+                globalNodes={nodes}
+                planNodesCache={planNodesCache}
+                setPlanNodesCache={setPlanNodesCache}
+                providerNamesCache={providerNamesCache}
+                setProviderNamesCache={setProviderNamesCache}
+                scannedOnce={scannedOnce}
+                setScannedOnce={setScannedOnce}
+                bookmarks={bookmarks}
+                onToggleBookmark={toggleBookmark}
+                activeNodeAddress={activeConnection?.node?.address}
+                onSelectNode={node => { setModalInfoOnly(true); setModalNode(node) }}
+                onSubscribe={() => fetchSubscriptions()} 
+              />
+            )}
+
+            {activeTab === 'my_subs' && (
+              <SubscriptionsPanel 
+                subscriptions={subscriptions} 
+                plans={plans} 
+                loading={subsLoading}
+                globalNodes={nodes}
+                providerNamesCache={providerNamesCache}
+                setProviderNamesCache={setProviderNamesCache}
+                planNodesCache={planNodesCache}
+                setPlanNodesCache={setPlanNodesCache}
+                bookmarks={bookmarks}
+                onToggleBookmark={toggleBookmark}
+                activeNodeAddress={activeConnection?.node?.address}
+                onConnect={handleConnectSubscription}
+                onUpdateSub={fetchSubscriptions}
+              />
+            )}
+
+            {activeTab === 'sessions' && (
+              <SessionPanel 
+                nodes={nodes} 
+                subscriptions={subscriptions} 
+                plans={plans} 
+                initialSessions={sessions}
+                loadingSessions={sessionsLoading}
+                onRefreshSessions={fetchSessions}
+                onConnectSession={handleConnectSession} 
+              />
+            )}
 
             {activeTab === 'manage' && (
               <div className="manage-tab-layout">
@@ -428,12 +568,14 @@ export default function App() {
         <NodeConnectModal
           node={modalNode} bookmarked={bookmarks.includes(modalNode.address)}
           onBookmark={() => toggleBookmark(modalNode.address)}
-          onClose={() => { setModalNode(null); setModalInfoOnly(false); setReuseSessionId(null) }}
-          onConnected={state => { 
-            setActiveConnection(state); setModalNode(null); setModalInfoOnly(false); setReuseSessionId(null)
+          onClose={() => { setModalNode(null); setModalInfoOnly(false); setReuseSessionId(null); setReuseSubscriptionId(null) }}
+          onConnected={state => {
+            setActiveConnection(state); setModalNode(null); setModalInfoOnly(false); setReuseSessionId(null); setReuseSubscriptionId(null)
             setTimeout(refreshIp, 2000)
           }}
-          infoOnly={modalInfoOnly} initialSessionId={reuseSessionId ? reuseSessionId.toString() : null}
+          infoOnly={modalInfoOnly}
+          initialSessionId={reuseSessionId ? reuseSessionId.toString() : null}
+          initialSubscriptionId={reuseSubscriptionId ? reuseSubscriptionId.toString() : null}
         />
       )}
 

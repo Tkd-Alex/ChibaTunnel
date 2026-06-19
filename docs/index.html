@@ -3,250 +3,621 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sentinel dVPN — The Privacy Revolution</title>
+
+  <!-- ═══ SEO ═══════════════════════════════════════════════════════════════ -->
+  <title>ChibaTunnel — Cyberpunk Decentralized VPN | Privacy on the Blockchain</title>
+  <meta name="description" content="ChibaTunnel is a cyberpunk-inspired decentralized VPN client powered by the Sentinel Protocol. Open source, trustless, no-log, multi-platform. Privacy guaranteed by cryptography — not promises.">
+  <meta name="keywords" content="ChibaTunnel, decentralized VPN, dVPN, Sentinel Protocol, privacy, blockchain VPN, cyberpunk, open source VPN, no-log VPN, WireGuard, V2Ray, Cosmos, DePIN">
+  <meta name="author" content="Tkd-Alex">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://chibatunnel.io/">
+
+  <!-- Open Graph -->
+  <meta property="og:type"        content="website">
+  <meta property="og:url"         content="https://chibatunnel.io/">
+  <meta property="og:title"       content="ChibaTunnel — Cyberpunk Decentralized VPN">
+  <meta property="og:description" content="Open source dVPN client powered by the Sentinel blockchain. Trustless, no-log, multi-platform. Run the tunnel.">
+  <meta property="og:image"       content="https://chibatunnel.io/images/og-card.png">
+  <meta property="og:image:width"  content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:site_name"   content="ChibaTunnel">
+
+  <!-- Twitter / X Card -->
+  <meta name="twitter:card"        content="summary_large_image">
+  <meta name="twitter:site"        content="@sentinelp2p">
+  <meta name="twitter:creator"     content="@sentinelp2p">
+  <meta name="twitter:title"       content="ChibaTunnel — Cyberpunk Decentralized VPN">
+  <meta name="twitter:description" content="Open source dVPN client powered by the Sentinel blockchain. Trustless, no-log, multi-platform. Run the tunnel.">
+  <meta name="twitter:image"       content="https://chibatunnel.io/images/og-card.png">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "ChibaTunnel",
+    "applicationCategory": "SecurityApplication",
+    "operatingSystem": "Linux, Windows, macOS",
+    "description": "Cyberpunk-inspired decentralized VPN client powered by the Sentinel Protocol blockchain.",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "author": { "@type": "Person", "name": "Tkd-Alex" },
+    "url": "https://chibatunnel.io/",
+    "downloadUrl": "https://github.com/Tkd-Alex/ChibaTunnel/releases",
+    "codeRepository": "https://github.com/Tkd-Alex/ChibaTunnel"
+  }
+  </script>
+
+  <!-- ═══ ASSETS ══════════════════════════════════════════════════════════ -->
   <link rel="stylesheet" href="style.css">
-  <link rel="icon" type="image/png" href="favicon.png">
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="images/chibatunnel-icon.svg">
+  <link rel="icon" type="image/png" sizes="512x512" href="images/chibatunnel-icon-512.png">
+  <link rel="icon" type="image/png" sizes="256x256" href="images/chibatunnel-icon-256.png">
+  <link rel="apple-touch-icon" href="images/chibatunnel-icon-256.png">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
+
 <body class="app-shell">
-  <div class="background-grid"></div>
-  
-  <header class="titlebar">
-    <div class="titlebar-logo">
-      <div class="logo-mark"></div>
+  <div class="background-grid" aria-hidden="true"></div>
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       HEADER
+  ══════════════════════════════════════════════════════════════════════ -->
+  <header class="titlebar" role="banner">
+    <a class="titlebar-logo" href="/" aria-label="ChibaTunnel home">
+      <!-- Torii gate mini-logo — inline SVG scales perfectly -->
+      <svg class="logo-mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"
+           width="36" height="36" aria-hidden="true">
+        <defs>
+          <filter id="hg" x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="1.4" result="b1"/>
+            <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="b2"/>
+            <feMerge><feMergeNode in="b2"/><feMergeNode in="b1"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <filter id="hc" x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="0.8" result="b1"/>
+            <feGaussianBlur in="SourceGraphic" stdDeviation="2"   result="b2"/>
+            <feMerge><feMergeNode in="b2"/><feMergeNode in="b1"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <!-- Tunnel lines -->
+        <g filter="url(#hc)">
+          <line x1="13" y1="14" x2="20" y2="26" stroke="#00ccff" stroke-width="1.1" opacity="0.90"/>
+          <line x1="27" y1="14" x2="20" y2="26" stroke="#00ccff" stroke-width="1.1" opacity="0.90"/>
+          <line x1="15" y1="17" x2="25" y2="17" stroke="#00ccff" stroke-width="0.9" opacity="0.80"/>
+          <line x1="17" y1="20" x2="23" y2="20" stroke="#00ccff" stroke-width="0.7" opacity="0.65"/>
+          <line x1="10" y1="35" x2="20" y2="26" stroke="#00ccff" stroke-width="0.8" opacity="0.45"/>
+          <line x1="30" y1="35" x2="20" y2="26" stroke="#00ccff" stroke-width="0.8" opacity="0.45"/>
+        </g>
+        <!-- VP dot -->
+        <circle cx="20" cy="26" r="1.5" fill="#ffffff"/>
+        <!-- Kasagi (top beam) -->
+        <polygon points="4,10 6.5,6 8.5,5 31.5,5 33.5,6 36,10  36,12 33.5,8 31.5,7 8.5,7 6.5,8 4,12"
+          fill="#ff0055" filter="url(#hg)"/>
+        <!-- Nuki (lower beam) -->
+        <rect x="11" y="13" width="18" height="1.5" rx="0.5" fill="#ff0055" filter="url(#hg)"/>
+        <!-- Pillars -->
+        <rect x="11" y="14.5" width="2.5" height="20" rx="0.5" fill="#ff0055" filter="url(#hg)"/>
+        <rect x="26.5" y="14.5" width="2.5" height="20" rx="0.5" fill="#ff0055" filter="url(#hg)"/>
+      </svg>
+
       <div class="logo-container">
-        <div class="logo-text">SENTINEL dVPN</div>
-        <div class="logo-sub">DECENTRALIZED NODE NETWORK</div>
+        <div class="logo-text">CHIBATUNNEL</div>
+        <div class="logo-sub">DECENTRALIZED · ENCRYPTED · FREE</div>
       </div>
-    </div>
+    </a>
+
     <div class="nav-container">
-      <button class="menu-toggle" aria-label="Toggle Menu">
+      <button class="menu-toggle" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="nav-links">
         <span></span>
         <span></span>
         <span></span>
       </button>
-      <nav class="nav-links">
-        <a href="#features" class="nav-link">Features</a>
-        <a href="#protocol" class="nav-link">Protocol</a>
+      <nav class="nav-links" id="nav-links" role="navigation" aria-label="Main navigation">
+        <a href="#features"  class="nav-link">Features</a>
+        <a href="#billing"   class="nav-link">Billing</a>
+        <a href="#protocol"  class="nav-link">Protocol</a>
         <a href="#validator" class="nav-link">Validator</a>
-        <a href="https://github.com/Tkd-Alex/sentinel-dvpn-client" class="btn btn-sm btn-secondary">GitHub</a>
+        <a href="https://github.com/Tkd-Alex/ChibaTunnel"
+           class="btn btn-sm btn-secondary" target="_blank" rel="noopener noreferrer"
+           aria-label="View ChibaTunnel source code on GitHub">GitHub ↗</a>
       </nav>
     </div>
   </header>
 
-  <main class="content-area">
-    <section class="hero">
+  <!-- ══════════════════════════════════════════════════════════════════════
+       MAIN CONTENT
+  ══════════════════════════════════════════════════════════════════════ -->
+  <main class="content-area" id="main-content">
+
+    <!-- ── HERO ──────────────────────────────────────────────────────────── -->
+    <section class="hero" aria-labelledby="hero-heading">
       <div class="hero-content">
-        <h1 class="glitch-text" data-text="SENTINEL dVPN">SENTINEL dVPN</h1>
+        <div class="hero-eyebrow">
+          <span class="eyebrow-dot"></span>
+          <span>dVPN · BLOCKCHAIN ENCRYPTED · OPEN SOURCE</span>
+        </div>
+        <h1 class="scramble-title" data-text="CHIBATUNNEL" id="hero-heading"></h1>
         <p class="hero-sub">
-          The next generation of privacy. Multi-platform, multi-language, and fully decentralized. 
-          Connect to a global marketplace of community-hosted nodes with absolute anonymity.
+          Enter the tunnel. Multi-platform, multi-language, fully decentralized.
+          Connect to a global mesh of community-hosted nodes with cryptographic anonymity —
+          no central authority, no logs, no compromise.
         </p>
         <div class="hero-actions">
-          <a href="https://github.com/Tkd-Alex/sentinel-dvpn-client/releases" class="btn btn-primary btn-lg">Download for Desktop</a>
+          <a href="https://github.com/Tkd-Alex/ChibaTunnel/releases"
+             class="btn btn-primary btn-lg" target="_blank" rel="noopener noreferrer">
+            ↓ Download Free
+          </a>
           <a href="#features" class="btn btn-cyan btn-lg">Learn More</a>
         </div>
-        <div class="hero-platform-tags">
-          <span class="tag">Linux</span>
-          <span class="tag">Windows</span>
-          <span class="tag">macOS</span>
-          <span class="tag feature">Multilingual Support</span>
-        </div>
-      </div>
-      <div class="hero-preview">
-        <div class="hero-image-container">
-          <img src="images/globe.png" alt="Sentinel dVPN Globe Interface" class="hero-screenshot">
+        <div class="hero-platform-tags" role="list" aria-label="Supported platforms">
+          <span class="tag" role="listitem">Linux</span>
+          <span class="tag" role="listitem">Windows</span>
+          <span class="tag" role="listitem">macOS</span>
+          <span class="tag feature" role="listitem">Multilingual</span>
+          <span class="tag magenta" role="listitem">Open Source</span>
         </div>
       </div>
     </section>
 
-    <section id="features" class="features">
-      <h2 class="section-title">The dVPN Advantage</h2>
+    <!-- ── STATS BAR ──────────────────────────────────────────────────────── -->
+    <div class="stats-bar" aria-label="Network statistics">
+      <div class="stat-item">
+        <span class="stat-num">100%</span>
+        <span class="stat-desc">Open Source</span>
+      </div>
+      <div class="stat-sep" aria-hidden="true">·</div>
+      <div class="stat-item">
+        <span class="stat-num">0</span>
+        <span class="stat-desc">Logs Stored</span>
+      </div>
+      <div class="stat-sep" aria-hidden="true">·</div>
+      <div class="stat-item">
+        <span class="stat-num">3</span>
+        <span class="stat-desc">Platforms</span>
+      </div>
+      <div class="stat-sep" aria-hidden="true">·</div>
+      <div class="stat-item">
+        <span class="stat-num">∞</span>
+        <span class="stat-desc">Global Nodes</span>
+      </div>
+    </div>
+
+    <!-- ── FEATURES ───────────────────────────────────────────────────────── -->
+    <section id="features" class="features" aria-labelledby="features-heading">
+      <h2 class="section-title" id="features-heading">The dVPN Advantage</h2>
       <p class="section-subtitle">Why settle for a centralized VPN when you can have a decentralized one?</p>
       <div class="features-grid">
-        <div class="feature-card">
-          <div class="feature-icon">🛡️</div>
+
+        <article class="feature-card">
+          <div class="feature-icon" aria-hidden="true">⛩️</div>
           <h3>Decentralized</h3>
-          <p>Not owned or operated by any single actor. Authority is distributed across the blockchain to various node owners and validators.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">🔍</div>
+          <p>No single point of control or failure. Authority is distributed across the blockchain — to node owners, validators, and the protocol itself.</p>
+        </article>
+
+        <article class="feature-card">
+          <div class="feature-icon" aria-hidden="true">🔍</div>
           <h3>Open Source</h3>
-          <p>Transparent code reviewed by thousands. Open-sourcing substantially decreases the risk of security breaches and backdoors.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">🚫</div>
-          <h3>No Log Policy</h3>
-          <p>Sentinel is a trustless technology. It's impossible for us to log your activity—your privacy is guaranteed by the protocol.</p>
-        </div>
+          <p>Every line of code is public and auditable. Open sourcing substantially decreases the risk of backdoors and hidden surveillance.</p>
+        </article>
+
+        <article class="feature-card">
+          <div class="feature-icon" aria-hidden="true">🔒</div>
+          <h3>Zero Logs</h3>
+          <p>ChibaTunnel is a trustless technology. It is architecturally impossible to log your activity — privacy is enforced by cryptography, not policy.</p>
+        </article>
+
+        <article class="feature-card">
+          <div class="feature-icon" aria-hidden="true">⚡</div>
+          <h3>WireGuard & V2Ray</h3>
+          <p>Choose between high-performance kernel-level tunnels (WireGuard) or advanced traffic-obfuscation proxy protocols (V2Ray) per connection.</p>
+        </article>
+
+        <article class="feature-card">
+          <div class="feature-icon" aria-hidden="true">🌐</div>
+          <h3>Pay Per Use</h3>
+          <p>Flexible billing on-chain — pay by data consumed or time connected. No subscriptions, no lock-in. Your wallet, your rules.</p>
+        </article>
+
+        <article class="feature-card">
+          <div class="feature-icon" aria-hidden="true">🛰️</div>
+          <h3>Cosmos IBC</h3>
+          <p>Natively interoperable with the entire Cosmos ecosystem via IBC. Seamless cross-chain token transfers and multi-chain identity.</p>
+        </article>
+
       </div>
     </section>
 
-    <section class="comparison-section">
-      <h2 class="section-title">VPN vs dVPN</h2>
-      <div class="comparison-grid">
-        <div class="comp-head">TRADITIONAL VPN</div>
-        <div class="comp-head highlight">SENTINEL dVPN</div>
-        
-        <div class="comp-label">TRUST MODEL</div>
-        <div class="comp-cell">Trust a single provider</div>
-        <div class="comp-cell">Trustless (Blockchain)</div>
+    <!-- ── COMPARISON ─────────────────────────────────────────────────────── -->
+    <section class="comparison-section" aria-labelledby="comparison-heading">
+      <h2 class="section-title" id="comparison-heading">VPN vs dVPN</h2>
+      <div class="comparison-grid" role="table" aria-label="Comparison between traditional VPN and ChibaTunnel dVPN">
 
-        <div class="comp-label">DATA LOGS</div>
-        <div class="comp-cell">Possible (Centralized logs)</div>
-        <div class="comp-cell">Impossible (No central entity)</div>
+        <div class="comp-head" role="columnheader">TRADITIONAL VPN</div>
+        <div class="comp-head highlight" role="columnheader">CHIBATUNNEL dVPN</div>
 
-        <div class="comp-label">INFRASTRUCTURE</div>
-        <div class="comp-cell">Company-owned servers</div>
-        <div class="comp-cell">P2P Community Nodes</div>
+        <div class="comp-label" role="rowheader">TRUST MODEL</div>
+        <div class="comp-cell neg" role="cell"><span class="comp-x">✕</span> Trust a single provider</div>
+        <div class="comp-cell pos" role="cell"><span class="comp-check">✓</span> Trustless — blockchain enforced</div>
 
-        <div class="comp-label">CODE TRANSPARENCY</div>
-        <div class="comp-cell">Proprietary / Closed</div>
-        <div class="comp-cell">100% Open Source</div>
+        <div class="comp-label" role="rowheader">DATA LOGS</div>
+        <div class="comp-cell neg" role="cell"><span class="comp-x">✕</span> Possible — centralized servers</div>
+        <div class="comp-cell pos" role="cell"><span class="comp-check">✓</span> Impossible — no central entity</div>
+
+        <div class="comp-label" role="rowheader">INFRASTRUCTURE</div>
+        <div class="comp-cell neg" role="cell"><span class="comp-x">✕</span> Company-owned servers</div>
+        <div class="comp-cell pos" role="cell"><span class="comp-check">✓</span> P2P community node mesh</div>
+
+        <div class="comp-label" role="rowheader">CODE TRANSPARENCY</div>
+        <div class="comp-cell neg" role="cell"><span class="comp-x">✕</span> Proprietary / closed source</div>
+        <div class="comp-cell pos" role="cell"><span class="comp-check">✓</span> 100% open source, auditable</div>
+
+        <div class="comp-label" role="rowheader">CENSORSHIP RESISTANCE</div>
+        <div class="comp-cell neg" role="cell"><span class="comp-x">✕</span> Can be shut down or seized</div>
+        <div class="comp-cell pos" role="cell"><span class="comp-check">✓</span> No shutdown vector — decentralized</div>
+
       </div>
     </section>
 
-    <section id="protocol" class="protocol-info">
-      <div class="protocol-grid">
-        <div class="protocol-text">
-          <h2 class="section-title">Powered by Sentinel Protocol</h2>
-          <p class="section-desc">
-            A layer-one P2P bandwidth marketplace DePIN blockchain built on the Cosmos SDK for maximum scalability.
+    <!-- ── BILLING MODES ──────────────────────────────────────────────── -->
+    <section id="billing" class="billing-section" aria-labelledby="billing-heading">
+      <h2 class="section-title" id="billing-heading">Choose Your Billing Mode</h2>
+      <p class="section-subtitle">Two ways to pay — one fully decentralised network</p>
+
+      <div class="billing-grid">
+
+        <!-- Pay-per-use -->
+        <div class="billing-card">
+          <div class="billing-card-header">
+            <span class="billing-icon" aria-hidden="true">⚡</span>
+            <div>
+              <h3 class="billing-title">Pay Per Use</h3>
+              <p class="billing-tagline">Pay only for what you consume</p>
+            </div>
+            <span class="billing-badge cyan">Flexible</span>
+          </div>
+
+          <p class="billing-desc">
+            Connect to any available node on the network and pay in real time —
+            billed by <strong>data consumed</strong> or <strong>time connected</strong>.
+            An on-chain escrow deposit is locked at session start and released automatically when you disconnect.
           </p>
-          <ul class="protocol-list">
-            <li><strong>WireGuard & V2Ray:</strong> Choose between high-performance kernel tunnels or advanced proxy protocols.</li>
-            <li><strong>sentinel-js-sdk:</strong> Native integration with the official JS SDK for robust, secure blockchain handshakes.</li>
-            <li><strong>Cosmos Interoperability:</strong> Seamless connection with the entire Cosmos IBC ecosystem.</li>
+
+          <ul class="billing-perks">
+            <li><span class="perk-dot cyan"></span>No subscription required</li>
+            <li><span class="perk-dot cyan"></span>Per-MB or per-hour billing</li>
+            <li><span class="perk-dot cyan"></span>Escrow auto-released on disconnect</li>
+            <li><span class="perk-dot cyan"></span>Full node marketplace access</li>
           </ul>
-          <div class="protocol-actions">
-            <a href="https://docs.sentinel.co/" class="btn btn-secondary">Read Protocol Specs</a>
+
+          <div class="billing-flow" aria-label="Pay-per-use connection flow">
+            <div class="flow-step">
+              <span class="flow-num">1</span>
+              <span class="flow-label">Choose Node</span>
+            </div>
+            <span class="flow-arrow" aria-hidden="true">→</span>
+            <div class="flow-step">
+              <span class="flow-num">2</span>
+              <span class="flow-label">Escrow Deposit</span>
+            </div>
+            <span class="flow-arrow" aria-hidden="true">→</span>
+            <div class="flow-step">
+              <span class="flow-num">3</span>
+              <span class="flow-label">Tunnel Active</span>
+            </div>
           </div>
         </div>
-        <div class="protocol-visual">
+
+        <!-- Subscription -->
+        <div class="billing-card billing-card--featured">
+          <div class="billing-card-header">
+            <span class="billing-icon" aria-hidden="true">🔑</span>
+            <div>
+              <h3 class="billing-title">Subscription Plan</h3>
+              <p class="billing-tagline">One payment, unlimited switches</p>
+            </div>
+            <span class="billing-badge magenta">Best Value</span>
+          </div>
+
+          <p class="billing-desc">
+            Subscribe to a plan once and get an <strong>on-chain allocation</strong>
+            across a curated pool of nodes. Switch between nodes freely without
+            new escrow deposits — ideal for daily drivers and power users.
+          </p>
+
+          <ul class="billing-perks">
+            <li><span class="perk-dot magenta"></span>Single up-front payment</li>
+            <li><span class="perk-dot magenta"></span>Access to a full node pool</li>
+            <li><span class="perk-dot magenta"></span>Switch nodes without re-depositing</li>
+            <li><span class="perk-dot magenta"></span>On-chain allocation tracking</li>
+          </ul>
+
+          <div class="billing-flow" aria-label="Subscription connection flow">
+            <div class="flow-step">
+              <span class="flow-num">1</span>
+              <span class="flow-label">Subscribe to Plan</span>
+            </div>
+            <span class="flow-arrow" aria-hidden="true">→</span>
+            <div class="flow-step">
+              <span class="flow-num">2</span>
+              <span class="flow-label">Pick from Pool</span>
+            </div>
+            <span class="flow-arrow" aria-hidden="true">→</span>
+            <div class="flow-step">
+              <span class="flow-num">3</span>
+              <span class="flow-label">Tunnel Active</span>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /billing-grid -->
+
+      <!-- shared footer note -->
+      <p class="billing-note">
+        All payments are settled <strong>on-chain via the Sentinel Protocol</strong> —
+        no credit cards, no third parties, no chargebacks.
+        Your wallet, your rules.
+      </p>
+
+    </section>
+
+    
+    <section id="protocol" class="protocol-info" aria-labelledby="protocol-heading">
+      <div class="protocol-grid">
+        <div class="protocol-text">
+          <h2 class="section-title" id="protocol-heading">Powered by Sentinel Protocol</h2>
+          <p class="section-desc">
+            A layer-one P2P bandwidth marketplace — a DePIN blockchain built on the Cosmos SDK
+            for maximum scalability and interoperability.
+          </p>
+          <ul class="protocol-list">
+            <li>
+              <strong>WireGuard & V2Ray</strong>
+              High-performance kernel tunnels or advanced traffic obfuscation — choose per session.
+            </li>
+            <li>
+              <strong>sentinel-js-sdk</strong>
+              Native integration with the official JS SDK for robust, secure blockchain handshakes and on-chain payments.
+            </li>
+            <li>
+              <strong>Cosmos Interoperability</strong>
+              Seamless IBC connection with the entire Cosmos ecosystem — stake, bridge, and pay cross-chain.
+            </li>
+            <li>
+              <strong>DePIN Architecture</strong>
+              Decentralized Physical Infrastructure Network — real bandwidth, real nodes, real cryptography.
+            </li>
+          </ul>
+          <div class="protocol-actions">
+            <a href="https://docs.sentinel.co/" class="btn btn-secondary"
+               target="_blank" rel="noopener noreferrer">Read Protocol Docs ↗</a>
+          </div>
+        </div>
+
+        <div class="protocol-visual" aria-hidden="true">
           <div class="stat-box">
             <span class="stat-val">COSMOS</span>
             <span class="stat-lab">ECOSYSTEM</span>
           </div>
+          <div class="stat-box magenta">
+            <span class="stat-val">DePIN</span>
+            <span class="stat-lab">ARCHITECTURE</span>
+          </div>
           <div class="stat-box cyan">
-            <span class="stat-val">SDK</span>
-            <span class="stat-lab">POWERED</span>
+            <span class="stat-val">IBC</span>
+            <span class="stat-lab">INTEROP</span>
           </div>
         </div>
       </div>
     </section>
 
-    <section id="interface" class="interface-gallery">
-      <h2 class="section-title">Modern Interface</h2>
+    <!-- ── INTERFACE GALLERY ──────────────────────────────────────────────── -->
+    <section id="interface" class="interface-gallery" aria-labelledby="interface-heading">
+      <h2 class="section-title" id="interface-heading">Modern Interface</h2>
+      <p class="section-subtitle">Built for the node runner, designed for the streets</p>
       <div class="gallery-grid">
-        <div class="gallery-item">
-          <img src="images/nodes.png" alt="Node Selection">
-          <div class="gallery-caption">Precision Node Selection</div>
-        </div>
-        <div class="gallery-item">
-          <img src="images/connect.png" alt="Connection Interface">
-          <div class="gallery-caption">Flexible Billing: Pay by Data or Time</div>
-        </div>
-        <div class="gallery-item">
-          <img src="images/sessions.png" alt="Management Dashboard">
-          <div class="gallery-caption">Full Session Control</div>
-        </div>
+        <figure class="gallery-item">
+          <img src="images/nodes.png" alt="ChibaTunnel node selection screen showing global VPN nodes" loading="lazy" width="600" height="400">
+          <figcaption class="gallery-caption">Precision Node Selection</figcaption>
+        </figure>
+        <figure class="gallery-item">
+          <img src="images/connect.png" alt="ChibaTunnel connection screen with data and time billing options" loading="lazy" width="600" height="400">
+          <figcaption class="gallery-caption">Flexible Billing — Data or Time</figcaption>
+        </figure>
+        <figure class="gallery-item">
+          <img src="images/sessions.png" alt="ChibaTunnel session management dashboard" loading="lazy" width="600" height="400">
+          <figcaption class="gallery-caption">Full Session Control</figcaption>
+        </figure>
       </div>
     </section>
 
-    <section id="validator" class="validator-section">
-      <h2 class="section-title">Support Development</h2>
+    <!-- ── VALIDATOR ──────────────────────────────────────────────────────── -->
+    <section id="validator" class="validator-section" aria-labelledby="validator-heading">
+      <h2 class="section-title" id="validator-heading">Support Development</h2>
       <div class="validator-card">
         <div class="validator-avatar-container">
-          <img src="images/validator.jpg" alt="Tkd-Alex Avatar" class="validator-avatar">
+          <img src="images/validator.jpg" alt="Tkd-Alex — ChibaTunnel developer and Sentinel network validator"
+               class="validator-avatar" width="200" height="200" loading="lazy">
         </div>
         <div class="validator-info">
           <h3 class="validator-name">Tkd-Alex</h3>
           <p class="validator-desc">
-            Supporting the network through validation and active development of the Sentinel ecosystem. 
-            Delegate your tokens to help me maintain this client and build more open-source privacy tools.
+            Supporting the Sentinel network through validation and actively developing the ChibaTunnel
+            ecosystem. Delegate your DVPN tokens to help maintain this client and build more
+            open-source privacy tools.
           </p>
           <div class="validator-actions">
-            <a href="https://explorer.busurnode.com/sentinel/staking/sentvaloper10unne9aclcdwfysj6ya5vzh7xwj3xht6jhfxn6" class="btn btn-purple btn-lg">Delegate to Tkd-Alex</a>
+            <a href="https://p2pscan.com/validator/sentvaloper10unne9aclcdwfysj6ya5vzh7xwj3xht6jhfxn6"
+               class="btn btn-purple btn-lg" target="_blank" rel="noopener noreferrer">
+              Delegate to Tkd-Alex ↗
+            </a>
           </div>
           <div class="donation-box">
             <div class="donation-addr" id="sentinel-addr">sent10unne9aclcdwfysj6ya5vzh7xwj3xht6djktun</div>
-            <button onclick="copyAddr()" class="btn btn-sm btn-cyan">Copy Donation Address</button>
+            <button onclick="copyAddr()" class="btn btn-sm btn-cyan" aria-label="Copy donation address to clipboard">
+              Copy Address
+            </button>
           </div>
         </div>
       </div>
     </section>
 
-    <section id="community" class="community-section">
+    <!-- ── COMMUNITY ──────────────────────────────────────────────────────── -->
+    <section id="community" class="community-section" aria-labelledby="community-heading">
       <div class="setup-card">
         <div class="setup-header">
-          <div class="icon">📢</div>
-          <h1>Join the Community</h1>
-          <p>Sentinel dVPN is a community-driven project. Help us make decentralized privacy the global standard.</p>
+          <div class="icon" aria-hidden="true">⛩️</div>
+          <h2 id="community-heading">Join the Network</h2>
+          <p>ChibaTunnel is a community-driven project. Help make decentralized privacy the global standard — one node at a time.</p>
         </div>
-        
+
         <div class="promotion-grid">
           <div class="promo-item">
-            <span class="promo-icon">⭐</span>
+            <span class="promo-icon" aria-hidden="true">⭐</span>
             <h3>Star on GitHub</h3>
-            <p>Show your support by starring the repository. It helps increase our visibility.</p>
-            <a href="https://github.com/Tkd-Alex/sentinel-dvpn-client" class="btn btn-primary btn-full">Star Repository</a>
+            <p>Show your support by starring the repository. It helps increase visibility in the open source community.</p>
+            <a href="https://github.com/Tkd-Alex/ChibaTunnel"
+               class="btn btn-primary btn-full" target="_blank" rel="noopener noreferrer">
+              Star Repository
+            </a>
           </div>
           <div class="promo-item">
-            <span class="promo-icon">💬</span>
+            <span class="promo-icon" aria-hidden="true">💬</span>
             <h3>Telegram</h3>
-            <p>Official group for support and discussion.</p>
-            <a href="https://t.me/sentinelp2p" class="btn btn-cyan btn-full">Join Group</a>
+            <p>Official group for support, feedback, and discussion with the core community.</p>
+            <a href="https://t.me/sentinelp2p" class="btn btn-cyan btn-full"
+               target="_blank" rel="noopener noreferrer">Join Group</a>
           </div>
           <div class="promo-item">
-            <span class="promo-icon">🚀</span>
+            <span class="promo-icon" aria-hidden="true">🚀</span>
             <h3>X (Twitter)</h3>
-            <p>Get the latest news and protocol updates.</p>
-            <a href="https://x.com/sentinelp2p" class="btn btn-purple btn-full">Follow @sentinelp2p</a>
+            <p>Get the latest news, protocol updates, and node announcements as they happen.</p>
+            <a href="https://x.com/sentinelp2p" class="btn btn-magenta btn-full"
+               target="_blank" rel="noopener noreferrer">Follow @sentinelp2p</a>
           </div>
         </div>
 
-        <div class="divider">CONTRIBUTE TO THE NETWORK</div>
+        <div class="divider" aria-hidden="true">CONTRIBUTE TO THE NETWORK</div>
         <p class="community-note">
-          Host a node, contribute code, or delegate to a validator. 
-          Together, we are building a network that cannot be censored or shutdown.
+          Host a node, contribute code, or delegate to a validator.
+          Together we are building a network that <strong>cannot be censored or shut down.</strong>
         </p>
       </div>
     </section>
+
   </main>
 
-  <footer class="bottom-bar">
+  <!-- ══════════════════════════════════════════════════════════════════════
+       FOOTER
+  ══════════════════════════════════════════════════════════════════════ -->
+  <footer class="bottom-bar" role="contentinfo">
     <div class="footer-info">
-      <span class="status-dot active"></span>
-      <span>NETWORK STATUS: ONLINE</span>
+      <span class="status-dot active" aria-label="Network online"></span>
+      <span>NETWORK STATUS: <strong>ONLINE</strong></span>
+    </div>
+    <div class="footer-center">
+      <span class="footer-brand">CHIBATUNNEL</span>
     </div>
     <div class="footer-links">
-      <span>© <span id="year"></span> Tkd-Alex — SENTINEL dVPN PROJECT</span>
+      <span>© <span id="year"></span> Tkd-Alex —
+        <a href="https://github.com/Tkd-Alex/ChibaTunnel"
+           target="_blank" rel="noopener noreferrer" class="footer-link">Open Source</a>
+      </span>
     </div>
   </footer>
 
+  <!-- ══════════════════════════════════════════════════════════════════════
+       SCRIPTS
+  ══════════════════════════════════════════════════════════════════════ -->
   <script>
-    document.getElementById('year').innerText = new Date().getFullYear();
+    // Year
+    document.getElementById('year').textContent = new Date().getFullYear();
 
+    // Hamburger menu
     const menuToggle = document.querySelector('.menu-toggle');
-    const navLinks = document.querySelector('.nav-links');
-    const links = document.querySelectorAll('.nav-link');
+    const navLinks   = document.querySelector('.nav-links');
+    const navLinkEls = document.querySelectorAll('.nav-link');
 
     menuToggle.addEventListener('click', () => {
+      const expanded = menuToggle.getAttribute('aria-expanded') === 'true';
+      menuToggle.setAttribute('aria-expanded', String(!expanded));
       menuToggle.classList.toggle('active');
       navLinks.classList.toggle('active');
     });
 
-    links.forEach(link => {
+    navLinkEls.forEach(link => {
       link.addEventListener('click', () => {
+        menuToggle.setAttribute('aria-expanded', 'false');
         menuToggle.classList.remove('active');
         navLinks.classList.remove('active');
       });
     });
 
+    // Close menu on outside click
+    document.addEventListener('click', e => {
+      if (!menuToggle.contains(e.target) && !navLinks.contains(e.target)) {
+        menuToggle.setAttribute('aria-expanded', 'false');
+        menuToggle.classList.remove('active');
+        navLinks.classList.remove('active');
+      }
+    });
+
+    // Copy donation address
     function copyAddr() {
-      const addr = document.getElementById('sentinel-addr').innerText;
-      navigator.clipboard.writeText(addr);
-      alert('Address copied to clipboard!');
+      const addr = document.getElementById('sentinel-addr').textContent;
+      navigator.clipboard.writeText(addr).then(() => {
+        const btn = event.currentTarget;
+        const orig = btn.textContent;
+        btn.textContent = '✓ Copied!';
+        btn.style.borderColor = 'var(--magenta)';
+        setTimeout(() => { btn.textContent = orig; btn.style.borderColor = ''; }, 2000);
+      });
+    }
+
+    // Data Scramble Animation
+    const scrambleHeading = document.getElementById('hero-heading');
+    if (scrambleHeading) {
+      const WORD = scrambleHeading.getAttribute('data-text') || 'CHIBATUNNEL';
+      const CHARS = '!@#$%^&*01アイウエオカキクケコ▓░■□◆◇';
+      
+      WORD.split('').forEach(ch => {
+        const span = document.createElement('span');
+        span.className = 'ch';
+        span.textContent = ch;
+        scrambleHeading.appendChild(span);
+      });
+
+      function scramble() {
+        const chars = scrambleHeading.querySelectorAll('.ch');
+        let iter = 0;
+        chars.forEach(ch => ch.classList.add('scrambling'));
+        const iv = setInterval(() => {
+          chars.forEach((ch, i) => {
+            if (i < iter) {
+              ch.textContent = WORD[i];
+              ch.classList.remove('scrambling');
+            } else {
+              ch.textContent = CHARS[Math.floor(Math.random() * CHARS.length)];
+            }
+          });
+          if (++iter > WORD.length) {
+            clearInterval(iv);
+            setTimeout(scramble, 3200);
+          }
+        }, 55);
+      }
+      // Start the animation slightly after load
+      setTimeout(scramble, 500);
+    }
+
+    // Subtle parallax on hero image
+    const heroImg = document.querySelector('.hero-image-container');
+    if (heroImg && window.matchMedia('(min-width: 900px)').matches) {
+      document.addEventListener('mousemove', e => {
+        const rx = ((e.clientX / window.innerWidth)  - 0.5) * 6;
+        const ry = ((e.clientY / window.innerHeight) - 0.5) * -3;
+        heroImg.style.transform =
+          `perspective(1000px) rotateY(${rx - 5}deg) rotateX(${ry + 2}deg)`;
+      });
     }
   </script>
 </body>
