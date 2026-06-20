@@ -464,8 +464,12 @@ export default function NodeConnectModal({
         )
       } else if (opts?.sessionId) {
         res = await window.api.connectSession({
-          nodeAddress: node.address,
-          sessionId:   parseInt(opts.sessionId)
+          nodeAddress:      node.address,
+          sessionId:        parseInt(opts.sessionId),
+          // Carried so the main process can mint a fresh session of the right type
+          // if the node holds a stale peer for this session (config-less 409).
+          subscriptionType: conn.subscriptionType,
+          amount:           conn.amount
         })
       } else {
         res = await window.api.connectNode({
