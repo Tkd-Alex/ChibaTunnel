@@ -615,7 +615,11 @@ function registerIpcHandlers(): void {
   ipcMain.handle('plans:fetch', async () => {
     if (!walletState.readonlyClient) return { success: false, plans: [] }
     try {
-      const res = await walletState.readonlyClient.sentinelQuery?.plan.plans(Status.STATUS_ACTIVE, undefined)
+      // STATUS_UNSPECIFIED (0) returns plans of every status. STATUS_ACTIVE would hide
+      // plans the provider has temporarily marked inactive, so subscribers can no longer
+      // see plans they may still hold a subscription against. The per-plan `status` field
+      // below lets the UI filter/label if it needs to.
+      const res = await walletState.readonlyClient.sentinelQuery?.plan.plans(Status.STATUS_UNSPECIFIED, undefined)
       const plans = (res?.plans ?? []).map(p => ({
         id: longToNum(p.id),
         provAddress: p.provAddress,
@@ -681,7 +685,11 @@ function registerIpcHandlers(): void {
     if (!walletState.readonlyClient) return { success: false, nodes: [] }
     try {
       const id = Long.fromNumber(planId, true)
-      const res = await walletState.readonlyClient.sentinelQuery?.node.nodesForPlan(id, Status.STATUS_ACTIVE, undefined)
+      // STATUS_UNSPECIFIED (0) returns ALL plan members. Passing STATUS_ACTIVE (1)
+      // silently drops just-linked / inactive-pending / temporarily-inactive nodes,
+      // so a plan that has nodes appears empty. The per-node `isActive` flag below
+      // still lets the UI distinguish active members.
+      const res = await walletState.readonlyClient.sentinelQuery?.node.nodesForPlan(id, Status.STATUS_UNSPECIFIED, undefined)
       
       const nodes = (res?.nodes ?? []).map(n => ({
         address: n.address,
@@ -722,7 +730,9 @@ function registerIpcHandlers(): void {
     for (const chunk of chunks) {
       await Promise.all(chunk.map(async (id) => {
         try {
-          const res = await walletState.readonlyClient!.sentinelQuery?.node.nodesForPlan(Long.fromNumber(id, true), Status.STATUS_ACTIVE, undefined)
+          // STATUS_UNSPECIFIED (0) returns ALL plan members; STATUS_ACTIVE would drop
+          // just-linked / inactive-pending nodes and make populated plans look empty.
+          const res = await walletState.readonlyClient!.sentinelQuery?.node.nodesForPlan(Long.fromNumber(id, true), Status.STATUS_UNSPECIFIED, undefined)
           nodesMap[id] = (res?.nodes ?? []).map(n => ({
             address: n.address,
             moniker: n.address.slice(0, 12) + '...',
