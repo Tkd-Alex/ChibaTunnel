@@ -1,0 +1,20 @@
+{
+  "name": "chiba-testing",
+  "version": "0.1.0",
+  "private": true,
+  "description": "End-to-end harness that drives ChibaTunnel's real ipcMain handlers to map and test every function.",
+  "type": "commonjs",
+  "main": "dist/cli.js",
+  "bin": {
+    "chiba-test": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "map": "npm run build && electron dist/boot.js --mode=map",
+    "test": "npm run build && electron dist/boot.js --mode=test",
+    "test:safe": "npm run build && electron dist/boot.js --mode=test --tier=readonly"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

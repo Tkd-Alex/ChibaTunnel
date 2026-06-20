@@ -224,12 +224,25 @@ function ensureBinariesUnquarantined(): void {
   }
 }
 
+// Test harness hook: when CHIBA_TEST is set, register the IPC handlers (so the
+// Chiba Testing harness can drive the real handler code path) but skip the
+// window and the privileged-helper auto-install. This avoids mutating the host
+// machine's network stack / scheduled tasks during automated end-to-end runs.
+// It changes nothing about normal app behaviour.
+const IS_TEST_HARNESS = process.env.CHIBA_TEST === '1'
+
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.chibatunnel')
   app.on('browser-window-created', (_, w) => optimizer.watchWindowShortcuts(w))
   registerIpcHandlers()
 
   ensureBinariesUnquarantined()
+
+  if (IS_TEST_HARNESS) {
+    // Signal the harness that handlers are registered and ready to be invoked.
+    app.emit('chiba-test:ready')
+    return
+  }
 
   const alive = await pingHelper()
   if (!alive) {
