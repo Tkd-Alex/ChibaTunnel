@@ -41,7 +41,7 @@ import * as os from 'os'
 import * as dns from 'dns'
 import * as crypto from 'crypto'
 
-import { pingHelper, sendToHelper } from './helper-client'
+import { verifyHelper, sendToHelper } from './helper-client'
 import pkg from '../../package.json'
 
 // ── Project Configuration ─────────────────────────────────────────────────────
@@ -231,17 +231,25 @@ app.whenReady().then(async () => {
 
   ensureBinariesUnquarantined()
 
-  const alive = await pingHelper()
-  if (!alive) {
-    if (process.platform === 'win32') {
-      try {
-        await installWindowsHelper()
-      } catch (e) {
-        console.error('Failed to install Windows helper on startup:', e)
-      }
+  // Verify the helper's IDENTITY, not just that *something* answers on the pipe
+  // / port. A bare ping can be answered by a foreign service (e.g. a leftover
+  // sentinel-helper.exe squatting on 127.0.0.1:47391). If the responder is not
+  // our genuine, protocol-compatible helper we (re)install — which force-creates
+  // the ChibaTunnelHelper task and thereby evicts the stale/foreign one.
+  const health = await verifyHelper()
+  if (!health.ok) {
+    if (health.reason === 'foreign') {
+      console.warn('[helper] A foreign service answered the helper ping — reinstalling the genuine helper to evict it.')
+    } else if (health.reason === 'incompatible') {
+      console.warn(`[helper] Helper protocol mismatch (got ${health.protocol ?? 'none'}) — reinstalling to align.`)
     }
-    else if (process.platform === 'linux') await installLinuxHelper()
-    else if (process.platform === 'darwin') await installDarwinHelper()
+    try {
+      if (process.platform === 'win32') await installWindowsHelper()
+      else if (process.platform === 'linux') await installLinuxHelper()
+      else if (process.platform === 'darwin') await installDarwinHelper()
+    } catch (e) {
+      console.error('Failed to install helper on startup:', e)
+    }
   }
 
   createWindow()
@@ -1544,6 +1552,56 @@ function patchConfigFileForDns(configFile: string): void {
 }
 
 /**
+ * Verifies that the genuine, protocol-compatible helper is up — and, if it is
+ * not, attempts a single (re)install before re-verifying. This is the gate that
+ * must pass before we hand the helper any privileged command (wg-up,
+ * start-transparent), so we never drive a foreign squatter or a missing helper.
+ *
+ * Returns { ready: true } when a verified helper is confirmed, otherwise
+ * { ready: false, error } with a user-facing reason.
+ *
+ * @returns { ready: true } | { ready: false, error }
+ */
+async function ensureHelperReady(): Promise<{ ready: boolean; error?: string }> {
+  let health = await verifyHelper()
+  if (health.ok) return { ready: true }
+
+  // Reinstalling force-recreates the helper (Windows: schtasks /create /f),
+  // which also evicts a stale or foreign holder before we retry verification.
+  if (health.reason === 'foreign') {
+    console.warn('[helper] Foreign responder on the helper channel — reinstalling genuine helper before wg-up.')
+  } else if (health.reason === 'incompatible') {
+    console.warn(`[helper] Helper protocol mismatch (got ${health.protocol ?? 'none'}) — reinstalling before wg-up.`)
+  } else {
+    console.warn('[helper] Helper unreachable — installing before wg-up.')
+  }
+
+  try {
+    if (process.platform === 'win32')      await installWindowsHelper()
+    else if (process.platform === 'linux') await installLinuxHelper()
+    else if (process.platform === 'darwin') await installDarwinHelper()
+  } catch (e: any) {
+    return { ready: false, error: `Helper install failed: ${e?.message ?? String(e)}` }
+  }
+
+  // Give the freshly-started service a moment to bind the pipe/port, then
+  // re-verify a few times before giving up.
+  for (let i = 0; i < 5; i++) {
+    await new Promise((r) => setTimeout(r, 600))
+    health = await verifyHelper()
+    if (health.ok) return { ready: true }
+  }
+
+  return {
+    ready: false,
+    error:
+      health.reason === 'foreign'
+        ? 'A conflicting privileged service is holding the helper channel and could not be evicted.'
+        : 'The privileged helper is not available. Try "Repair helper" from settings.',
+  }
+}
+
+/**
  * Brings up a WireGuard tunnel by delegating to the chibatunnel-helper service.
  * On Windows the helper runs wireguard.exe /installtunnelservice (SYSTEM privilege).
  * On Linux/macOS the helper runs wg-quick up (root privilege).
@@ -1556,6 +1614,10 @@ function patchConfigFileForDns(configFile: string): void {
  * @returns           { success: true } on success, { success: false, error } on failure.
  */
 async function wgQuickUp(configFile: string): Promise<{ success: boolean; error?: string }> {
+  // Gate: never hand wg-up to an unverified / foreign helper.
+  const ready = await ensureHelperReady()
+  if (!ready.ready) return { success: false, error: ready.error ?? 'Helper not ready.' }
+
   const info   = checkBinaries()
   const wgPath = info.wgPath ?? undefined
 
