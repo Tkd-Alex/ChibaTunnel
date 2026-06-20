@@ -625,9 +625,12 @@ function registerIpcHandlers(): void {
   ipcMain.handle('sessions:fetch', async () => {
     if (!walletState.readonlyClient || !walletState.address) return { success: false, sessions: [] }
     try {
-      const r = await walletState.readonlyClient.sentinelQuery?.session.sessionsForAccount(
-        walletState.address, 
-        PageRequest.fromJSON({ limit: 100, reverse: true })
+      const r = await rpcWithRetry(
+        () => walletState.readonlyClient!.sentinelQuery?.session.sessionsForAccount(
+          walletState.address!,
+          PageRequest.fromJSON({ limit: 10000, reverse: true })
+        ),
+        'sessions:fetch'
       )
       const sessions = (r?.sessions ?? []).map(anyVal => {
         try {
@@ -661,7 +664,13 @@ function registerIpcHandlers(): void {
   ipcMain.handle('plans:fetch', async () => {
     if (!walletState.readonlyClient) return { success: false, plans: [] }
     try {
-      const res = await walletState.readonlyClient.sentinelQuery?.plan.plans(Status.STATUS_ACTIVE, undefined)
+      const res = await rpcWithRetry(
+        () => walletState.readonlyClient!.sentinelQuery?.plan.plans(
+          Status.STATUS_UNSPECIFIED,
+          PageRequest.fromJSON({ limit: 10000 })
+        ),
+        'plans:fetch'
+      )
       const plans = (res?.plans ?? []).map(p => ({
         id: longToNum(p.id),
         provAddress: p.provAddress,
@@ -684,7 +693,13 @@ function registerIpcHandlers(): void {
   ipcMain.handle('subscriptions:fetch', async () => {
     if (!walletState.readonlyClient || !walletState.address) return { success: false, subscriptions: [] }
     try {
-      const res = await walletState.readonlyClient.sentinelQuery?.subscription.subscriptionsForAccount(walletState.address, undefined)
+      const res = await rpcWithRetry(
+        () => walletState.readonlyClient!.sentinelQuery?.subscription.subscriptionsForAccount(
+          walletState.address!,
+          PageRequest.fromJSON({ limit: 10000 })
+        ),
+        'subscriptions:fetch'
+      )
       const subscriptions = (res?.subscriptions ?? []).map(s => {
         try {
           return {
@@ -727,8 +742,15 @@ function registerIpcHandlers(): void {
     if (!walletState.readonlyClient) return { success: false, nodes: [] }
     try {
       const id = Long.fromNumber(planId, true)
-      const res = await walletState.readonlyClient.sentinelQuery?.node.nodesForPlan(id, Status.STATUS_ACTIVE, undefined)
-      
+      const res = await rpcWithRetry(
+        () => walletState.readonlyClient!.sentinelQuery?.node.nodesForPlan(
+          id,
+          Status.STATUS_UNSPECIFIED,
+          PageRequest.fromJSON({ limit: 10000 })
+        ),
+        `plan:nodes#${planId}`
+      )
+
       const nodes = (res?.nodes ?? []).map(n => ({
         address: n.address,
         moniker: n.address.slice(0, 12) + '...',
@@ -759,16 +781,27 @@ function registerIpcHandlers(): void {
     if (!walletState.readonlyClient) return { success: false, nodesMap: {} }
     const nodesMap: Record<number, any[]> = {}
     
-    // Concurrency limit: 10
+    // Concurrency limit: 5 — keep fan-out small to stay under RPC 429 rate limits.
+    const CHUNK_SIZE = 5
     const chunks = []
-    for (let i = 0; i < planIds.length; i += 10) {
-      chunks.push(planIds.slice(i, i + 10))
+    for (let i = 0; i < planIds.length; i += CHUNK_SIZE) {
+      chunks.push(planIds.slice(i, i + CHUNK_SIZE))
     }
 
-    for (const chunk of chunks) {
+    for (let ci = 0; ci < chunks.length; ci++) {
+      const chunk = chunks[ci]
+      // Pace successive chunks so a large plan set doesn't hammer the endpoint.
+      if (ci > 0) await delay(250)
       await Promise.all(chunk.map(async (id) => {
         try {
-          const res = await walletState.readonlyClient!.sentinelQuery?.node.nodesForPlan(Long.fromNumber(id, true), Status.STATUS_ACTIVE, undefined)
+          const res = await rpcWithRetry(
+            () => walletState.readonlyClient!.sentinelQuery?.node.nodesForPlan(
+              Long.fromNumber(id, true),
+              Status.STATUS_UNSPECIFIED,
+              PageRequest.fromJSON({ limit: 10000 })
+            ),
+            `scanNodes#${id}`
+          )
           nodesMap[id] = (res?.nodes ?? []).map(n => ({
             address: n.address,
             moniker: n.address.slice(0, 12) + '...',
@@ -821,16 +854,22 @@ function registerIpcHandlers(): void {
     if (!walletState.readonlyClient) return { success: false, providers: {} }
     const providers: Record<string, any> = {}
     
-    // Concurrency limit: 20 (providers are simpler)
+    // Concurrency limit: 10 — providers are simpler reads, but still rate-limited.
+    const CHUNK_SIZE = 10
     const chunks = []
-    for (let i = 0; i < addresses.length; i += 20) {
-      chunks.push(addresses.slice(i, i + 20))
+    for (let i = 0; i < addresses.length; i += CHUNK_SIZE) {
+      chunks.push(addresses.slice(i, i + CHUNK_SIZE))
     }
 
-    for (const chunk of chunks) {
+    for (let ci = 0; ci < chunks.length; ci++) {
+      const chunk = chunks[ci]
+      if (ci > 0) await delay(200)
       await Promise.all(chunk.map(async (addr) => {
         try {
-          const res = await walletState.readonlyClient!.sentinelQuery?.provider.provider(addr)
+          const res = await rpcWithRetry(
+            () => walletState.readonlyClient!.sentinelQuery?.provider.provider(addr),
+            `provider#${addr.slice(0, 12)}`
+          )
           if (res) {
             providers[addr] = {
               name: res.name,
@@ -1698,6 +1737,56 @@ async function setupWallet(mnemonic: string, label: string, rpc: string) {
 }
 
 function withTimeout<T>(promise: Promise<T> | undefined, ms: number, msg: string): Promise<T> { if (!promise) return Promise.reject(new Error(msg)); return Promise.race([promise, new Promise<never>((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]) }
+
+// ── RPC retry / backoff ───────────────────────────────────────────────────────
+// The Sentinel RPC endpoints rate-limit bursty fan-out (HTTP 429) and may briefly
+// drop connections (ECONNRESET / ETIMEDOUT / EAI_AGAIN). A single transient hiccup
+// shouldn't surface as "no nodes for this plan" in the UI, so wrap chain reads in a
+// bounded exponential backoff that ONLY retries transient failures — never on-chain
+// logic errors (those are returned verbatim so callers see the real cause).
+
+function isTransientNetworkError(err: unknown): boolean {
+  const e = err as { code?: string; message?: string; status?: number; response?: { status?: number } }
+  const status = e?.status ?? e?.response?.status
+  if (status === 429 || (typeof status === 'number' && status >= 500)) return true
+  const code = e?.code
+  if (code && ['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EAI_AGAIN', 'ENOTFOUND', 'EPIPE'].includes(code)) return true
+  const msg = String(e?.message ?? err ?? '').toLowerCase()
+  return (
+    msg.includes('429') ||
+    msg.includes('too many requests') ||
+    msg.includes('rate limit') ||
+    msg.includes('socket hang up') ||
+    msg.includes('timeout') ||
+    msg.includes('econnreset') ||
+    msg.includes('service unavailable') ||
+    msg.includes('bad gateway')
+  )
+}
+
+/**
+ * Runs an RPC read with exponential backoff on transient failures only.
+ * Non-transient (on-chain/logic) errors reject immediately so the real cause
+ * is preserved. Backoff grows 400ms → 800ms → 1600ms (+ jitter), capped at 3 tries.
+ */
+async function rpcWithRetry<T>(fn: () => Promise<T>, label = 'rpc', maxRetries = 3): Promise<T> {
+  let lastErr: unknown
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (err) {
+      lastErr = err
+      if (!isTransientNetworkError(err) || attempt === maxRetries - 1) throw err
+      const backoff = 400 * 2 ** attempt + Math.floor(Math.random() * 200)
+      console.warn(`[rpc:retry] ${label} transient failure (attempt ${attempt + 1}/${maxRetries}), retrying in ${backoff}ms:`, extractError(err))
+      await new Promise((r) => setTimeout(r, backoff))
+    }
+  }
+  throw lastErr
+}
+
+/** Sleep helper for inter-chunk pacing to stay under RPC rate limits. */
+function delay(ms: number): Promise<void> { return new Promise((r) => setTimeout(r, ms)) }
 
 /*
  * Drop-in replacement for checkBinaries() in the Electron main process.
