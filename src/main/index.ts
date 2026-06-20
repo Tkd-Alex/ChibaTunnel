@@ -607,7 +607,7 @@ function registerIpcHandlers(): void {
     if (!walletState.client || !walletState.address) return { success: false, error: 'Wallet not initialized' }
     try {
       const msg = sessionCancel({ from: walletState.address, id: Long.fromNumber(sessionId, true) })
-      const tx  = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
+      const tx  = await safeBroadcast([msg], 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
       assertIsDeliverTxSuccess(tx); return { success: true }
     } catch (err: unknown) { return { success: false, error: extractError(err) } }
   })
@@ -667,7 +667,7 @@ function registerIpcHandlers(): void {
         denom: denom,
         renewalPricePolicy: policy
       })
-      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
+      const tx = await safeBroadcast([msg], 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
       assertIsDeliverTxSuccess(tx)
       console.log(`[Plan:Subscribe] Success! TX: ${tx.transactionHash}`)
       return { success: true, txHash: tx.transactionHash }
@@ -809,7 +809,7 @@ function registerIpcHandlers(): void {
           id: Long.fromNumber(subscriptionId, true)
         }
       }
-      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
+      const tx = await safeBroadcast([msg], 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
       assertIsDeliverTxSuccess(tx)
       console.log(`[Subscription:Cancel] Success! TX: ${tx.transactionHash}`)
 
@@ -850,7 +850,7 @@ function registerIpcHandlers(): void {
           renewalPricePolicy: policy
         }
       }
-      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
+      const tx = await safeBroadcast([msg], 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
       assertIsDeliverTxSuccess(tx)
       console.log(`[Subscription:Update] Success! TX: ${tx.transactionHash}`)
       return { success: true, txHash: tx.transactionHash }
@@ -872,7 +872,7 @@ function registerIpcHandlers(): void {
         id: Long.fromNumber(subscriptionId, true),
         nodeAddress: nodeAddress
       })
-      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
+      const tx = await safeBroadcast([msg], 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
       assertIsDeliverTxSuccess(tx)
 
       mainWindow?.webContents.send('vpn:status', { step: 'extracting_tx' })
@@ -1182,7 +1182,7 @@ async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabyt
 
     mainWindow?.webContents.send('vpn:status', { step: 'signing_tx' })
     mainWindow?.webContents.send('vpn:status', { step: 'broadcasting_tx' })
-    const tx = await walletState.client!.signAndBroadcast(walletState.address!, [nodeStartSession(txArgs)], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
+    const tx = await safeBroadcast([nodeStartSession(txArgs)], 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
     assertIsDeliverTxSuccess(tx)
 
     mainWindow?.webContents.send('vpn:status', { step: 'extracting_tx' })
@@ -1654,6 +1654,78 @@ async function setupWallet(mnemonic: string, label: string, rpc: string) {
 function withTimeout<T>(promise: Promise<T> | undefined, ms: number, msg: string): Promise<T> { if (!promise) return Promise.reject(new Error(msg)); return Promise.race([promise, new Promise<never>((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]) }
 
 /*
+ * Sequence-safe broadcasting.
+ *
+ * SigningSentinelClient (CosmJS under the hood) caches the account sequence on
+ * the client instance. Every IPC handler shares the single long-lived
+ * walletState.client, so two broadcasts firing close together (e.g. a session
+ * cancel racing an auto-refresh, or rapid UI clicks) reuse the same cached
+ * sequence and the chain rejects the second with:
+ *
+ *   "account sequence mismatch, expected N, got N-1: incorrect account sequence"
+ *   (Cosmos SDK error code 32, ErrWrongSequence)
+ *
+ * Two layers of protection:
+ *   1. A mutex queue serializes all broadcasts so only one is in flight at a
+ *      time — no concurrent sequence reuse.
+ *   2. On a sequence error we rebuild the signing client (which re-queries the
+ *      account's real sequence from chain) and retry with backoff.
+ */
+function isSequenceError(err: unknown): boolean {
+  const e = err as { code?: number; message?: string; rawLog?: string }
+  if (e?.code === 32) return true
+  const s = `${e?.message ?? ''} ${e?.rawLog ?? ''} ${typeof err === 'string' ? err : ''}`
+  return s.includes('account sequence mismatch') || s.includes('incorrect account sequence')
+}
+
+// Rebuild walletState.client from the active mnemonic so it re-fetches a fresh
+// account sequence from chain. Returns false if the wallet can't be rebuilt.
+async function refreshSigningClient(): Promise<boolean> {
+  const mnemonic = getActiveMnemonic()
+  if (!mnemonic) return false
+  try {
+    const wallet = await DirectSecp256k1HdWallet.fromMnemonic(mnemonic.trim(), { prefix: 'sent' })
+    const client = await withTimeout(SigningSentinelClient.connectWithSigner(walletState.rpc, wallet, { gasPrice: makeGasPrice('0.2udvpn') as any }), RPC_TIMEOUT_MS, 'RPC timeout')
+    walletState.client = client
+    return true
+  } catch (err: unknown) {
+    console.warn('[safeBroadcast] Failed to refresh signing client:', err)
+    return false
+  }
+}
+
+let _broadcastQueue: Promise<unknown> = Promise.resolve()
+
+// Serialize + retry a broadcast. Drop-in for walletState.client.signAndBroadcast.
+async function safeBroadcast(msgs: readonly any[], memo: string): Promise<any> {
+  const run = async (): Promise<any> => {
+    let lastErr: unknown
+    for (let attempt = 0; attempt < 4; attempt++) {
+      if (!walletState.client || !walletState.address) throw new Error('Wallet not initialized')
+      if (attempt > 0) {
+        await new Promise(r => setTimeout(r, Math.min(1500 * attempt, 4500)))
+        await refreshSigningClient() // fresh client = fresh sequence
+      }
+      try {
+        const tx = await walletState.client.signAndBroadcast(walletState.address, msgs as any, 'auto', memo)
+        if (tx.code !== 0 && isSequenceError({ code: tx.code, rawLog: tx.rawLog })) { lastErr = new Error(tx.rawLog); continue }
+        return tx
+      } catch (err: unknown) {
+        lastErr = err
+        if (isSequenceError(err)) continue
+        throw err
+      }
+    }
+    throw lastErr
+  }
+  // Chain onto the queue so only one broadcast runs at a time; keep the queue
+  // alive even if this broadcast rejects.
+  const p = _broadcastQueue.then(run, run)
+  _broadcastQueue = p.then(() => undefined, () => undefined)
+  return p
+}
+
+/*
  * Drop-in replacement for checkBinaries() in the Electron main process.
  *
  * Binary resolution priority (same for all binaries):
@@ -1948,10 +2020,8 @@ async function killActiveConnections(sendEndSession = true) {
   if (sendEndSession) {
     if (activeSessionId && walletState.client && walletState.address) {
       try {
-        await walletState.client.signAndBroadcast(
-          walletState.address,
+        await safeBroadcast(
           [sessionCancel({ from: walletState.address, id: Long.fromString(activeSessionId, true) })],
-          'auto',
           'chibatunnel'
         )
       } catch (err) {
