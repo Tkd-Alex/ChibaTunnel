@@ -344,6 +344,10 @@
     "start_proxy": "شروع پروکسی محلی",
     "start_transparent": "شروع حالت شفاف",
     "or_start_proxy": "یا شروع پروکسی محلی",
+    "repair_helper": "تعمیر سرویس دارای مجوز",
+    "repairing_helper": "در حال تعمیر...",
+    "repair_failed": "تعمیر ناموفق بود:",
+    "repair_success": "تعمیر با موفقیت انجام شد! تلاش مجدد برای اتصال...",
     "currently_connected": "در حال حاضر به این گره متصل هستید"
   },
   "binary": {

@@ -344,6 +344,10 @@
     "start_proxy": "Avvia proxy locale",
     "start_transparent": "Avvia Trasparente",
     "or_start_proxy": "o avvia proxy locale",
+    "repair_helper": "RIPARA SERVIZIO PRIVILEGIATO",
+    "repairing_helper": "RIPARAZIONE IN CORSO...",
+    "repair_failed": "Riparazione fallita:",
+    "repair_success": "Riparazione completata! Riprovo la connessione...",
     "currently_connected": "Attualmente connesso a questo nodo"
   },
   "binary": {

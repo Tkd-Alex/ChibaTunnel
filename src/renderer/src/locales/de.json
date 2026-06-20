@@ -344,6 +344,10 @@
     "start_proxy": "Lokalen Proxy starten",
     "start_transparent": "Transparent starten",
     "or_start_proxy": "oder lokalen Proxy starten",
+    "repair_helper": "PRIVILEGIERTEN DIENST REPARIEREN",
+    "repairing_helper": "REPARATUR...",
+    "repair_failed": "Reparatur fehlgeschlagen:",
+    "repair_success": "Reparatur erfolgreich! Verbindung wird erneut versucht...",
     "currently_connected": "Aktuell mit diesem Knoten verbunden"
   },
   "binary": {

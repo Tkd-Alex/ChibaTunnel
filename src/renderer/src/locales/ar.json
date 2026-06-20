@@ -344,6 +344,10 @@
     "start_proxy": "بدء بروكسي محلي",
     "start_transparent": "بدء وضع شفاف",
     "or_start_proxy": "أو بدء بروكسي محلي",
+    "repair_helper": "إصلاح الخدمة المتميزة",
+    "repairing_helper": "جاري الإصلاح...",
+    "repair_failed": "فشل الإصلاح:",
+    "repair_success": "تم الإصلاح بنجاح! جاري إعادة الاتصال...",
     "currently_connected": "متصل حالياً بهذه العقدة"
   },
   "binary": {

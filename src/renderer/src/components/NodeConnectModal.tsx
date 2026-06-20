@@ -324,23 +324,73 @@ function LivePanel({ node, initialSessionId }: { node: ApiNode, initialSessionId
 
 function ErrorStep({ error, onRetryTunnel, onRetryFull, onClose, hasConfig }: any) {
   const { t } = useTranslation()
+  const [repairing, setRepairing] = useState(false)
+  const [repairError, setRepairError] = useState<string | null>(null)
+  const [repairSuccess, setRepairSuccess] = useState(false)
+
+  const errorText = String(error || '').toLowerCase()
+  const isHelperError = errorText.includes('helper') || 
+                        errorText.includes('service is not running') || 
+                        errorText.includes('connection refused') || 
+                        errorText.includes('pipe')
+
+  const handleRepair = async () => {
+    setRepairing(true)
+    setRepairError(null)
+    try {
+      const res = await window.api.repairHelper()
+      if (res.success) {
+        setRepairSuccess(true)
+        setTimeout(() => {
+          onRetryTunnel()
+        }, 1500)
+      } else {
+        setRepairError(res.error || 'Failed to repair helper service')
+      }
+    } catch (err: any) {
+      setRepairError(err.message || String(err))
+    } finally {
+      setRepairing(false)
+    }
+  }
+
   return (
     <>
       <div className="error-box" style={{ whiteSpace: 'pre-wrap' }}>
         <div className="error-label">{t('common.error')}</div>
         {error}
+        {repairError && (
+          <div style={{ marginTop: 10, color: 'var(--red)', borderTop: '1px solid rgba(255,0,0,0.2)', paddingTop: 8 }}>
+            <strong>{t('node_modal.repair_failed')}</strong> {repairError}
+          </div>
+        )}
+        {repairSuccess && (
+          <div style={{ marginTop: 10, color: 'var(--green)', borderTop: '1px solid rgba(0,255,0,0.2)', paddingTop: 8 }}>
+            <strong>{t('node_modal.repair_success')}</strong>
+          </div>
+        )}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {hasConfig && (
-          <button className="btn btn-primary btn-full" onClick={onRetryTunnel}>
+        {isHelperError && !repairSuccess && (
+          <button 
+            className={`btn btn-primary btn-full ${repairing ? 'loading' : ''}`} 
+            onClick={handleRepair}
+            disabled={repairing}
+            style={{ borderColor: 'var(--orange)', color: 'var(--orange)' }}
+          >
+            {repairing ? t('node_modal.repairing_helper') : `🔧 ${t('node_modal.repair_helper')}`}
+          </button>
+        )}
+        {hasConfig && !repairSuccess && (
+          <button className="btn btn-primary btn-full" onClick={onRetryTunnel} disabled={repairing}>
             ↺ {t('node_modal.retry_tunnel')}
           </button>
         )}
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-secondary" style={{ flex: 1 }} onClick={onRetryFull}>
+          <button className="btn btn-secondary" style={{ flex: 1 }} onClick={onRetryFull} disabled={repairing}>
             ⚡ {t('node_modal.new_subscription')}
           </button>
-          <button className="btn btn-secondary" onClick={onClose}>{t('common.close')}</button>
+          <button className="btn btn-secondary" onClick={onClose} disabled={repairing}>{t('common.close')}</button>
         </div>
       </div>
     </>

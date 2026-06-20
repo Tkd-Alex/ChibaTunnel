@@ -233,7 +233,14 @@ app.whenReady().then(async () => {
 
   const alive = await pingHelper()
   if (!alive) {
-    if (process.platform === 'linux') await installLinuxHelper()
+    if (process.platform === 'win32') {
+      try {
+        await installWindowsHelper()
+      } catch (e) {
+        console.error('Failed to install Windows helper on startup:', e)
+      }
+    }
+    else if (process.platform === 'linux') await installLinuxHelper()
     else if (process.platform === 'darwin') await installDarwinHelper()
   }
 
@@ -244,6 +251,30 @@ app.on('window-all-closed', async () => {
   await killActiveConnections(true)
   if (process.platform !== 'darwin') app.quit()
 })
+
+async function installWindowsHelper(): Promise<void> {
+  const resourcesPath = app.isPackaged
+    ? process.resourcesPath
+    : path.join(__dirname, '..', '..', 'dist-helper')
+
+  const helperDest = path.join(resourcesPath, 'chibatunnel-helper.exe')
+  
+  if (!fs.existsSync(helperDest)) {
+    throw new Error(`Helper executable not found at: ${helperDest}`)
+  }
+
+  // Force stop and remove old task, create new, and run
+  const result = await execPrivileged([
+    `schtasks /end /tn "ChibaTunnelHelper" *>$null`,
+    `schtasks /delete /tn "ChibaTunnelHelper" /f *>$null`,
+    `schtasks /create /tn "ChibaTunnelHelper" /tr "\\"${helperDest}\\" --service" /sc onstart /ru SYSTEM /rl HIGHEST /f`,
+    `schtasks /run /tn "ChibaTunnelHelper"`
+  ])
+
+  if (result.code !== 0) {
+    throw new Error(`Windows Helper install failed: ${result.stderr}`)
+  }
+}
 
 async function installDarwinHelper(): Promise<void> {
   const resourcesPath = app.isPackaged
@@ -405,6 +436,21 @@ function registerIpcHandlers(): void {
     const res = await execPrivileged([cmd])
     if (res.code === 0) return { success: true }
     return { success: false, error: res.stderr }
+  })
+  ipcMain.handle('helper:repair', async () => {
+    try {
+      if (process.platform === 'win32') {
+        await installWindowsHelper()
+      } else if (process.platform === 'linux') {
+        await installLinuxHelper()
+      } else if (process.platform === 'darwin') {
+        await installDarwinHelper()
+      }
+      return { success: true }
+    } catch (err: any) {
+      console.error('[helper:repair] Failed to repair helper:', err)
+      return { success: false, error: err.message || String(err) }
+    }
   })
 
   ipcMain.handle('wallet:list', async () => {

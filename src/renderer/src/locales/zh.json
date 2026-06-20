@@ -344,6 +344,10 @@
     "start_proxy": "启动本地代理",
     "start_transparent": "启动透明代理",
     "or_start_proxy": "或启动本地代理",
+    "repair_helper": "修复特权服务",
+    "repairing_helper": "正在修复...",
+    "repair_failed": "修复失败：",
+    "repair_success": "修复成功！正在重新尝试连接...",
     "currently_connected": "当前已连接到此节点"
   },
   "binary": {

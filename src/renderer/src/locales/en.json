@@ -344,6 +344,10 @@
     "start_proxy": "Start local proxy",
     "start_transparent": "Start Transparent",
     "or_start_proxy": "or start local proxy",
+    "repair_helper": "REPAIR PRIVILEGED SERVICE",
+    "repairing_helper": "REPAIRING...",
+    "repair_failed": "Repair failed:",
+    "repair_success": "Repair successful! Retrying connection...",
     "currently_connected": "Currently connected to this node"
   },
   "binary": {
