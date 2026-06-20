@@ -1014,28 +1014,67 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('network:getPublicIp', async () => {
-    const fetchIp = async () => {
-      const res = await fetch('https://ipapi.co/json/', {
-        headers: { 'User-Agent': 'Chiba Tunnel (Sentinel dVPN Desktop Client)' },
+    // Multiple providers so a single rate-limit / block / captive portal does not
+    // take out IP detection entirely. Each maps its response onto the ipapi.co
+    // shape the renderer expects ({ ip, country_name, ... }).
+    const providers: Array<{ url: string; map: (j: any) => any }> = [
+      { url: 'https://ipapi.co/json/', map: j => j },
+      { url: 'https://ipwho.is/', map: j => ({ ...j, country_name: j.country }) },
+      { url: 'https://api.ipify.org?format=json', map: j => ({ ip: j.ip }) }
+    ]
+
+    const fetchIp = async (url: string, map: (j: any) => any) => {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Chiba Tunnel (Sentinel dVPN Desktop Client)',
+          'Accept': 'application/json'
+        },
         signal: AbortSignal.timeout(5000)
       })
-      return await res.json() as any
+      // A rate-limited / blocked endpoint (or a captive portal) often replies with
+      // a non-JSON body like "Please contact ...". Reading it as JSON would throw
+      // an opaque SyntaxError, so guard on status and content type and read text
+      // first, then parse explicitly for a clean, actionable error.
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status} ${res.statusText}`)
+      }
+      const body = (await res.text()).trim()
+      const looksJson = body.startsWith('{') || body.startsWith('[')
+      if (!looksJson) {
+        const snippet = body.slice(0, 80)
+        throw new Error(`Non-JSON response (likely rate-limited or blocked): ${snippet}`)
+      }
+      let parsed: any
+      try {
+        parsed = JSON.parse(body)
+      } catch {
+        throw new Error('Invalid JSON in IP service response')
+      }
+      // ipapi.co signals throttling with { error: true, reason: "RateLimited" }.
+      if (parsed && parsed.error) {
+        throw new Error(`IP service error: ${parsed.reason || parsed.message || 'unknown'}`)
+      }
+      return map(parsed)
     }
 
     console.log('[Main] Fetching public IP info...')
-    // Retry logic for IP fetch during routing transitions
+    let lastErr = 'Unknown error'
+    // Retry across providers and routing transitions.
     for (let i = 0; i < 3; i++) {
-      try {
-        if (i > 0) await new Promise(r => setTimeout(r, 1500 * i))
-        const data = await fetchIp()
-        console.log('[Main] IP info fetched successfully:', data?.ip)
-        return data
-      } catch (err: unknown) {
-        console.warn(`[Main] IP fetch attempt ${i+1} failed:`, String(err))
-        if (i === 2) return { error: String(err) }
+      if (i > 0) await new Promise(r => setTimeout(r, 1500 * i))
+      for (const { url, map } of providers) {
+        try {
+          const data = await fetchIp(url, map)
+          if (!data?.ip) throw new Error('Response missing ip field')
+          console.log(`[Main] IP info fetched successfully via ${url}:`, data.ip)
+          return data
+        } catch (err: unknown) {
+          lastErr = String(err instanceof Error ? err.message : err)
+          console.warn(`[Main] IP fetch via ${url} (attempt ${i + 1}) failed:`, lastErr)
+        }
       }
     }
-    return { error: 'Unknown error' }
+    return { error: lastErr }
   })
 
   ipcMain.handle('killswitch:enable', async () => {
