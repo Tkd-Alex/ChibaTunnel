@@ -1018,8 +1018,45 @@ function registerIpcHandlers(): void {
     // take out IP detection entirely. Each maps its response onto the ipapi.co
     // shape the renderer expects ({ ip, country_name, ... }).
     const providers: Array<{ url: string; map: (j: any) => any }> = [
+      // Ordered by reliability of GEO data + tolerance to rate limits. The free tiers
+      // of ipapi.co / ipwho.is throttle aggressively (429/403), which would otherwise
+      // fall through to ipify (IP only, no location -> empty LOCATION / PROVIDER in the
+      // UI). ip-api.com and ipinfo.io return full geo without a key. Each map()
+      // normalizes onto the shape the renderer reads: { ip, city, country_name, org, asn }.
+      {
+        url: 'http://ip-api.com/json/?fields=status,message,query,city,regionName,country,isp,org,as',
+        map: j => ({
+          ip: j.query,
+          city: j.city,
+          country_name: j.country,
+          region: j.regionName,
+          org: j.org || j.isp || '',
+          asn: j.as ? String(j.as).split(' ')[0] : ''
+        })
+      },
+      {
+        url: 'https://ipinfo.io/json',
+        map: j => ({
+          ip: j.ip,
+          city: j.city,
+          country_name: j.country,
+          region: j.region,
+          org: j.org ? String(j.org).replace(/^AS\d+\s*/, '') : '',
+          asn: j.org ? (String(j.org).match(/^AS\d+/)?.[0] || '') : ''
+        })
+      },
+      {
+        url: 'https://ipwho.is/',
+        map: j => ({
+          ip: j.ip,
+          city: j.city,
+          country_name: j.country,
+          region: j.region,
+          org: j.connection?.org || j.connection?.isp || '',
+          asn: j.connection?.asn ? `AS${j.connection.asn}` : ''
+        })
+      },
       { url: 'https://ipapi.co/json/', map: j => j },
-      { url: 'https://ipwho.is/', map: j => ({ ...j, country_name: j.country }) },
       { url: 'https://api.ipify.org?format=json', map: j => ({ ip: j.ip }) }
     ]
 
@@ -1053,6 +1090,14 @@ function registerIpcHandlers(): void {
       // ipapi.co signals throttling with { error: true, reason: "RateLimited" }.
       if (parsed && parsed.error) {
         throw new Error(`IP service error: ${parsed.reason || parsed.message || 'unknown'}`)
+      }
+      // ipwho.is signals failure with { success: false, message }.
+      if (parsed && parsed.success === false) {
+        throw new Error(`IP service error: ${parsed.message || 'request failed'}`)
+      }
+      // ip-api.com signals failure with { status: "fail", message }.
+      if (parsed && parsed.status === 'fail') {
+        throw new Error(`IP service error: ${parsed.message || 'request failed'}`)
       }
       return map(parsed)
     }
