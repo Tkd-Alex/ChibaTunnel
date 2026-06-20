@@ -62,8 +62,30 @@ export interface HelperCommand {
 export interface HelperResponse {
   status: 'ok' | 'error' | 'pong'
   error?: string
+  /** Identity fields returned by the current helper's 'ping' handler. */
+  product?: string
+  protocol?: number
   [key: string]: unknown
 }
+
+/**
+ * Protocol version this app requires from the helper. Must match (or be <=)
+ * HELPER_PROTOCOL in chibatunnel-helper.ts. Protocol 2 introduced wg-up/wg-down;
+ * a helper below this cannot bring up a tunnel and must be reinstalled.
+ */
+export const REQUIRED_HELPER_PROTOCOL = 2
+
+/** Product identity the helper must report so a foreign helper can't impersonate it. */
+export const HELPER_PRODUCT = 'chibatunnel'
+
+/**
+ * Result of verifyHelper(): a precise reason the bootstrap can act on, instead
+ * of a bare boolean. 'ok' = current ChibaTunnel helper is serving the port.
+ * 'absent' = nothing is listening. 'foreign' = something answers pong but is not
+ * us (e.g. a leftover sentinel-helper). 'outdated' = our helper but too old to
+ * know wg-up. The last two both mean "reinstall/replace the listener".
+ */
+export type HelperHealth = 'ok' | 'absent' | 'foreign' | 'outdated'
 
 // ---------------------------------------------------------------------------
 // Core function
@@ -224,4 +246,34 @@ export function sendToHelper(
 export async function pingHelper(timeoutMs = 3_000): Promise<boolean> {
   const res = await sendToHelper({ command: 'ping' }, timeoutMs)
   return res.status === 'pong'
+}
+
+/**
+ * Verifies not just that *a* helper is listening, but that it is the *current
+ * ChibaTunnel* helper — new enough to handle wg-up. This is the gate that
+ * prevents the "Unknown command: wg-up" failure: a foreign or stale listener on
+ * the port is detected here, before any privileged command is sent.
+ *
+ *   'ok'       — current ChibaTunnel helper at the required protocol. Safe to use.
+ *   'absent'   — nothing answered (no listener / not running).
+ *   'foreign'  — something answered 'pong' but isn't us (e.g. old sentinel-helper).
+ *   'outdated' — our helper, but protocol too low (predates wg-up).
+ *
+ * @param timeoutMs  Optional timeout override. Defaults to 3 s.
+ * @returns          A HelperHealth describing exactly what is on the port.
+ */
+export async function verifyHelper(timeoutMs = 3_000): Promise<HelperHealth> {
+  const res = await sendToHelper({ command: 'ping' }, timeoutMs)
+  if (res.status !== 'pong') return 'absent'
+
+  // A current helper reports its product. A helper that omits it (old build) or
+  // reports a different product (foreign helper squatting the port) is not ours.
+  if (res.product !== HELPER_PRODUCT) return 'foreign'
+
+  // Same product, but the command set predates what we need.
+  if (typeof res.protocol !== 'number' || res.protocol < REQUIRED_HELPER_PROTOCOL) {
+    return 'outdated'
+  }
+
+  return 'ok'
 }

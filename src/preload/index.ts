@@ -68,7 +68,7 @@ const api = {
   // VPN
   connectNode: (args: { nodeAddress: string; subscriptionType: 'gigabytes' | 'hours'; amount: number; donate?: boolean }) =>
     ipcRenderer.invoke('node:connect', args),
-  connectSession: (args: { nodeAddress: string; sessionId: number }) =>
+  connectSession: (args: { nodeAddress: string; sessionId: number; subscriptionType?: 'gigabytes' | 'hours'; amount?: number }) =>
     ipcRenderer.invoke('node:connectSession', args),
   connectWireGuard: () => ipcRenderer.invoke('node:connectWireguard'),
   connectV2Ray:     (args: { transparent?: boolean } = {}) => ipcRenderer.invoke('node:connectV2ray', args),

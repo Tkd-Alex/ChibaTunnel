@@ -50,6 +50,19 @@ const HELPER_PORT = 47391
 const PIPE_PATH   = '\\\\.\\pipe\\chibatunnel-helper'   // Windows only
 const MAX_CONNECTIONS = 4
 
+/**
+ * Identity returned by the 'ping' handler so the Electron app can prove it is
+ * talking to the *current* ChibaTunnel helper — not a foreign or stale helper
+ * squatting on the same TCP port (e.g. a predecessor "Sentinel dVPN" build).
+ *
+ * HELPER_PRODUCT distinguishes us from any other helper that answers 'pong'.
+ * HELPER_PROTOCOL is bumped whenever the command set changes incompatibly; the
+ * app refuses helpers below its required protocol and triggers a reinstall.
+ * Bump HELPER_PROTOCOL when adding/removing/renaming a command in processCommand().
+ */
+const HELPER_PRODUCT  = 'chibatunnel'
+const HELPER_PROTOCOL = 2   // 1 = pre-WireGuard; 2 = adds wg-up / wg-down
+
 const IS_SERVICE_MODE = process.argv.includes('--service')
 const USE_NAMED_PIPE  = process.argv.includes('--namedpipe')
 const PLATFORM        = process.platform   // 'win32' | 'linux' | 'darwin'
@@ -940,10 +953,22 @@ function stopTransparentDarwin(socket: net.Socket): void {
 // Command handlers (platform-agnostic entry points)
 // ---------------------------------------------------------------------------
 
-/** Handles 'ping'. @param socket Connected client socket. */
+/**
+ * Handles 'ping'. Replies 'pong' with an identity envelope so the app can
+ * verify this is the current ChibaTunnel helper (not a foreign/stale listener
+ * on the same port) before sending privileged commands. Older helpers reply
+ * with a bare {status:'pong'} and no product/protocol — the app treats a
+ * missing or mismatched product/protocol as "wrong helper, reinstall".
+ *
+ * @param socket Connected client socket.
+ */
 function handlePing(socket: net.Socket): void {
   log('INFO', 'Ping received — sending pong.')
-  sendResponse(socket, { status: 'pong' })
+  sendResponse(socket, {
+    status: 'pong',
+    product: HELPER_PRODUCT,
+    protocol: HELPER_PROTOCOL,
+  })
 }
 
 /**

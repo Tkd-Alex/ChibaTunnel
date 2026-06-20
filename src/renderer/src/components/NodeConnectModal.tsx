@@ -414,8 +414,10 @@ export default function NodeConnectModal({
         )
       } else if (opts?.sessionId) {
         res = await window.api.connectSession({
-          nodeAddress: node.address,
-          sessionId:   parseInt(opts.sessionId)
+          nodeAddress:      node.address,
+          sessionId:        parseInt(opts.sessionId),
+          subscriptionType: conn.subscriptionType,
+          amount:           conn.amount
         })
       } else {
         res = await window.api.connectNode({

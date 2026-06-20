@@ -267,16 +267,21 @@ export default function SessionPanel({
                     <td style={{ fontSize: 10, color: 'var(--yellow)', whiteSpace: 'nowrap' }}>{fmtPrice(s.price, isHourly)}</td>
                     <td style={{ fontSize: 10, color: 'var(--text-3)' }}>{fmtDate(s.startAt)}</td>
                     <td>
-                      {s.status === 1 && (
-                        <div style={{ display: 'flex', gap: 6 }}>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {/* End only makes sense for an on-chain ACTIVE session. */}
+                        {s.status === 1 && (
                           <button className="btn btn-danger btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} disabled={busy || !!connecting} onClick={() => setConfirmId(s.id)}>
                             {busy ? <div className="spinner" style={{ width: 10, height: 10 }} /> : <><X size={12} /> {t('sessions.end_btn')}</>}
                           </button>
-                          <button className="btn btn-primary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} disabled={busy || !!connecting} onClick={() => onConnectSession && onConnectSession(s.nodeAddress, s.id)}>
-                            <Play size={12} fill="currentColor" /> {t('sessions.connect_btn')}
-                          </button>
-                        </div>
-                      )}
+                        )}
+                        {/* Connect is offered for active AND inactive sessions: an inactive
+                            session simply mints a fresh session on the same node (stale-peer
+                            recovery in node:connectSession), so the user is never stranded
+                            without a way to reconnect to a node they already used. */}
+                        <button className="btn btn-primary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} disabled={busy || !!connecting} onClick={() => onConnectSession && onConnectSession(s.nodeAddress, s.id)}>
+                          <Play size={12} fill="currentColor" /> {t('sessions.connect_btn')}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )

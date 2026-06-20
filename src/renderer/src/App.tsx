@@ -229,6 +229,9 @@ export default function App() {
           sessionId: d.sessionId || prev?.sessionId || null,
           node: d.node || prev?.node || null
         }))
+        // A connect mints/activates a session on-chain. Re-fetch so the Sessions
+        // panel reflects reality instead of showing a stale (possibly empty) snapshot.
+        fetchSessions()
       }
     })
     const u2 = window.api.onVpnDisconnect((d: any) => {
@@ -241,6 +244,8 @@ export default function App() {
         setActiveConnection(null)
       }
       setTimeout(refreshIp, 1000)
+      // Session state changes on disconnect too — keep the panel honest.
+      fetchSessions()
     })
     const u3 = window.api.onReconnect((d: unknown) => {
       const ev = d as { status: string; attempt?: number; delay?: number }
@@ -260,7 +265,7 @@ export default function App() {
     const u5 = window.api.onCloseRequest(() => setShowQuitConfirm(true))
     const u6 = window.api.onDnsRetryAsk(() => setShowDnsRetryConfirm(true))
     return () => { u1(); u2(); u3(); u4(); u5(); u6() }
-  }, [refreshIp])
+  }, [refreshIp, fetchSessions])
 
   function applyFilters(nodes: ApiNode[], f: NodeFilters, bms: string[]): ApiNode[] {
     return nodes.filter(n => {
