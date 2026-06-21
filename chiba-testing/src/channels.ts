@@ -37,6 +37,12 @@ export interface ChannelSpec {
    *   'void'     — undefined/no meaningful return.
    */
   returns: 'envelope' | 'value' | 'void'
+  /**
+   * True if this channel opens a native dialog or otherwise needs a real focused
+   * window. The harness boots windowless (CHIBA_TEST=1), so invoking it would pop
+   * a modal dialog and block. The engine skips these automatically — never invoke.
+   */
+  requiresWindow?: boolean
 }
 
 /** Mutable context threaded through a test run so later specs can use earlier results. */
@@ -71,7 +77,7 @@ export const CHANNELS: ChannelSpec[] = [
 
   // ── binaries (readonly / local) ──
   { channel: 'binary:check', api: 'checkBinaries', desc: 'Check for wireguard/v2ray binaries', tier: 'readonly', returns: 'value' },
-  { channel: 'binary:browse', api: 'browseBinary', desc: 'Open file picker for a binary (no-op headless)', tier: 'ui', args: () => ['wireguard'], returns: 'value' },
+  { channel: 'binary:browse', api: 'browseBinary', desc: 'Open file picker for a binary (native dialog — needs a window)', tier: 'ui', args: () => ['wireguard'], returns: 'value', requiresWindow: true },
   { channel: 'binary:install', api: 'installBinary', desc: 'Run a binary install command', tier: 'privileged', args: () => ['true'], returns: 'value' },
   { channel: 'helper:repair', api: 'repairHelper', desc: 'Reinstall the privileged helper', tier: 'privileged', returns: 'envelope' },
 

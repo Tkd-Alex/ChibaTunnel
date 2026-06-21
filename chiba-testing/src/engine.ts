@@ -122,6 +122,16 @@ export async function runEngine(opts: EngineOptions, reporter: Reporter): Promis
   }
 
   for (const spec of specs) {
+    // The harness boots windowless; channels that open a native dialog would block
+    // on a modal with no parent window. Never invoke them — record an explicit skip.
+    if (spec.requiresWindow) {
+      reporter.record({
+        channel: spec.channel, api: spec.api, tier: spec.tier, outcome: 'skip', ms: 0,
+        detail: 'requires a focused window (native dialog) — not invoked headless', findings: [],
+      })
+      continue
+    }
+
     if (!hasChannel(spec.channel)) {
       reporter.record({
         channel: spec.channel, api: spec.api, tier: spec.tier, outcome: 'fail', ms: 0,

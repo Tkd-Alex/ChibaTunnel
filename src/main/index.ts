@@ -433,8 +433,11 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('binary:check', () => checkBinaries())
   ipcMain.handle('binary:browse', async (_e, name: string) => {
+    // Needs a real window to parent the modal dialog. Without one (e.g. headless
+    // / test harness) showOpenDialog would block indefinitely on an orphan modal.
+    if (!mainWindow) return { success: false, error: 'No window available for file dialog' }
     const isWin = process.platform === 'win32'
-    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow!, {
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
       title: `Select ${name} executable`,
       filters: isWin ? [{ name: 'Executables', extensions: ['exe'] }] : [],
       properties: ['openFile']
