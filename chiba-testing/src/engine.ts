@@ -88,7 +88,13 @@ function harvestContext(channel: string, value: unknown, ctx: InvokeContext): vo
   }
   if ((channel === 'plan:nodes' || channel === 'nodes:fetch') && Array.isArray(v.nodes) && v.nodes.length) {
     const n = v.nodes[0] as Record<string, unknown>
-    if (typeof n.address === 'string' && !ctx.nodeAddress) ctx.nodeAddress = n.address
+    if (typeof n.address === 'string' && !ctx.nodeAddress) {
+      ctx.nodeAddress = n.address
+      // plan:nodes is scoped to ctx.planId; nodes:fetch is the global list (plan unknown → -1).
+      // subscription:connect later needs a node ON the subscription's plan, so we track which
+      // plan this node belongs to and re-harvest if it doesn't match (see runEngine spend loop).
+      ctx.nodePlanId = channel === 'plan:nodes' && typeof ctx.planId === 'number' ? ctx.planId : -1
+    }
   }
   if (channel === 'sessions:fetch' && Array.isArray(v.sessions) && v.sessions.length) {
     const s = v.sessions[0] as Record<string, unknown>
@@ -269,6 +275,45 @@ export async function runEngine(opts: EngineOptions, reporter: Reporter): Promis
     // the chain rejects with "id cannot be zero". That's not a real test of the path; it
     // just burns fees and pollutes the report with a fake failure. SKIP (don't broadcast)
     // when the precondition isn't met, and say exactly what was missing.
+    // subscription:connect must pair its subscription's plan with a node that exists ON
+    // that plan. The node harvested earlier came from plans:fetch[0] / the global
+    // nodes:fetch list, whose plan differs from the chosen ACTIVE subscription's plan —
+    // sending that mismatched pair makes the chain reject "node X for plan Y does not
+    // exist". Re-harvest a node scoped to the subscription's actual plan first.
+    if (spec.channel === 'subscription:connect' &&
+        typeof ctx.planId === 'number' && ctx.nodePlanId !== ctx.planId &&
+        hasChannel('plan:nodes')) {
+      try {
+        const fresh = await invoke('plan:nodes', ctx.planId)
+        if (isEnvelope(fresh)) {
+          const fv = fresh as Record<string, unknown>
+          if (Array.isArray(fv.nodes) && fv.nodes.length) {
+            const n = fv.nodes[0] as Record<string, unknown>
+            if (typeof n.address === 'string') {
+              ctx.nodeAddress = n.address
+              ctx.nodePlanId = ctx.planId
+            }
+          } else {
+            // No node on the subscription's plan — clear the stale (wrong-plan) node so the
+            // precondition skips honestly instead of broadcasting a doomed mismatched connect.
+            ctx.nodeAddress = undefined
+            ctx.nodePlanId = undefined
+          }
+        }
+      } catch (err) {
+        // Re-harvest is best-effort; if it throws, fall through and let the precondition
+        // decide on the existing (possibly stale) node rather than crashing the run.
+        const msg = err instanceof Error ? err.message : String(err)
+        reporter.record({
+          channel: spec.channel, api: spec.api, tier: spec.tier, outcome: 'skip', ms: 0,
+          detail: `could not re-harvest a node on the subscription's plan (${ctx.planId}): ${msg}`,
+          findings: [],
+        })
+        continue
+      }
+      await new Promise((r) => setTimeout(r, 150))
+    }
+
     if (spec.tier === 'spend') {
       const missing = spendPrecondition(spec.channel, ctx)
       if (missing) {

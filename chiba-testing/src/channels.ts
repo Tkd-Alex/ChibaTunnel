@@ -66,6 +66,13 @@ export interface InvokeContext {
   planId?: number
   /** A node address discovered from nodes:fetch, for node:info / provider:info. */
   nodeAddress?: string
+  /**
+   * The plan id the harvested nodeAddress is known to belong to. -1 means the node
+   * came from the global (plan-agnostic) nodes:fetch list, so its plan is unknown.
+   * subscription:connect must pair its subscription's plan with a node ON that plan,
+   * so the engine re-harvests a plan-scoped node when this doesn't match the sub's plan.
+   */
+  nodePlanId?: number
   /** Provider address discovered from a node, for provider:info. */
   providerAddress?: string
   /** A subscription id discovered from subscriptions:fetch (prefers an ACTIVE one). */

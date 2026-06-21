@@ -36,6 +36,13 @@ import {
   MsgStartLeaseRequest as TestMsgStartLeaseRequest,
   MsgEndLeaseRequest as TestMsgEndLeaseRequest
 } from '@sentinel-official/sentinel-js-sdk/dist/protobuf/sentinel/lease/v1/msg'
+// Test-harness only: lease QUERY service. The lease module is absent from the bundled
+// SentinelQueryClient, so the CHIBA_TEST reconcile handler builds it on top of the existing
+// cosmjs QueryClient (createProtobufRpcClient) to look up pre-existing leases by node.
+import {
+  QueryServiceClientImpl as TestLeaseQueryClient,
+  QueryLeasesForNodeRequest as TestQueryLeasesForNodeRequest
+} from '@sentinel-official/sentinel-js-sdk/dist/protobuf/sentinel/lease/v1/querier'
 // Test-harness only: provider v3 register/status msgs. A wallet must be a REGISTERED + ACTIVE
 // provider (sentprov-prefixed) before it can create plans. The bundled SentinelRegistry omits
 // the provider module, so the CHIBA_TEST handler registers these typeUrls at runtime.
@@ -43,7 +50,7 @@ import {
   MsgRegisterProviderRequest as TestMsgRegisterProviderRequest,
   MsgUpdateProviderStatusRequest as TestMsgUpdateProviderStatusRequest
 } from '@sentinel-official/sentinel-js-sdk/dist/protobuf/sentinel/provider/v3/msg'
-import { assertIsDeliverTxSuccess } from '@cosmjs/stargate'
+import { assertIsDeliverTxSuccess, createProtobufRpcClient } from '@cosmjs/stargate'
 import { fromBech32, toBech32 } from '@cosmjs/encoding'
 import { MsgSend } from 'cosmjs-types/cosmos/bank/v1beta1/tx'
 import Long from 'long'
@@ -1174,6 +1181,36 @@ function registerIpcHandlers(): void {
           price: { denom: udvpn.denom, baseValue: String(udvpn.baseValue), quoteValue: String(udvpn.quoteValue) },
           remote: chainNode.remoteAddrs?.[0] ?? null
         }
+      } catch (err: unknown) {
+        return { success: false, error: extractError(err) }
+      }
+    })
+
+    // Query the on-chain leases attached to a node. The lease module is NOT part of the bundled
+    // SentinelQueryClient, so build the lease QueryService on top of the existing cosmjs
+    // QueryClient (sentinelQuery extends @cosmjs/stargate's QueryClient → has the abci RPC the
+    // protobuf rpc client needs). The provider e2e uses this to RECONCILE a pre-existing lease:
+    // a crashed prior run can orphan a lease on the chosen node, and StartLease then reverts with
+    // "duplicate lease". Returning existing leases lets the harness end/reuse before re-leasing.
+    ipcMain.handle('test:leasesForNode', async (_e, nodeAddress: string) => {
+      if (!walletState.client?.sentinelQuery) return { success: false, error: 'Read client not initialized' }
+      if (!nodeAddress || !nodeAddress.startsWith('sentnode')) return { success: false, error: 'Invalid node address' }
+      try {
+        const rpc = createProtobufRpcClient(walletState.client.sentinelQuery as unknown as Parameters<typeof createProtobufRpcClient>[0])
+        const leaseQuery = new TestLeaseQueryClient(rpc)
+        const res = await withTimeout(
+          leaseQuery.QueryLeasesForNode(TestQueryLeasesForNodeRequest.fromJSON({ address: nodeAddress })),
+          RPC_TIMEOUT_MS,
+          'RPC timeout fetching leases for node'
+        )
+        const leases = (res?.leases ?? []).map((l) => ({
+          id: longToNum(l.id),
+          provAddress: l.provAddress,
+          nodeAddress: l.nodeAddress,
+          hours: longToNum(l.hours),
+          maxHours: longToNum(l.maxHours)
+        }))
+        return { success: true, leases }
       } catch (err: unknown) {
         return { success: false, error: extractError(err) }
       }

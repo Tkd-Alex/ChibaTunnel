@@ -286,6 +286,46 @@ export async function runProviderE2E(opts: ProviderOptions, ctx: InvokeContext, 
   step(reporter, 'provider:ensure', ensureDetail, 'pass', Date.now() - pt)
   if (!prov.alreadyActive) await new Promise((r) => setTimeout(r, STEP_GAP_MS))
 
+  // ── 2c. reconcile any PRE-EXISTING lease on the target node ──
+  // A prior provider run that crashed before lease:end leaves an orphaned lease on this node.
+  // The chain enforces one lease per (node, provider): StartLease then reverts with
+  // "duplicate lease" and the whole run fails on un-cleaned state from a previous run. Query
+  // the node's leases up front; if THIS provider already holds one, end it so the fresh
+  // StartLease below succeeds. (Leases held by OTHER providers are left untouched — they are
+  // not ours to end, and the cheapest-node picker can still select this node since the chain
+  // only blocks a second lease by the SAME provider.) Honest no-op if the channel is absent.
+  if (hasChannel('test:leasesForNode')) {
+    const rt = Date.now()
+    const lr = (await invoke('test:leasesForNode', targetNode.address)) as {
+      success?: boolean
+      error?: string
+      leases?: Array<{ id: number; provAddress: string; nodeAddress: string }>
+    }
+    if (lr?.success !== true) {
+      step(reporter, 'lease:reconcile(provider)', `could not query existing leases for ${targetNode.address}: ${lr?.error ?? 'unknown'} — proceeding (StartLease will surface a duplicate if one exists)`, 'skip', Date.now() - rt)
+    } else {
+      const mine = (lr.leases ?? []).filter((l) => l.provAddress === provFrom && Number.isFinite(l.id) && l.id > 0)
+      if (!mine.length) {
+        step(reporter, 'lease:reconcile(provider)', `no pre-existing lease by this provider on ${targetNode.address} — clean to lease`, 'pass', Date.now() - rt)
+      } else {
+        for (const orphan of mine) {
+          const et = Date.now()
+          const ended = await providerBroadcast([{ typeUrl: TYPE_END_LEASE, value: { from: provFrom, id: String(orphan.id) } }])
+          step(
+            reporter,
+            'lease:reconcile(provider)',
+            ended?.success === true
+              ? `ended orphaned lease ${orphan.id} on ${targetNode.address} (tx ${ended.txHash}) — node freed for a fresh lease`
+              : `could not end orphaned lease ${orphan.id}: ${ended?.error ?? 'unknown'} — fresh StartLease may still revert`,
+            ended?.success === true ? 'pass' : 'fail',
+            Date.now() - et,
+          )
+          await new Promise((r) => setTimeout(r, STEP_GAP_MS))
+        }
+      }
+    }
+  }
+
   // ── 3. create our own plan ──
   // chiba-SDK MsgCreatePlanRequest shape: { from, bytes (string), duration
   // (Duration {seconds, nanos}), prices (Price[]), private (NOT isPrivate) }.
