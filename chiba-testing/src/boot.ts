@@ -21,6 +21,15 @@ import { runEngine } from './engine'
 // ── 0. force test mode for the app bundle we are about to require ──
 process.env.CHIBA_TEST = '1'
 
+// Match the INSTALLED app's userData dir so the harness reads the same electron-store
+// (wallets, settings, RPC) the real app uses. Launched via the raw electron binary,
+// app.getName() defaults to 'Electron' → userData would be ...\Roaming\Electron and the
+// app's Store({name:'chibatunnel'}) would land there (an empty parallel store). The
+// installed exe resolves name 'chibatunnel' → ...\Roaming\chibatunnel. We force the same
+// name BEFORE requiring the bundle so Store() resolves to the real path. This must run
+// before app.whenReady() (the app constructs its Store at module load).
+app.setName('chibatunnel')
+
 // ── 1. capture shim must be live before the app registers handlers ──
 installCapture()
 
@@ -32,6 +41,23 @@ function flag(name: string, fallback?: string): string | undefined {
 const mode = (flag('mode', 'map') ?? 'map') as 'map' | 'test'
 const maxTier = (flag('tier', 'readonly') ?? 'readonly') as Tier
 const mnemonic = flag('mnemonic') || process.env.CHIBA_TEST_MNEMONIC
+// Opt-in: run wallet-store-mutating channels. The harness shares the installed app's
+// real wallet store, so these are skipped by default to protect the user's wallets.
+const allowWalletMutations = process.argv.includes('--allow-wallet-mutations')
+// Hard opt-in: the LIVE tier brings a REAL tunnel up on this host (WireGuard/tun2socks)
+// to exercise the feature branches gated behind an active session/config. Mutates the
+// host network stack and spends on sessions — never run implicitly.
+const allowLiveTunnel = process.argv.includes('--allow-live-tunnel')
+// Hard opt-in: run the PROVIDER e2e (create plan → lease+link a live node → self-
+// subscribe → connect → end lease) instead of the consumer live tier. Spends real
+// funds (plan create + node lease + subscription). Requires --tier=live AND
+// --allow-live-tunnel. Without it, the live tier runs the consumer path (runLive).
+const providerE2E = process.argv.includes('--provider-e2e')
+// How many nodes the live tier probes (real node:info RTT each) looking for a live one.
+// The live network is large and mostly V2Ray; the default is generous so the probe
+// reaches a live node of the dominant type rather than exhausting a tiny budget.
+const maxProbeRaw = flag('max-probe')
+const maxProbe = maxProbeRaw && Number.isFinite(Number(maxProbeRaw)) ? Number(maxProbeRaw) : undefined
 
 if (!TIER_ORDER.includes(maxTier)) {
   // eslint-disable-next-line no-console
@@ -102,7 +128,26 @@ async function run(): Promise<void> {
     console.log(`  ⚠ SPEND tier enabled — on-chain transactions may be broadcast. Use a throwaway wallet.\n`)
   }
 
-  await runEngine({ maxTier, mnemonic }, reporter)
+  if (allowWalletMutations) {
+    // eslint-disable-next-line no-console
+    console.log(`  ⚠ WALLET MUTATIONS enabled — add/remove/switch/rename/setup/forget will run against the REAL store.\n`)
+  }
+
+  if (TIER_ORDER.indexOf(maxTier) >= TIER_ORDER.indexOf('live')) {
+    // eslint-disable-next-line no-console
+    console.log(
+      allowLiveTunnel
+        ? `  ⚠ LIVE tier enabled — a REAL tunnel will be brought up on this host and torn down.\n`
+        : `  ⚠ LIVE tier selected but --allow-live-tunnel not passed — the live tunnel step will be skipped.\n`,
+    )
+  }
+
+  if (providerE2E) {
+    // eslint-disable-next-line no-console
+    console.log(`  ⚠ PROVIDER e2e enabled — will CREATE a plan, LEASE a node (≤1 DVPN/1h), self-subscribe, connect, then END the lease.\n`)
+  }
+
+  await runEngine({ maxTier, mnemonic, allowWalletMutations, allowLiveTunnel, maxProbe, providerE2E }, reporter)
 
   const { json, md } = reporter.finish(nowIso(), reportDir())
   const t = reporter.totals

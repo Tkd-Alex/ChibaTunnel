@@ -14,7 +14,13 @@
 //                requires a funded throwaway wallet.
 //   ui         — window/app lifecycle. Mostly no-ops headless; run but don't assert effects.
 
-export type Tier = 'readonly' | 'local' | 'privileged' | 'spend' | 'ui'
+//   live       — brings a REAL tunnel up on the host (WireGuard/tun2socks) against a
+//                live node, exercising the feature branches gated behind an active
+//                session/config (split tunnel rewrite, DoH injection, transparent
+//                proxy, traffic-stat sources, on-chain disconnect). Highest tier;
+//                opt-in only, mutates the host network stack, spends on sessions.
+
+export type Tier = 'readonly' | 'local' | 'privileged' | 'spend' | 'ui' | 'live'
 
 export interface ChannelSpec {
   /** IPC channel name as registered by ipcMain.handle. */
@@ -43,6 +49,13 @@ export interface ChannelSpec {
    * a modal dialog and block. The engine skips these automatically — never invoke.
    */
   requiresWindow?: boolean
+  /**
+   * True if this channel mutates the SHARED wallet store the installed app uses
+   * (the harness now points at the real userData dir). Running it automatically would
+   * change/destroy the user's real wallets/active selection. The engine skips these
+   * unless --allow-wallet-mutations is passed. Reads are always safe.
+   */
+  mutatesWallet?: boolean
 }
 
 /** Mutable context threaded through a test run so later specs can use earlier results. */
@@ -55,6 +68,12 @@ export interface InvokeContext {
   nodeAddress?: string
   /** Provider address discovered from a node, for provider:info. */
   providerAddress?: string
+  /** A subscription id discovered from subscriptions:fetch (prefers an ACTIVE one). */
+  subscriptionId?: number
+  /** True when the harvested subscription is ACTIVE (status===1) — connectable. */
+  subscriptionActive?: boolean
+  /** A session id discovered from sessions:fetch, for node:connectSession. */
+  sessionId?: number
   /** Arbitrary scratch space. */
   [key: string]: unknown
 }
@@ -83,15 +102,15 @@ export const CHANNELS: ChannelSpec[] = [
 
   // ── wallet (mixed) ──
   { channel: 'wallet:list', api: 'listWallets', desc: 'List stored wallets', tier: 'readonly', returns: 'value' },
-  { channel: 'wallet:add', api: 'addWallet', desc: 'Add a wallet from mnemonic', tier: 'local', args: (c) => [c.mnemonic ?? '', 'chiba-test'], returns: 'envelope' },
-  { channel: 'wallet:switch', api: 'switchWallet', desc: 'Switch active wallet by index', tier: 'local', args: () => [0], returns: 'envelope' },
-  { channel: 'wallet:remove', api: 'removeWallet', desc: 'Remove a wallet by index', tier: 'local', args: () => [0], returns: 'envelope' },
-  { channel: 'wallet:rename', api: 'renameWallet', desc: 'Rename a wallet', tier: 'local', args: () => [0, 'renamed'], returns: 'envelope' },
+  { channel: 'wallet:add', api: 'addWallet', desc: 'Add a wallet from mnemonic', tier: 'local', args: (c) => [c.mnemonic ?? '', 'chiba-test'], returns: 'envelope', mutatesWallet: true },
+  { channel: 'wallet:switch', api: 'switchWallet', desc: 'Switch active wallet by index', tier: 'local', args: () => [0], returns: 'envelope', mutatesWallet: true },
+  { channel: 'wallet:remove', api: 'removeWallet', desc: 'Remove a wallet by index', tier: 'local', args: () => [0], returns: 'envelope', mutatesWallet: true },
+  { channel: 'wallet:rename', api: 'renameWallet', desc: 'Rename a wallet', tier: 'local', args: () => [0, 'renamed'], returns: 'envelope', mutatesWallet: true },
   { channel: 'wallet:hasMnemonic', api: 'hasMnemonic', desc: 'Whether a mnemonic is stored', tier: 'readonly', returns: 'value' },
   { channel: 'wallet:generateMnemonic', api: 'generateMnemonic', desc: 'Generate a fresh mnemonic', tier: 'readonly', returns: 'value' },
-  { channel: 'wallet:setup', api: 'setupWallet', desc: 'Set up wallet from mnemonic', tier: 'local', args: (c) => [c.mnemonic ?? '', 'chiba-test'], returns: 'envelope' },
+  { channel: 'wallet:setup', api: 'setupWallet', desc: 'Set up wallet from mnemonic', tier: 'local', args: (c) => [c.mnemonic ?? '', 'chiba-test'], returns: 'envelope', mutatesWallet: true },
   { channel: 'wallet:loadStored', api: 'loadStoredWallet', desc: 'Load the stored wallet', tier: 'readonly', returns: 'envelope' },
-  { channel: 'wallet:forget', api: 'forgetWallet', desc: 'Forget the active wallet', tier: 'local', returns: 'envelope' },
+  { channel: 'wallet:forget', api: 'forgetWallet', desc: 'Forget the active wallet', tier: 'local', returns: 'envelope', mutatesWallet: true },
   { channel: 'wallet:getBalances', api: 'getBalances', desc: 'Fetch balances for addresses', tier: 'readonly', args: (c) => [c.address ? [c.address] : []], returns: 'value' },
   { channel: 'wallet:getInfo', api: 'getWalletInfo', desc: 'Get active wallet info', tier: 'readonly', returns: 'value' },
 
@@ -143,7 +162,7 @@ export const CHANNELS: ChannelSpec[] = [
 ]
 
 /** Tier ordering for "run up to tier" gating. */
-export const TIER_ORDER: Tier[] = ['ui', 'readonly', 'local', 'privileged', 'spend']
+export const TIER_ORDER: Tier[] = ['ui', 'readonly', 'local', 'privileged', 'spend', 'live']
 
 /** Channels at or below the given max tier (by TIER_ORDER position). */
 export function channelsUpToTier(maxTier: Tier): ChannelSpec[] {
