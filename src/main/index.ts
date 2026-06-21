@@ -1094,6 +1094,11 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('killswitch:enable', async () => {
     try {
+      // set-kill-switch installs SYSTEM/root firewall rules via the helper — gate it
+      // behind helper verification (reinstall once if needed) so we never drive a foreign
+      // or missing helper, same contract as wg-up / start-transparent.
+      const ready = await ensureHelperReady()
+      if (!ready.ready) return { success: false, error: ready.error ?? 'Helper not ready.' }
       await sendToHelper({ command: 'set-kill-switch', enabled: true })
       return { success: true }
     } catch (err: unknown) {
@@ -1103,6 +1108,12 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('killswitch:disable', async () => {
     try {
+      // Disabling also clears privileged firewall rules through the helper. A foreign
+      // squatter must be evicted (the gate reinstalls the genuine helper) before we can
+      // actually clear the rules — driving an unverified helper here could leave traffic
+      // blocked. Gate it like enable.
+      const ready = await ensureHelperReady()
+      if (!ready.ready) return { success: false, error: ready.error ?? 'Helper not ready.' }
       await sendToHelper({ command: 'set-kill-switch', enabled: false })
       return { success: true }
     } catch (err: unknown) {
@@ -1156,6 +1167,13 @@ async function setupTransparentV2Ray(v2ray: V2Ray): Promise<{ success: boolean; 
       } catch (e) { console.error('DNS resolve failed', e) }
     }
     activeV2RayServerIp = serverIp
+
+    // Gate: start-transparent is a privileged op (the helper brings up tun2socks and,
+    // with killSwitch, installs firewall rules at SYSTEM/root). Never hand it to an
+    // unverified / foreign / missing helper — verify (and reinstall once) first, exactly
+    // as wg-up does. This is the contract ensureHelperReady's own docstring promises.
+    const ready = await ensureHelperReady()
+    if (!ready.ready) return { success: false, error: ready.error ?? 'Helper not ready.' }
 
     const binaries = checkBinaries()
     const settings = getSettings()
@@ -1554,8 +1572,9 @@ function patchConfigFileForDns(configFile: string): void {
 /**
  * Verifies that the genuine, protocol-compatible helper is up — and, if it is
  * not, attempts a single (re)install before re-verifying. This is the gate that
- * must pass before we hand the helper any privileged command (wg-up,
- * start-transparent), so we never drive a foreign squatter or a missing helper.
+ * must pass before we hand the helper ANY privileged command (wg-up,
+ * start-transparent, set-kill-switch), so we never drive a foreign squatter or a
+ * missing helper.
  *
  * Returns { ready: true } when a verified helper is confirmed, otherwise
  * { ready: false, error } with a user-facing reason.
@@ -1569,11 +1588,11 @@ async function ensureHelperReady(): Promise<{ ready: boolean; error?: string }> 
   // Reinstalling force-recreates the helper (Windows: schtasks /create /f),
   // which also evicts a stale or foreign holder before we retry verification.
   if (health.reason === 'foreign') {
-    console.warn('[helper] Foreign responder on the helper channel — reinstalling genuine helper before wg-up.')
+    console.warn('[helper] Foreign responder on the helper channel — reinstalling genuine helper before privileged op.')
   } else if (health.reason === 'incompatible') {
-    console.warn(`[helper] Helper protocol mismatch (got ${health.protocol ?? 'none'}) — reinstalling before wg-up.`)
+    console.warn(`[helper] Helper protocol mismatch (got ${health.protocol ?? 'none'}) — reinstalling before privileged op.`)
   } else {
-    console.warn('[helper] Helper unreachable — installing before wg-up.')
+    console.warn('[helper] Helper unreachable — installing before privileged op.')
   }
 
   try {
