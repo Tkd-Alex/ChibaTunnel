@@ -623,7 +623,7 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('sessions:fetch', async () => {
-    if (!walletState.readonlyClient || !walletState.address) return { success: false, sessions: [] }
+    if (!walletState.readonlyClient || !walletState.address) return { success: false, error: walletState.address ? 'No RPC client' : 'Wallet not loaded', sessions: [] }
     try {
       const r = await walletState.readonlyClient.sentinelQuery?.session.sessionsForAccount(
         walletState.address, 
@@ -659,7 +659,7 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('plans:fetch', async () => {
-    if (!walletState.readonlyClient) return { success: false, plans: [] }
+    if (!walletState.readonlyClient) return { success: false, error: 'No RPC client', plans: [] }
     try {
       const res = await walletState.readonlyClient.sentinelQuery?.plan.plans(Status.STATUS_ACTIVE, undefined)
       const plans = (res?.plans ?? []).map(p => ({
@@ -682,7 +682,7 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('subscriptions:fetch', async () => {
-    if (!walletState.readonlyClient || !walletState.address) return { success: false, subscriptions: [] }
+    if (!walletState.readonlyClient || !walletState.address) return { success: false, error: walletState.address ? 'No RPC client' : 'Wallet not loaded', subscriptions: [] }
     try {
       const res = await walletState.readonlyClient.sentinelQuery?.subscription.subscriptionsForAccount(walletState.address, undefined)
       const subscriptions = (res?.subscriptions ?? []).map(s => {
@@ -724,7 +724,7 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('plan:nodes', async (_e, planId: number) => {
-    if (!walletState.readonlyClient) return { success: false, nodes: [] }
+    if (!walletState.readonlyClient) return { success: false, error: 'No RPC client', nodes: [] }
     try {
       const id = Long.fromNumber(planId, true)
       const res = await walletState.readonlyClient.sentinelQuery?.node.nodesForPlan(id, Status.STATUS_ACTIVE, undefined)
@@ -756,7 +756,7 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('plans:scanNodes', async (_e, planIds: number[]) => {
-    if (!walletState.readonlyClient) return { success: false, nodesMap: {} }
+    if (!walletState.readonlyClient) return { success: false, error: 'No RPC client', nodesMap: {} }
     const nodesMap: Record<number, any[]> = {}
     
     // Concurrency limit: 10
@@ -818,7 +818,7 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('providers:fetchBatch', async (_e, addresses: string[]) => {
-    if (!walletState.readonlyClient) return { success: false, providers: {} }
+    if (!walletState.readonlyClient) return { success: false, error: 'No RPC client', providers: {} }
     const providers: Record<string, any> = {}
     
     // Concurrency limit: 20 (providers are simpler)
