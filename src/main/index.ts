@@ -937,7 +937,6 @@ function registerIpcHandlers(): void {
 
       // Handshake with a small retry loop for propagation delay.
       let lastErr: any = null
-      let recreatedForStalePeer = false
       for (let i = 0; i < 5; i++) {
         try {
           if (i > 0) await new Promise(r => setTimeout(r, 2000))
@@ -947,37 +946,13 @@ function registerIpcHandlers(): void {
           lastErr = err
           const msg = (err.message || '').toLowerCase()
 
-          // Config-less 409: node holds a STALE peer for this session. Cancel it
-          // on-chain to release the node peer, mint a fresh subscription session,
-          // and retry once. Re-handshaking the same dead session 409s forever.
-          if (isStalePeer409(err) && !recreatedForStalePeer) {
-            recreatedForStalePeer = true
-            console.warn(`[Subscription:Connect] Stale node peer for Session #${sessionId} (409, no config). Minting a fresh session and retrying...`)
-            try {
-              await walletState.client!.signAndBroadcast(
-                walletState.address!,
-                [sessionCancel({ from: walletState.address!, id: sessionId })],
-                'auto',
-                'Chiba Tunnel (Sentinel dVPN Desktop Client)'
-              ).catch((cancelErr: any) => console.warn('[Subscription:Connect] cancel of stale session failed (continuing):', cancelErr))
-
-              const freshTx = await walletState.client!.signAndBroadcast(
-                walletState.address!,
-                [subscriptionStartSession({ from: walletState.address!, id: Long.fromNumber(subscriptionId, true), nodeAddress })],
-                'auto',
-                'Chiba Tunnel (Sentinel dVPN Desktop Client)'
-              )
-              assertIsDeliverTxSuccess(freshTx)
-              const freshEvent = searchEvent(SubscriptionEventCreateSession.type, freshTx.events)
-              if (!freshEvent) throw new Error('Fresh session creation event not found')
-              sessionId = SubscriptionEventCreateSession.parse(freshEvent).value.sessionId
-              activeSessionId = sessionId.toString()
-              console.log(`[Subscription:Connect] Minted fresh Session #${sessionId} after stale-peer 409 -> retrying handshake`)
-              continue
-            } catch (mintErr: any) {
-              console.error('[Subscription:Connect] Fresh-session mint failed:', mintErr)
-              return { success: false, error: extractError(mintErr) }
-            }
+          // Config-less 409: the node holds a STALE peer for this session and will not
+          // release it on re-handshake. We do NOT mint a fresh session here — that would
+          // charge the user again for a session they already paid for (see
+          // stalePeerFailure / docs/STALE-PEER-409.md). Surface the node-side bug.
+          if (isStalePeer409(err)) {
+            console.warn(`[Subscription:Connect] Stale node peer for Session #${sessionId} (409, no config) — not auto-spending; surfacing to user.`)
+            return stalePeerFailure(sessionId)
           }
 
           if (msg.includes('not exist') || msg.includes('404') || msg.includes('409') || msg.includes('already exists')) {
@@ -1017,14 +992,12 @@ function registerIpcHandlers(): void {
     reconnectAttempts = 0; wasConnected = false;
 
     let sessionId: Long = Long.fromNumber(args.sessionId, true)
-    let recreatedForStalePeer = false
     let lastErr: any = null
 
     // Handshake the chosen session. If the node holds a STALE peer for it (config-less
-    // 409 "already exists"), don't re-handshake the same dead session — that 409s
-    // forever. Mirror the Sentinel C# SDK (SentinelVpnClient.Connect.cs:250-271): mint
-    // a FRESH session on the same node and handshake the new session ID. The node keys
-    // its peer record by session ID, so a new ID side-steps the stale peer cleanly.
+    // 409 "already exists"), re-handshaking the same session 409s forever. We do NOT
+    // mint a fresh session to escape it — that re-charges the user (see stalePeerFailure
+    // / docs/STALE-PEER-409.md). Surface the node-side bug instead.
     for (let i = 0; i < 6; i++) {
       try {
         if (i > 0) await new Promise(r => setTimeout(r, 2000))
@@ -1034,19 +1007,9 @@ function registerIpcHandlers(): void {
         lastErr = err
         const msg = (err.message || '').toLowerCase()
 
-        if (isStalePeer409(err) && !recreatedForStalePeer) {
-          recreatedForStalePeer = true
-          console.warn(`[Node:ConnectSession] Stale node peer for Session #${sessionId} (409, no config). Minting a fresh session and retrying...`)
-          try {
-            const fresh = await mintFreshNodeSession(args.nodeAddress, args.subscriptionType ?? 'gigabytes', args.amount ?? 1, sessionId)
-            sessionId = fresh
-            activeSessionId = sessionId.toString()
-            console.log(`[Node:ConnectSession] Minted fresh Session #${sessionId} after stale-peer 409 -> retrying handshake`)
-            continue
-          } catch (mintErr: any) {
-            console.error('[Node:ConnectSession] Fresh-session mint failed:', mintErr)
-            return { success: false, error: extractError(mintErr), details: mintErr?.response?.data }
-          }
+        if (isStalePeer409(err)) {
+          console.warn(`[Node:ConnectSession] Stale node peer for Session #${sessionId} (409, no config) — not auto-spending; surfacing to user.`)
+          return stalePeerFailure(sessionId)
         }
 
         // 404 / "not exist": propagation lag. 409 / "already exists" (with config): node
@@ -1352,48 +1315,27 @@ async function findReusableSession(nodeAddress: string): Promise<Long | null> {
 
 // Mint a brand-new on-chain session for `nodeAddress` and return its session ID.
 // Used to recover from a config-less stale-peer 409: the node keys its peer record
-// by session ID, so a fresh session ID side-steps the stale peer that re-handshaking
-// the same ID never clears. Mirrors the Sentinel C# SDK's poison + create-new + retry
-// (SentinelVpnClient.Connect.cs:250-271). We also best-effort cancel the stale session
-// on-chain first so the wallet isn't left paying for an orphaned session.
-async function mintFreshNodeSession(
-  nodeAddress: string,
-  subscriptionType: 'gigabytes' | 'hours',
-  amount: number,
-  staleSessionId?: Long
-): Promise<Long> {
-  if (!walletState.client || !walletState.address) throw new Error('Wallet not initialized')
+// by session ID. A new session ID WOULD side-step the stale peer — but minting one
+// means a fresh nodeStartSession TX, i.e. the user PAYS AGAIN for a session they already
+// bought, and the orphaned session keeps billing until it expires. That is a paid
+// workaround for a NODE-SIDE bug (the dVPN node fails to evict a stale WireGuard peer
+// when the same account re-handshakes an existing session), so we must NOT silently
+// spend the user's funds to paper over it. The honest behaviour is to surface the bug
+// with an actionable message and let the user decide. Root cause + intended node-side
+// fix are documented in docs/STALE-PEER-409.md.
+//
+// User-facing message for a config-less stale-peer 409. No on-chain spend.
+const STALE_PEER_409_MESSAGE =
+  'This node is holding a stale connection from a previous session and is refusing ' +
+  'the handshake (HTTP 409). Reusing your existing session is the correct, free path, ' +
+  'but the node will not release the old peer on its own. Try reconnecting in a minute, ' +
+  'or pick another node. (This is a node-side issue: the dVPN node should evict a stale ' +
+  'peer when the same account re-handshakes an existing session.)'
 
-  // Best-effort: release the stale session on-chain (the node drops the peer). If this
-  // fails (already ended, propagation lag) we still mint a fresh session and proceed.
-  if (staleSessionId) {
-    mainWindow?.webContents.send('vpn:status', { step: 'clearing_stale_session' })
-    try {
-      await walletState.client.signAndBroadcast(walletState.address, [sessionCancel({ from: walletState.address, id: staleSessionId })], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
-    } catch (cancelErr) {
-      console.warn('[mintFreshNodeSession] cancel of stale session failed (continuing to mint fresh):', cancelErr)
-    }
-  }
-
-  const chainNode = await withTimeout(walletState.client.sentinelQuery?.node.node(nodeAddress), RPC_TIMEOUT_MS, 'RPC timeout fetching node')
-  if (!chainNode) throw new Error(`Node not found: ${nodeAddress}`)
-  const chainPrices = (subscriptionType === 'gigabytes' ? chainNode.gigabytePrices : chainNode.hourlyPrices) ?? []
-  const udvpnPrice = chainPrices.find((p: Price) => p.denom === 'udvpn')
-  if (!udvpnPrice) throw new Error('No udvpn price on chain')
-
-  mainWindow?.webContents.send('vpn:status', { step: 'signing_tx' })
-  mainWindow?.webContents.send('vpn:status', { step: 'broadcasting_tx' })
-  const txArgs: TxNodeStartSession = {
-    from: walletState.address, nodeAddress,
-    gigabytes: subscriptionType === 'gigabytes' ? Long.fromNumber(Math.max(1, amount), true) : undefined,
-    hours: subscriptionType === 'hours' ? Long.fromNumber(Math.max(1, amount), true) : undefined,
-    maxPrice: udvpnPrice, fee: 'auto', memo: 'Chiba Tunnel (Sentinel dVPN Desktop Client)'
-  }
-  const tx = await walletState.client.signAndBroadcast(walletState.address, [nodeStartSession(txArgs)], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
-  assertIsDeliverTxSuccess(tx)
-  const event = searchEvent(NodeEventCreateSession.type, tx.events)
-  if (!event) throw new Error('Session creation event not found after stale-peer recovery')
-  return NodeEventCreateSession.parse(event).value.sessionId
+// Build the failure envelope for a config-less stale-peer 409. Marked stalePeer so the
+// renderer can offer "try another node" without implying the user must pay again.
+function stalePeerFailure(sessionId: Long | number): { success: false; error: string; stalePeer: true; sessionId: string } {
+  return { success: false, error: STALE_PEER_409_MESSAGE, stalePeer: true, sessionId: sessionId.toString() }
 }
 
 // When a node returns HTTP 409 "already exists" it may still include the peer
@@ -1473,7 +1415,6 @@ async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabyt
 
     // Handshake with a small retry loop for propagation delay.
     let lastErr: any = null
-    let recreatedForStalePeer = false
     for (let i = 0; i < 5; i++) {
       try {
         if (i > 0) await new Promise(r => setTimeout(r, 2000))
@@ -1485,21 +1426,12 @@ async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabyt
 
         // Config-less 409: the node holds a STALE peer for this session (left by a
         // prior process that exited without disconnecting). Re-handshaking the same
-        // session 409s forever, so cancel it on-chain (releases the node peer) and
-        // mint one fresh session, then retry. Done at most once — if it recurs the
-        // node is in a state we can't clear, so fall through to normal failure.
-        if (isStalePeer409(err) && !recreatedForStalePeer) {
-          recreatedForStalePeer = true
-          console.warn(`[Node:Connect] Stale node peer for Session #${sessionId} (409, no config). Minting a fresh session and retrying...`)
-          try {
-            sessionId = await mintFreshNodeSession(args.nodeAddress, args.subscriptionType, args.amount, sessionId as Long)
-            activeSessionId = sessionId.toString()
-            console.log(`[Node:Connect] Recreated Session #${sessionId} after stale-peer 409 -> retrying handshake`)
-            continue
-          } catch (mintErr: any) {
-            console.error('[Node:Connect] Fresh-session mint failed:', mintErr)
-            return { success: false, error: extractError(mintErr), details: mintErr?.response?.data }
-          }
+        // session 409s forever. We do NOT mint a fresh session to escape it — that
+        // re-charges the user for a session they already paid for (see stalePeerFailure
+        // / docs/STALE-PEER-409.md). Surface the node-side bug instead.
+        if (isStalePeer409(err)) {
+          console.warn(`[Node:Connect] Stale node peer for Session #${sessionId} (409, no config) — not auto-spending; surfacing to user.`)
+          return stalePeerFailure(sessionId)
         }
 
         // 404 / "not exist": node hasn't indexed the session yet (propagation lag).

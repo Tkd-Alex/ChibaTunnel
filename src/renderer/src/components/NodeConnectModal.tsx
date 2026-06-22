@@ -466,8 +466,9 @@ export default function NodeConnectModal({
         res = await window.api.connectSession({
           nodeAddress:      node.address,
           sessionId:        parseInt(opts.sessionId),
-          // Carried so the main process can mint a fresh session of the right type
-          // if the node holds a stale peer for this session (config-less 409).
+          // Carried as context for the main process. NOTE: a config-less stale-peer 409
+          // is NOT auto-recovered by minting a fresh (paid) session — the main process
+          // surfaces it as a node-side error (see docs/STALE-PEER-409.md).
           subscriptionType: conn.subscriptionType,
           amount:           conn.amount
         })
