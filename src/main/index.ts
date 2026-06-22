@@ -1361,7 +1361,7 @@ async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabyt
     if (!remoteAddr) return { success: false, error: 'Node has no remote addresses' }
     const chainPrices = (args.subscriptionType === 'gigabytes' ? chainNode.gigabytePrices : chainNode.hourlyPrices) ?? []
     const udvpnPrice = chainPrices.find((p: Price) => p.denom === 'udvpn')
-    if (!udvpnPrice) return { success: false, error: `No udvpn price on chain` }
+    if (!udvpnPrice) return { success: false, error: `No up2p price on chain` }
 
     mainWindow?.webContents.send('vpn:status', { step: 'preparing_tx' })
     const txArgs: TxNodeStartSession = {
@@ -1476,8 +1476,8 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
             if (donationAmount > 0n && !recipientValid) {
               console.log(`[SUPPORT] Donation skipped: invalid recipient address "${PROJECT_WALLET_ADDRESS}"`)
             } else if (donationAmount > 0n) {
-              console.log(`[SUPPORT] Calculated Donation: ${donationAmount.toString()} udvpn`)
-              mainWindow?.webContents.send('vpn:warning', { message: `Project donation triggered: ${donationAmount.toString()} udvpn` })
+              console.log(`[SUPPORT] Calculated Donation: ${donationAmount.toString()} up2p`)
+              mainWindow?.webContents.send('vpn:warning', { message: `Project donation triggered: ${donationAmount.toString()} up2p` })
 
               walletState.client.sendTokens(
                 walletState.address, 

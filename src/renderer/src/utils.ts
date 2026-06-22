@@ -43,7 +43,7 @@ export function vpnTypeLabel(type: number): string {
 export function formatBalance(amount: string, denom: string): string {
   if (denom === 'udvpn') {
     const dvpn = (parseInt(amount, 10) / 1_000_000).toFixed(6)
-    return `${dvpn} DVPN`
+    return `${dvpn} P2P`
   }
   if (denom.startsWith('ibc/')) {
     const shortDenom = denom.slice(4, 10) + '…'
@@ -56,7 +56,7 @@ export function formatUdvpnPrice(prices: Array<{ denom: string; value: string }>
   const p = prices.find(x => x.denom === 'udvpn')
   if (!p) return '—'
   const dvpn = (parseInt(p.value, 10) / 1_000_000).toFixed(2)
-  return `${dvpn} DVPN`
+  return `${dvpn} P2P`
 }
 
 export function truncateAddress(addr: string, len = 12): string {
