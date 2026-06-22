@@ -58,6 +58,17 @@ export default function App() {
     document.documentElement.lang = i18n.language
   }, [i18n.language, isRtl])
 
+  useEffect(() => {
+    const onBlur = () => document.body.classList.add('window-blurred')
+    const onFocus = () => document.body.classList.remove('window-blurred')
+    window.addEventListener('blur', onBlur)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      window.removeEventListener('blur', onBlur)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [])
+
   const [screen, setScreen]         = useState<AppScreen>('loading')
   const [bootStatus, setBootStatus] = useState('')
   const [currentRpc, setCurrentRpc] = useState('')
