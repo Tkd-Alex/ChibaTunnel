@@ -1238,17 +1238,26 @@ function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('vpn:status', () => ({
-    v2rayActive: isV2RayRunning(),
-    v2rayPid: getV2RayPid(),
-    wgActive: !!activeWgConfigFile,
-    wgInterface: activeWgConfigFile ? path.basename(activeWgConfigFile, '.conf') : null,
-    tunActive: activeTun2Socks !== null,
-    tunPid: activeTun2Socks,
-    tunInterface: activeTunInterface,
-    sessionId: activeSessionId,
-    nodeAddress: activeNodeAddress
-  }))
+  ipcMain.handle('vpn:status', () => {
+    let inbounds: any = null
+    if (activeV2Ray?.config?.inbounds) {
+      inbounds = activeV2Ray.config.inbounds
+        .filter((ib: any) => ib.protocol !== 'dokodemo-door')
+        .map((ib: any) => ({ protocol: ib.protocol, listen: ib.listen, port: ib.port }))
+    }
+    return {
+      v2rayActive: isV2RayRunning(),
+      v2rayPid: getV2RayPid(),
+      wgActive: !!activeWgConfigFile,
+      wgInterface: activeWgConfigFile ? path.basename(activeWgConfigFile, '.conf') : null,
+      tunActive: activeTun2Socks !== null,
+      tunPid: activeTun2Socks,
+      tunInterface: activeTunInterface,
+      sessionId: activeSessionId,
+      nodeAddress: activeNodeAddress,
+      inbounds
+    }
+  })
 }
 
 function getNextTunInterface(): string {

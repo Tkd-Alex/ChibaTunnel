@@ -59,7 +59,8 @@ function ConnectedDetails({ conn, onDisconnect }: { conn: ConnectionState; onDis
   const isWg   = conn.vpnType === 'wireguard'
   const color  = isWg ? 'var(--purple)' : 'var(--green)'
 
-  const isLoadingProxy = !isWg && !sys?.tunActive && (!conn.inbounds || conn.inbounds.length === 0)
+  const activeInbounds = sys?.inbounds || conn.inbounds
+  const isLoadingProxy = !isWg && !sys?.tunActive && (!activeInbounds || activeInbounds.length === 0)
 
   useEffect(() => {
     window.api.getVpnStatus().then(setSys)
@@ -107,7 +108,7 @@ function ConnectedDetails({ conn, onDisconnect }: { conn: ConnectionState; onDis
                   <span style={{ fontSize: 10 }}>{t('node_modal.fetching_session_info')}</span>
                 </div>
               ) : (
-                conn.inbounds && conn.inbounds.length > 0 && !sys?.tunActive && (
+                activeInbounds && activeInbounds.length > 0 && !sys?.tunActive && (
                   <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <div className="form-hint" style={{ margin: 0, padding: 8, background: 'rgba(168,85,247,0.05)', border: '1px solid rgba(168,85,247,0.15)', borderRadius: 'var(--radius-sm)', color: 'var(--text-2)', display: 'block', lineHeight: 1.4 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: 'var(--purple)', textTransform: 'uppercase', fontSize: 8, letterSpacing: '0.05em', marginBottom: 4 }}>
@@ -133,7 +134,7 @@ function ConnectedDetails({ conn, onDisconnect }: { conn: ConnectionState; onDis
 
                     <div style={{ marginTop: 4 }}>
                       <div className="cd-section-label" style={{ fontSize: 8, opacity: 0.6, marginBottom: 4 }}>{t('node_modal.active_listeners')}</div>
-                      {conn.inbounds.map((ib, i) => (
+                      {activeInbounds.map((ib, i) => (
                         <div key={i} className="cd-row" style={{ marginBottom: 4 }}>
                           <span style={{ fontSize: 10 }}>{ib.protocol.toUpperCase()}</span>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
