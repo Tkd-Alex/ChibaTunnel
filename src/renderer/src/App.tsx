@@ -187,18 +187,22 @@ export default function App() {
           if ((nRes as any).success) setNodes((nRes as any).nodes)
           if ((pRes as any).success) {
             setPlans((pRes as any).plans)
-            // Heavy Background Scan (Plans analysis)
+            // Heavy Background Scan (Plans analysis) - awaited to ensure plans tab is instantly ready
             const planIds = (pRes as any).plans.map((p: any) => p.id)
             const uniqueProviders = Array.from(new Set((pRes as any).plans.map((p: any) => p.provAddress))) as string[]
-            window.api.fetchProvidersBatch(uniqueProviders).then((res: any) => {
-              if (res.success) setProviderNamesCache(prev => ({ ...prev, ...res.providers }))
-            })
-            window.api.scanPlanNodes(planIds).then((res: any) => {
-              if (res.success) {
-                setPlanNodesCache(prev => ({ ...prev, ...res.nodesMap }))
+            try {
+              const [provRes, nodesRes] = await Promise.all([
+                window.api.fetchProvidersBatch(uniqueProviders),
+                window.api.scanPlanNodes(planIds)
+              ])
+              if (provRes.success) setProviderNamesCache(prev => ({ ...prev, ...provRes.providers }))
+              if (nodesRes.success) {
+                setPlanNodesCache(prev => ({ ...prev, ...nodesRes.nodesMap }))
                 setScannedOnce(true)
               }
-            })
+            } catch (err) {
+              console.error('Failed to prefetch plan details during splash screen:', err)
+            }
           }
           if ((sRes as any).success) setSubscriptions((sRes as any).subscriptions)
           if ((sessRes as any).success) setSessions(((sessRes as any).sessions ?? []).filter((s: any) => typeof s.id === 'number'))
@@ -208,7 +212,7 @@ export default function App() {
       }
 
       const elapsed = Date.now() - startTime
-      const remaining = Math.max(0, 2500 - elapsed)
+      const remaining = Math.max(0, 600 - elapsed)
       setTimeout(() => setScreen(nextScreen), remaining)
     }
     boot()

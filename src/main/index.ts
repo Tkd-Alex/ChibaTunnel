@@ -127,6 +127,7 @@ const STORE_KEY_SETTINGS = 'settings'
 // const STORE_KEY_BINARIES = 'custom_binaries'
 const NODES_API          = 'https://api.sentnodes.com/v2/nodes'
 const RPC_TIMEOUT_MS     = 10_000
+const PAGINATION_LIMIT   = 250
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
 interface AppSettings {
@@ -628,14 +629,17 @@ function registerIpcHandlers(): void {
   ipcMain.handle('sessions:fetch', async () => {
     if (!walletState.readonlyClient || !walletState.address) return { success: false, error: walletState.address ? 'No RPC client' : 'Wallet not loaded', sessions: [] }
     try {
-      const r = await rpcWithRetry(
-        () => walletState.readonlyClient!.sentinelQuery?.session.sessionsForAccount(
+      const sessionsRaw = await queryAllWithPagination(
+        (pageReq) => walletState.readonlyClient!.sentinelQuery!.session.sessionsForAccount(
           walletState.address!,
-          PageRequest.fromJSON({ limit: 10000, reverse: true })
+          pageReq
         ),
-        'sessions:fetch'
+        (res) => res?.sessions ?? [],
+        'sessions:fetch',
+        PAGINATION_LIMIT,
+        true
       )
-      const sessions = (r?.sessions ?? []).map(anyVal => {
+      const sessions = sessionsRaw.map(anyVal => {
         try {
           const decoded = Session.decode(anyVal.value); const bs = decoded.baseSession
           if (!bs) return null
@@ -667,14 +671,15 @@ function registerIpcHandlers(): void {
   ipcMain.handle('plans:fetch', async () => {
     if (!walletState.readonlyClient) return { success: false, error: 'No RPC client', plans: [] }
     try {
-      const res = await rpcWithRetry(
-        () => walletState.readonlyClient!.sentinelQuery?.plan.plans(
+      const plansRaw = await queryAllWithPagination(
+        (pageReq) => walletState.readonlyClient!.sentinelQuery!.plan.plans(
           Status.STATUS_UNSPECIFIED,
-          PageRequest.fromJSON({ limit: 10000 })
+          pageReq
         ),
+        (res) => res?.plans ?? [],
         'plans:fetch'
       )
-      const plans = (res?.plans ?? []).map(p => ({
+      const plans = plansRaw.map(p => ({
         id: longToNum(p.id),
         provAddress: p.provAddress,
         bytes: p.bytes,
@@ -696,14 +701,15 @@ function registerIpcHandlers(): void {
   ipcMain.handle('subscriptions:fetch', async () => {
     if (!walletState.readonlyClient || !walletState.address) return { success: false, error: walletState.address ? 'No RPC client' : 'Wallet not loaded', subscriptions: [] }
     try {
-      const res = await rpcWithRetry(
-        () => walletState.readonlyClient!.sentinelQuery?.subscription.subscriptionsForAccount(
+      const subscriptionsRaw = await queryAllWithPagination(
+        (pageReq) => walletState.readonlyClient!.sentinelQuery!.subscription.subscriptionsForAccount(
           walletState.address!,
-          PageRequest.fromJSON({ limit: 10000 })
+          pageReq
         ),
+        (res) => res?.subscriptions ?? [],
         'subscriptions:fetch'
       )
-      const subscriptions = (res?.subscriptions ?? []).map(s => {
+      const subscriptions = subscriptionsRaw.map(s => {
         try {
           return {
             id: longToNum(s.id),
@@ -745,16 +751,17 @@ function registerIpcHandlers(): void {
     if (!walletState.readonlyClient) return { success: false, error: 'No RPC client', nodes: [] }
     try {
       const id = Long.fromNumber(planId, true)
-      const res = await rpcWithRetry(
-        () => walletState.readonlyClient!.sentinelQuery?.node.nodesForPlan(
+      const nodesRaw = await queryAllWithPagination(
+        (pageReq) => walletState.readonlyClient!.sentinelQuery!.node.nodesForPlan(
           id,
           Status.STATUS_UNSPECIFIED,
-          PageRequest.fromJSON({ limit: 10000 })
+          pageReq
         ),
+        (res) => res?.nodes ?? [],
         `plan:nodes#${planId}`
       )
 
-      const nodes = (res?.nodes ?? []).map(n => ({
+      const nodes = nodesRaw.map(n => ({
         address: n.address,
         moniker: n.address.slice(0, 12) + '...',
         version: (n as any).version || '',
@@ -797,15 +804,16 @@ function registerIpcHandlers(): void {
       if (ci > 0) await delay(250)
       await Promise.all(chunk.map(async (id) => {
         try {
-          const res = await rpcWithRetry(
-            () => walletState.readonlyClient!.sentinelQuery?.node.nodesForPlan(
+          const nodesRaw = await queryAllWithPagination(
+            (pageReq) => walletState.readonlyClient!.sentinelQuery!.node.nodesForPlan(
               Long.fromNumber(id, true),
               Status.STATUS_UNSPECIFIED,
-              PageRequest.fromJSON({ limit: 10000 })
+              pageReq
             ),
+            (res) => res?.nodes ?? [],
             `scanNodes#${id}`
           )
-          nodesMap[id] = (res?.nodes ?? []).map(n => ({
+          nodesMap[id] = nodesRaw.map(n => ({
             address: n.address,
             moniker: n.address.slice(0, 12) + '...',
             version: (n as any).version || '',
@@ -1870,6 +1878,39 @@ async function rpcWithRetry<T>(fn: () => Promise<T>, label = 'rpc', maxRetries =
     }
   }
   throw lastErr
+}
+
+/**
+ * Automatically pages through Cosmos RPC queries using key-based pagination.
+ * Runs page requests sequentially with rpcWithRetry.
+ */
+async function queryAllWithPagination<T = any>(
+  queryFn: (pageReq: PageRequest) => Promise<any>,
+  extractor: (res: any) => T[],
+  label = 'query',
+  limit = PAGINATION_LIMIT,
+  reverse = false
+): Promise<T[]> {
+  const allItems: T[] = []
+  let nextKey: Uint8Array | undefined = undefined
+  let isFirst = true
+
+  while (isFirst || (nextKey && nextKey.length > 0)) {
+    isFirst = false
+    const pageReq = PageRequest.fromPartial({
+      key: nextKey,
+      limit: Long.fromNumber(limit),
+      reverse
+    })
+    const res = await rpcWithRetry(() => queryFn(pageReq), `${label}:page`, 3)
+    const items = extractor(res)
+    if (items) {
+      allItems.push(...items)
+    }
+    nextKey = res?.pagination?.nextKey
+  }
+
+  return allItems
 }
 
 /** Sleep helper for inter-chunk pacing to stay under RPC rate limits. */
