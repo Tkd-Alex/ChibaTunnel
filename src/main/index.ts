@@ -46,7 +46,7 @@ import pkg from '../../package.json'
 
 // ── Project Configuration ─────────────────────────────────────────────────────
 const PROJECT_WALLET_ADDRESS = process.env.PROJECT_WALLET_ADDRESS || 'sent1ppkl...zq7k0v' // Default dev address
-const PROJECT_DONATION_MEMO  = process.env.PROJECT_DONATION_MEMO  || `${pkg.name} project support`
+const PROJECT_DONATION_MEMO  = process.env.PROJECT_DONATION_MEMO  || `${pkg.name} (Donation)`
 
 // ── GasPrice shim ────────────────────────────────────────────────────────────
 function makeGasPrice(str: string): unknown {
@@ -128,6 +128,8 @@ const STORE_KEY_SETTINGS = 'settings'
 const NODES_API          = 'https://api.sentnodes.com/v2/nodes'
 const RPC_TIMEOUT_MS     = 10_000
 const PAGINATION_LIMIT   = 250
+
+const MEMO = 'ChibaTunnel (Sentinel dVPN Desktop Client)'
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
 interface AppSettings {
@@ -663,7 +665,7 @@ function registerIpcHandlers(): void {
     if (!walletState.client || !walletState.address) return { success: false, error: 'Wallet not initialized' }
     try {
       const msg = sessionCancel({ from: walletState.address, id: Long.fromNumber(sessionId, true) })
-      const tx  = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
+      const tx  = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', MEMO)
       assertIsDeliverTxSuccess(tx); return { success: true }
     } catch (err: unknown) { return { success: false, error: extractError(err) } }
   })
@@ -737,7 +739,7 @@ function registerIpcHandlers(): void {
         denom: denom,
         renewalPricePolicy: policy
       })
-      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
+      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', MEMO)
       assertIsDeliverTxSuccess(tx)
       console.log(`[Plan:Subscribe] Success! TX: ${tx.transactionHash}`)
       return { success: true, txHash: tx.transactionHash }
@@ -905,7 +907,7 @@ function registerIpcHandlers(): void {
           id: Long.fromNumber(subscriptionId, true)
         }
       }
-      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
+      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', MEMO)
       assertIsDeliverTxSuccess(tx)
       console.log(`[Subscription:Cancel] Success! TX: ${tx.transactionHash}`)
 
@@ -946,7 +948,7 @@ function registerIpcHandlers(): void {
           renewalPricePolicy: policy
         }
       }
-      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
+      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', MEMO)
       assertIsDeliverTxSuccess(tx)
       console.log(`[Subscription:Update] Success! TX: ${tx.transactionHash}`)
       return { success: true, txHash: tx.transactionHash }
@@ -968,7 +970,7 @@ function registerIpcHandlers(): void {
         id: Long.fromNumber(subscriptionId, true),
         nodeAddress: nodeAddress
       })
-      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
+      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', MEMO)
       assertIsDeliverTxSuccess(tx)
 
       mainWindow?.webContents.send('vpn:status', { step: 'extracting_tx' })
@@ -1159,7 +1161,7 @@ function registerIpcHandlers(): void {
     const fetchIp = async (url: string, map: (j: any) => any) => {
       const res = await fetch(url, {
         headers: {
-          'User-Agent': 'Chiba Tunnel (Sentinel dVPN Desktop Client)',
+          'User-Agent': MEMO,
           'Accept': 'application/json'
         },
         signal: AbortSignal.timeout(5000)
@@ -1357,12 +1359,12 @@ async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabyt
       from: walletState.address!, nodeAddress: args.nodeAddress,
       gigabytes: args.subscriptionType === 'gigabytes' ? Long.fromNumber(Math.max(1, args.amount), true) : undefined,
       hours: args.subscriptionType === 'hours' ? Long.fromNumber(Math.max(1, args.amount), true) : undefined,
-      maxPrice: udvpnPrice, fee: 'auto', memo: 'Chiba Tunnel (Sentinel dVPN Desktop Client)'
+      maxPrice: udvpnPrice, fee: 'auto', memo: MEMO
     }
 
     mainWindow?.webContents.send('vpn:status', { step: 'signing_tx' })
     mainWindow?.webContents.send('vpn:status', { step: 'broadcasting_tx' })
-    const tx = await walletState.client!.signAndBroadcast(walletState.address!, [nodeStartSession(txArgs)], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
+    const tx = await walletState.client!.signAndBroadcast(walletState.address!, [nodeStartSession(txArgs)], 'auto', MEMO)
     assertIsDeliverTxSuccess(tx)
 
     mainWindow?.webContents.send('vpn:status', { step: 'extracting_tx' })

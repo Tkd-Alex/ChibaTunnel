@@ -1,7 +1,7 @@
 {
   "name": "chibatunnel",
   "version": "2.0.0",
-  "description": "Chiba Tunnel (Sentinel dVPN Desktop Client)",
+  "description": "ChibaTunnel (Sentinel dVPN Desktop Client)",
   "productName": "chibatunnel",
   "main": "out/main/index.js",
   "author": "Tkd-Alex <alex.tkd.alex@gmail.com>",
