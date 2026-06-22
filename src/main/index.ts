@@ -1550,6 +1550,9 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
 }
 
 async function getTrafficStats(): Promise<{ rx: number; tx: number; source: string }> {
+  const { promisify } = require('util')
+  const execFileAsync = promisify(execFile)
+
   // 1. WireGuard Stats
   if (activeWgConfigFile && activeWgInstance) {
     const ifName = path.basename(activeWgConfigFile, '.conf')
@@ -1561,7 +1564,8 @@ async function getTrafficStats(): Promise<{ rx: number; tx: number; source: stri
       } catch { /* Fallback */ }
     }
     try {
-      const lines = execSync('wg show all transfer', { stdio: 'pipe' }).toString().trim().split('\n')
+      const { stdout } = await execFileAsync('wg', ['show', 'all', 'transfer'])
+      const lines = stdout.trim().split('\n')
       let rx = 0, tx = 0; for (const line of lines) { const parts = line.trim().split(/\s+/); if (parts.length >= 3) { rx += parseInt(parts[1]) || 0; tx += parseInt(parts[2]) || 0 } }
       return { rx, tx, source: 'wireguard' }
     } catch { }
@@ -1578,8 +1582,8 @@ async function getTrafficStats(): Promise<{ rx: number; tx: number; source: stri
     } else if (process.platform === 'darwin') {
       try {
         // netstat -ibI <iface> returns a table. We want the 7th (IBytes) and 10th (OBytes) columns.
-        const output = execSync(`netstat -ibI ${activeTunInterface}`, { stdio: 'pipe' }).toString().trim()
-        const lines = output.split('\n')
+        const { stdout } = await execFileAsync('netstat', ['-ibI', activeTunInterface])
+        const lines = stdout.trim().split('\n')
         if (lines.length > 1) {
           const stats = lines[1].split(/\s+/)
           return { rx: parseInt(stats[6]) || 0, tx: parseInt(stats[9]) || 0, source: 'tun2socks' }
