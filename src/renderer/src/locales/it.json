@@ -398,5 +398,14 @@
     "desc_other": "Politica avanzata basata sull'andamento dei prezzi.",
     "update_btn": "Aggiorna Politica",
     "updating": "Aggiornamento..."
+  },
+  "boot": {
+    "verifying_environment": "Verifica dell'ambiente...",
+    "loading_wallet": "Caricamento portafoglio...",
+    "fetching_nodes": "Recupero nodi...",
+    "fetching_plans": "Recupero piani...",
+    "analyzing_plans": "Analisi dei piani...",
+    "fetching_subs": "Recupero abbonamenti...",
+    "fetching_sessions": "Recupero sessioni..."
   }
 }

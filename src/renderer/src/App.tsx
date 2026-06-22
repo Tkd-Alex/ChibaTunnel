@@ -59,6 +59,7 @@ export default function App() {
   }, [i18n.language, isRtl])
 
   const [screen, setScreen]         = useState<AppScreen>('loading')
+  const [bootStatus, setBootStatus] = useState('')
   const [currentRpc, setCurrentRpc] = useState('')
   const [activeTab, setActiveTab]   = useState<Tab>('globe')
   const [binaries, setBinaries]     = useState<BinaryStatus | null>(null)
@@ -156,6 +157,7 @@ export default function App() {
       const startTime = Date.now()
       refreshIp()
       
+      setBootStatus(t('boot.verifying_environment'))
       const rpcPromise  = window.api.getCurrentRpc()
       const binsPromise = window.api.checkBinaries()
       const bmsPromise  = window.api.listBookmarks()
@@ -173,22 +175,20 @@ export default function App() {
       let nextScreen: AppScreen = 'setup'
       
       if (hasMnemonic) {
+        setBootStatus(t('boot.loading_wallet'))
         const res = await window.api.loadStoredWallet()
         if (res.success) {
           setCurrentRpc((res as { rpc?: string }).rpc ?? (rpc as string))
           
-          // Fetch main data in background while splash is showing
-          const [nRes, pRes, sRes, sessRes] = await Promise.all([
-            window.api.fetchNodes(),
-            window.api.fetchPlans(),
-            window.api.fetchSubscriptions(),
-            window.api.fetchSessions()
-          ])
-
+          setBootStatus(t('boot.fetching_nodes'))
+          const nRes = await window.api.fetchNodes()
           if ((nRes as any).success) setNodes((nRes as any).nodes)
+
+          setBootStatus(t('boot.fetching_plans'))
+          const pRes = await window.api.fetchPlans()
           if ((pRes as any).success) {
             setPlans((pRes as any).plans)
-            // Heavy Background Scan (Plans analysis) - awaited to ensure plans tab is instantly ready
+            setBootStatus(t('boot.analyzing_plans'))
             const planIds = (pRes as any).plans.map((p: any) => p.id)
             const uniqueProviders = Array.from(new Set((pRes as any).plans.map((p: any) => p.provAddress))) as string[]
             try {
@@ -205,7 +205,13 @@ export default function App() {
               console.error('Failed to prefetch plan details during splash screen:', err)
             }
           }
+
+          setBootStatus(t('boot.fetching_subs'))
+          const sRes = await window.api.fetchSubscriptions()
           if ((sRes as any).success) setSubscriptions((sRes as any).subscriptions)
+
+          setBootStatus(t('boot.fetching_sessions'))
+          const sessRes = await window.api.fetchSessions()
           if ((sessRes as any).success) setSessions(((sessRes as any).sessions ?? []).filter((s: any) => typeof s.id === 'number'))
 
           nextScreen = 'main'
@@ -213,7 +219,7 @@ export default function App() {
       }
 
       const elapsed = Date.now() - startTime
-      const remaining = Math.max(0, 600 - elapsed)
+      const remaining = Math.max(0, 1500 - elapsed)
       setTimeout(() => setScreen(nextScreen), remaining)
     }
     boot()
@@ -354,7 +360,7 @@ export default function App() {
     }
   }, [activeConnection])
 
-  if (screen === 'loading') return <SplashScreen />
+  if (screen === 'loading') return <SplashScreen status={bootStatus} />
 
   if (screen === 'setup') return (
     <div className="app-shell" dir={isRtl ? 'rtl' : 'ltr'}>

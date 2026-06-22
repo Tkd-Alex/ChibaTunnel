@@ -398,5 +398,14 @@
     "desc_other": "سياسة متقدمة بناءً على حركة الأسعار.",
     "update_btn": "تحديث السياسة",
     "updating": "جاري التحديث..."
+  },
+  "boot": {
+    "verifying_environment": "التحقق من البيئة...",
+    "loading_wallet": "جاري تحميل المحفظة...",
+    "fetching_nodes": "جاري جلب العقد...",
+    "fetching_plans": "جاري جلب الخطط...",
+    "analyzing_plans": "جاري تحليل الخطط...",
+    "fetching_subs": "جاري جلب الاشتراكات...",
+    "fetching_sessions": "جاري جلب الجلسات..."
   }
 }

@@ -398,5 +398,14 @@
     "desc_other": "Política avanzada basada en el movimiento de precios.",
     "update_btn": "Actualizar Política",
     "updating": "Actualizando..."
+  },
+  "boot": {
+    "verifying_environment": "Verificando el entorno...",
+    "loading_wallet": "Cargando billetera...",
+    "fetching_nodes": "Obteniendo nodos...",
+    "fetching_plans": "Obteniendo planes...",
+    "analyzing_plans": "Analizando planes...",
+    "fetching_subs": "Obteniendo suscripciones...",
+    "fetching_sessions": "Obteniendo sesiones..."
   }
 }

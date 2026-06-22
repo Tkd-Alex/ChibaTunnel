@@ -398,5 +398,14 @@
     "desc_other": "Advanced policy based on price movement.",
     "update_btn": "Update Policy",
     "updating": "Updating..."
+  },
+  "boot": {
+    "verifying_environment": "Verifying environment...",
+    "loading_wallet": "Loading wallet...",
+    "fetching_nodes": "Fetching nodes...",
+    "fetching_plans": "Fetching plans...",
+    "analyzing_plans": "Analyzing plans...",
+    "fetching_subs": "Fetching subscriptions...",
+    "fetching_sessions": "Fetching sessions..."
   }
 }

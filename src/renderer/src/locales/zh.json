@@ -398,5 +398,14 @@
     "desc_other": "基于价格变动的高级策略。",
     "update_btn": "更新策略",
     "updating": "更新中..."
+  },
+  "boot": {
+    "verifying_environment": "正在验证环境...",
+    "loading_wallet": "正在加载钱包...",
+    "fetching_nodes": "正在获取节点...",
+    "fetching_plans": "正在获取计划...",
+    "analyzing_plans": "正在分析计划...",
+    "fetching_subs": "正在获取订阅...",
+    "fetching_sessions": "正在获取會话..."
   }
 }

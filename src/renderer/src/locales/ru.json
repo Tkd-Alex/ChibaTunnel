@@ -398,5 +398,14 @@
     "desc_other": "Продвинутая политика на основе изменения цен.",
     "update_btn": "Обновить политику",
     "updating": "Обновление..."
+  },
+  "boot": {
+    "verifying_environment": "Проверка окружения...",
+    "loading_wallet": "Загрузка кошелька...",
+    "fetching_nodes": "Получение узлов...",
+    "fetching_plans": "Получение планов...",
+    "analyzing_plans": "Анализ планов...",
+    "fetching_subs": "Получение подписок...",
+    "fetching_sessions": "Получение сессий..."
   }
 }

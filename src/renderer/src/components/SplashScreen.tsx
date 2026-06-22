@@ -1,7 +1,65 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
-export default function SplashScreen() {
+const SCRAMBLE_CHARS = '!@#$%^&*01アイウエオカキクケコ▓░■□◆◇'
+
+function ScrambleText({ text }: { text: string }) {
+  const [displayChars, setDisplayChars] = useState<Array<{ char: string; scrambling: boolean }>>([])
+  const [trigger, setTrigger] = useState(0)
+
+  useEffect(() => {
+    const targetWord = text || 'INITIALIZING...'
+    setDisplayChars(targetWord.split('').map(char => ({ char, scrambling: true })))
+
+    let iter = 0
+    const interval = setInterval(() => {
+      setDisplayChars(() => {
+        return targetWord.split('').map((char, idx) => {
+          if (char === ' ') {
+            return { char: ' ', scrambling: false }
+          }
+          if (idx < iter) {
+            return { char, scrambling: false }
+          } else {
+            const randomChar = SCRAMBLE_CHARS[Math.floor(Math.random() * SCRAMBLE_CHARS.length)]
+            return { char: randomChar, scrambling: true }
+          }
+        })
+      })
+
+      iter++
+      if (iter > targetWord.length) {
+        clearInterval(interval)
+        const timeout = setTimeout(() => {
+          setTrigger(t => t + 1)
+        }, 3200)
+        return () => clearTimeout(timeout)
+      }
+      return undefined
+    }, 55)
+
+    return () => clearInterval(interval)
+  }, [text, trigger])
+
+  return (
+    <span className="scramble-container">
+      {displayChars.map((item, idx) => (
+        <span
+          key={idx}
+          className={`ch ${item.scrambling ? 'scrambling' : ''}`}
+        >
+          {item.char}
+        </span>
+      ))}
+    </span>
+  )
+}
+
+interface Props {
+  status?: string
+}
+
+export default function SplashScreen({ status }: Props) {
   const { t } = useTranslation()
 
   return (
@@ -84,10 +142,16 @@ export default function SplashScreen() {
           <div className="tagline">Decentralized · Private · Open</div>
         </div>
 
-        <div className="status">
-          <span className="status-dot"></span>
-          {t('common.loading')}
+        <div className="scramble-title">
+          <ScrambleText text={t('common.loading')} />
         </div>
+
+        {status && (
+          <div className="status" style={{ marginTop: 4 }}>
+            <span className="status-dot"></span>
+            {status}
+          </div>
+        )}
       </div>
 
       <style dangerouslySetInnerHTML={{ __html: `
@@ -166,6 +230,27 @@ export default function SplashScreen() {
           93%  { text-shadow: 0 0 10px #ff0055dd; opacity: 1; }
           96%  { text-shadow: none; opacity: .88; }
           97%  { text-shadow: 0 0 10px #ff0055dd, 0 0 28px #ff005555; }
+        }
+        .splash-screen .scramble-title {
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: .25em;
+          text-transform: uppercase;
+          height: 18px;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          margin-bottom: 2px;
+        }
+        .splash-screen .ch {
+          display: inline-block;
+          transition: color .08s;
+          color: #ff0055;
+          text-shadow: 0 0 8px rgba(255,0,85,.8), 0 0 24px rgba(255,0,85,.4);
+        }
+        .splash-screen .ch.scrambling {
+          color: rgba(0, 204, 255, 0.9);
+          text-shadow: 0 0 8px rgba(0, 204, 255, 0.9);
         }
         .splash-screen .status {
           display: flex; align-items: center; gap: 10px;

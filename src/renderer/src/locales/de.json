@@ -398,5 +398,14 @@
     "desc_other": "Erweiterte Richtlinie basierend auf Preisbewegungen.",
     "update_btn": "Richtlinie aktualisieren",
     "updating": "Aktualisiere..."
+  },
+  "boot": {
+    "verifying_environment": "Umgebung überprüfen...",
+    "loading_wallet": "Brieftasche laden...",
+    "fetching_nodes": "Knoten abrufen...",
+    "fetching_plans": "Pläne abrufen...",
+    "analyzing_plans": "Pläne analysieren...",
+    "fetching_subs": "Abonnements abrufen...",
+    "fetching_sessions": "Sitzungen abrufen..."
   }
 }
