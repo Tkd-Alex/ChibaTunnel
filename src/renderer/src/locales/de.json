@@ -34,7 +34,8 @@
     "missing": "FEHLT",
     "checking": "Prüfen...",
     "exec": "Ausführen",
-    "browse": "Durchsuchen"
+    "browse": "Durchsuchen",
+    "or": "oder"
   },
   "tabs": {
     "globe": "Globus",
@@ -199,8 +200,8 @@
     "forget_confirm_msg": "Dies löscht alle gespeicherten Phrasen und Adressen von diesem Gerät. Dies kann nicht rückgängig gemacht werden.",
     "forget_confirm_btn": "Ja, alles entfernen",
     "refresh_info": "Wallet-Info aktualisieren",
-    "p2p_session": "P2P SITZUNG",
-    "p2p_session_plural": "P2P SITZUNGEN",
+    "p2p_session": "SITZUNG",
+    "p2p_session_plural": "SITZUNGEN",
     "active_sessions_hint": "Aktive On-Chain-Sitzungen für diese Wallet",
     "manage_title": "Wallets",
     "manage_sub": "Mehrere Sentinel-Wallets verwalten",
@@ -221,7 +222,9 @@
     "reconnecting": "Wiederverbindung...",
     "status": "VPN-Status",
     "disconnect_btn": "Trennen",
-    "manage_btn": "Verwalten"
+    "manage_btn": "Verwalten",
+    "disconnect_confirm_title": "Verbindung trennen?",
+    "disconnect_confirm_msg": "Sind Sie sicher, dass Sie die Verbindung trennen möchten?"
   },
   "settings": {
     "title": "Einstellungen",
@@ -293,6 +296,10 @@
     "address": "Adresse",
     "endpoint": "Endpunkt",
     "real_time_status": "Echtzeit-Status",
+    "connection_proto": "Protokoll",
+    "connection_proxy": "Proxy-Typ",
+    "connection_transport": "Transport",
+    "connection_security": "Sicherheit",
     "polling_node": "KNOTEN WIRD ABGEFRAGT...",
     "node_unreachable": "Knoten nicht erreichbar",
     "live_peers": "Aktuelle Peers",
@@ -316,7 +323,7 @@
     "per_hr": "Pro Stunde",
     "indicative_prices": "Richtpreise aus dem API-Cache.",
     "support_project": "Projektentwicklung unterstützen",
-    "support_desc": "Fügen Sie dieser Transaktion 10% ({{amount}} DVPN) hinzu, um das ChibaTunnel-Projekt zu unterstützen. Ihr Beitrag hilft uns, diese App zu warten und zu verbessern!",
+    "support_desc": "Fügen Sie dieser Transaktion 10% ({{amount}} P2P) hinzu, um das ChibaTunnel-Projekt zu unterstützen. Ihr Beitrag hilft uns, diese App zu warten und zu verbessern!",
     "subscription_type": "Abonnement-Typ",
     "gigabytes": "Gigabyte",
     "hours": "Stunden",
@@ -338,12 +345,29 @@
       "handshaking": "Handshake mit {{name}}-Knoten...",
       "generating_config": "Lokale VPN-Konfiguration generieren..."
     },
-    "hide_qr": "QR verbergen",
-    "show_qr": "QR zeigen",
-    "qr_only": "Nur QR",
-    "start_proxy": "Lokalen Proxy starten",
-    "start_transparent": "Transparent starten",
-    "or_start_proxy": "oder lokalen Proxy starten",
+    "handshake_success_banner": "Handshake abgeschlossen, Ihre Sitzungs-ID ist #{{sessionId}}. Wählen Sie aus, was Sie schützen möchten und wie:",
+    "connect_mode_title": "How do you want to connect?",
+    "mode_full_title": "Protect this entire device",
+    "mode_full_desc": "All apps and system traffic go through the tunnel.",
+    "mode_full_badge": "Recommended",
+    "mode_full_missing_badge": "Requires extra component",
+    "mode_proxy_title": "Protect only some apps",
+    "mode_proxy_desc": "Only apps you manually configure will use this connection.",
+    "mode_proxy_badge": "Advanced",
+    "mode_proxy_info": "After connecting you'll get an address and port to set manually in your browser or app's proxy settings.",
+    "other_device_title": "Use on another device",
+    "other_device_desc": "Scan the QR code or copy the link into a compatible app.",
+    "other_device_v2ray_hint": "On Android, import the link/QR into v2rayNG. On iOS/macOS, use Shadowrocket or Streisand.",
+    "other_device_wg_hint": "Scan the QR or import the file using the official WireGuard app (Android, iOS, Windows, macOS, Linux).",
+    "close_use_other_device": "Close — I'll connect from another device",
+    "proxy_active_hint": "Manually set this proxy in the network settings of the app or browser you want to protect.",
+    "proxy_howto_link": "How do I set this up?",
+    "proxy_howto_chrome": "Chrome / Edge: Settings → System → Open your computer's proxy settings",
+    "proxy_howto_firefox": "Firefox: Settings → Network Settings → Manual proxy configuration",
+    "repair_helper": "PRIVILEGIERTEN DIENST REPARIEREN",
+    "repairing_helper": "REPARATUR...",
+    "repair_failed": "Reparatur fehlgeschlagen:",
+    "repair_success": "Reparatur erfolgreich! Verbindung wird erneut versucht...",
     "currently_connected": "Aktuell mit diesem Knoten verbunden"
   },
   "binary": {
@@ -380,5 +404,14 @@
     "desc_other": "Erweiterte Richtlinie basierend auf Preisbewegungen.",
     "update_btn": "Richtlinie aktualisieren",
     "updating": "Aktualisiere..."
+  },
+  "boot": {
+    "verifying_environment": "Umgebung überprüfen...",
+    "loading_wallet": "Brieftasche laden...",
+    "fetching_nodes": "Knoten abrufen...",
+    "fetching_plans": "Pläne abrufen...",
+    "analyzing_plans": "Pläne analysieren...",
+    "fetching_subs": "Abonnements abrufen...",
+    "fetching_sessions": "Sitzungen abrufen..."
   }
 }

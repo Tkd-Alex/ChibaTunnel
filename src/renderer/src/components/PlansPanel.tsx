@@ -41,6 +41,11 @@ export default function PlansPanel({
   onSubscribe 
 }: Props) {
   const { t } = useTranslation()
+  const formatDenom = (denom?: string) => {
+    if (!denom) return ''
+    const clean = denom.replace(/^u/, '').toLowerCase()
+    return clean === 'dvpn' ? 'P2P' : clean.toUpperCase()
+  }
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null)
   const [isScanning, setIsScanning] = useState(false)
   const [confirmingPlan, setConfirmingPlan] = useState<ApiPlan | null>(null)
@@ -295,7 +300,7 @@ export default function PlansPanel({
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
                 <div style={{ fontSize: '14px', color: 'var(--yellow)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <CreditCard size={14} />
-                  {parseInt(plan.prices[0]?.amount || '0') / 1_000_000} {plan.prices[0]?.denom.replace('u', '').toUpperCase()}
+                  {parseInt(plan.prices[0]?.amount || '0') / 1_000_000} {formatDenom(plan.prices[0]?.denom)}
                 </div>
                 {isSelected && (
                    <div className="badge badge-green" style={{ fontSize: '10px', fontWeight: 700 }}>SELECTED</div>
@@ -333,7 +338,10 @@ export default function PlansPanel({
                       onClick={() => setConfirmingPlan(selectedPlan)}
                     >
                       <CreditCard size={16} style={{ marginRight: 8 }} />
-                      SUBSCRIBE FOR {parseInt(selectedPlan.prices[0]?.amount || '0') / 1_000_000} {selectedPlan.prices[0]?.denom.replace('u', '').toUpperCase()}
+                      {t('plans.subscribe_for', {
+                        amount: parseInt(selectedPlan.prices[0]?.amount || '0') / 1_000_000,
+                        denom: formatDenom(selectedPlan.prices[0]?.denom)
+                      })}
                     </button>
                   </div>
                </div>

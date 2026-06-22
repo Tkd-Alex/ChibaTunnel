@@ -76,6 +76,7 @@ const api = {
   disconnectNode:   () => ipcRenderer.invoke('node:disconnect'),
   getVpnStatus:     () => ipcRenderer.invoke('vpn:status'),
   getPublicIp:      () => ipcRenderer.invoke('network:getPublicIp'),
+  repairHelper:     () => ipcRenderer.invoke('helper:repair'),
 
   // Events → renderer
   onVpnStatus:      (cb: (d: unknown) => void) => { 

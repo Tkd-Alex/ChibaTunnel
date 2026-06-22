@@ -34,7 +34,8 @@
     "missing": "مفقود",
     "checking": "جاري الفحص...",
     "exec": "تنفيذ",
-    "browse": "تصفح"
+    "browse": "تصفح",
+    "or": "أو"
   },
   "tabs": {
     "globe": "الخريطة",
@@ -199,8 +200,8 @@
     "forget_confirm_msg": "سيؤدي هذا إلى حذف جميع العبارات والعناوين المخزنة. لا يمكن التراجع عن هذا الإجراء.",
     "forget_confirm_btn": "نعم، احذف الكل",
     "refresh_info": "تحديث معلومات المحفظة",
-    "p2p_session": "جلسة P2P",
-    "p2p_session_plural": "جلسات P2P",
+    "p2p_session": "جلسة",
+    "p2p_session_plural": "جلسات",
     "active_sessions_hint": "جلسات نشطة على الشبكة لهذه المحفظة",
     "manage_title": "المحافظ",
     "manage_sub": "إدارة محافظ Sentinel المتعددة",
@@ -221,7 +222,9 @@
     "reconnecting": "جاري إعادة الاتصال...",
     "status": "حالة VPN",
     "disconnect_btn": "قطع الاتصال",
-    "manage_btn": "إدارة"
+    "manage_btn": "إدارة",
+    "disconnect_confirm_title": "قطع الاتصال؟",
+    "disconnect_confirm_msg": "هل أنت متأكد أنك تريد قطع الاتصال؟"
   },
   "settings": {
     "title": "الإعدادات",
@@ -293,6 +296,10 @@
     "address": "العنوان",
     "endpoint": "نقطة النهاية",
     "real_time_status": "الحالة المباشرة",
+    "connection_proto": "البروتوكول",
+    "connection_proxy": "نوع البروكسي",
+    "connection_transport": "النقل",
+    "connection_security": "الأمان",
     "polling_node": "جاري فحص العقدة...",
     "node_unreachable": "العقدة غير متاحة",
     "live_peers": "الأقران الحاليون",
@@ -316,7 +323,7 @@
     "per_hr": "لكل ساعة",
     "indicative_prices": "الأسعار استرشادية من الكاش.",
     "support_project": "دعم تطوير المشروع",
-    "support_desc": "أضف 10% ({{amount}} DVPN) إلى هذه المعاملة لدعم مشروع ChibaTunnel. مساهمتك تساعدنا في صيانة وتحسين هذا التطبيق!",
+    "support_desc": "أضف 10% ({{amount}} P2P) إلى هذه المعاملة لدعم مشروع ChibaTunnel. مساهمتك تساعدنا في صيانة وتحسين هذا التطبيق!",
     "subscription_type": "نوع الاشتراك",
     "gigabytes": "جيجابايت",
     "hours": "ساعات",
@@ -338,12 +345,29 @@
       "handshaking": "جاري إجراء الهندشيك مع عقدة {{name}}...",
       "generating_config": "جاري إنشاء تكوين VPN المحلي..."
     },
-    "hide_qr": "إخفاء QR",
-    "show_qr": "إظهار QR",
-    "qr_only": "QR فقط",
-    "start_proxy": "بدء بروكسي محلي",
-    "start_transparent": "بدء وضع شفاف",
-    "or_start_proxy": "أو بدء بروكسي محلي",
+    "handshake_success_banner": "اكتملت المصافحة، رقم تعريف جلستك هو #{{sessionId}}. اختر ما تريد حمايته وكيف:",
+    "connect_mode_title": "How do you want to connect?",
+    "mode_full_title": "Protect this entire device",
+    "mode_full_desc": "All apps and system traffic go through the tunnel.",
+    "mode_full_badge": "Recommended",
+    "mode_full_missing_badge": "Requires extra component",
+    "mode_proxy_title": "Protect only some apps",
+    "mode_proxy_desc": "Only apps you manually configure will use this connection.",
+    "mode_proxy_badge": "Advanced",
+    "mode_proxy_info": "After connecting you'll get an address and port to set manually in your browser or app's proxy settings.",
+    "other_device_title": "Use on another device",
+    "other_device_desc": "Scan the QR code or copy the link into a compatible app.",
+    "other_device_v2ray_hint": "On Android, import the link/QR into v2rayNG. On iOS/macOS, use Shadowrocket or Streisand.",
+    "other_device_wg_hint": "Scan the QR or import the file using the official WireGuard app (Android, iOS, Windows, macOS, Linux).",
+    "close_use_other_device": "Close — I'll connect from another device",
+    "proxy_active_hint": "Manually set this proxy in the network settings of the app or browser you want to protect.",
+    "proxy_howto_link": "How do I set this up?",
+    "proxy_howto_chrome": "Chrome / Edge: Settings → System → Open your computer's proxy settings",
+    "proxy_howto_firefox": "Firefox: Settings → Network Settings → Manual proxy configuration",
+    "repair_helper": "إصلاح الخدمة المتميزة",
+    "repairing_helper": "جاري الإصلاح...",
+    "repair_failed": "فشل الإصلاح:",
+    "repair_success": "تم الإصلاح بنجاح! جاري إعادة الاتصال...",
     "currently_connected": "متصل حالياً بهذه العقدة"
   },
   "binary": {
@@ -380,5 +404,14 @@
     "desc_other": "سياسة متقدمة بناءً على حركة الأسعار.",
     "update_btn": "تحديث السياسة",
     "updating": "جاري التحديث..."
+  },
+  "boot": {
+    "verifying_environment": "التحقق من البيئة...",
+    "loading_wallet": "جاري تحميل المحفظة...",
+    "fetching_nodes": "جاري جلب العقد...",
+    "fetching_plans": "جاري جلب الخطط...",
+    "analyzing_plans": "جاري تحليل الخطط...",
+    "fetching_subs": "جاري جلب الاشتراكات...",
+    "fetching_sessions": "جاري جلب الجلسات..."
   }
 }

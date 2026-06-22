@@ -46,7 +46,7 @@ import pkg from '../../package.json'
 
 // ── Project Configuration ─────────────────────────────────────────────────────
 const PROJECT_WALLET_ADDRESS = process.env.PROJECT_WALLET_ADDRESS || 'sent1ppkl...zq7k0v' // Default dev address
-const PROJECT_DONATION_MEMO  = process.env.PROJECT_DONATION_MEMO  || `${pkg.name} project support`
+const PROJECT_DONATION_MEMO  = process.env.PROJECT_DONATION_MEMO  || `${pkg.name} (Donation)`
 
 // ── GasPrice shim ────────────────────────────────────────────────────────────
 function makeGasPrice(str: string): unknown {
@@ -127,6 +127,9 @@ const STORE_KEY_SETTINGS = 'settings'
 // const STORE_KEY_BINARIES = 'custom_binaries'
 const NODES_API          = 'https://api.sentnodes.com/v2/nodes'
 const RPC_TIMEOUT_MS     = 10_000
+const PAGINATION_LIMIT   = 250
+
+const MEMO = 'ChibaTunnel (Sentinel dVPN Desktop Client)'
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
 interface AppSettings {
@@ -233,7 +236,14 @@ app.whenReady().then(async () => {
 
   const alive = await pingHelper()
   if (!alive) {
-    if (process.platform === 'linux') await installLinuxHelper()
+    if (process.platform === 'win32') {
+      try {
+        await installWindowsHelper()
+      } catch (e) {
+        console.error('Failed to install Windows helper on startup:', e)
+      }
+    }
+    else if (process.platform === 'linux') await installLinuxHelper()
     else if (process.platform === 'darwin') await installDarwinHelper()
   }
 
@@ -244,6 +254,30 @@ app.on('window-all-closed', async () => {
   await killActiveConnections(true)
   if (process.platform !== 'darwin') app.quit()
 })
+
+async function installWindowsHelper(): Promise<void> {
+  const resourcesPath = app.isPackaged
+    ? process.resourcesPath
+    : path.join(__dirname, '..', '..', 'dist-helper')
+
+  const helperDest = path.join(resourcesPath, 'chibatunnel-helper.exe')
+  
+  if (!fs.existsSync(helperDest)) {
+    throw new Error(`Helper executable not found at: ${helperDest}`)
+  }
+
+  // Force stop and remove old task, create new, and run
+  const result = await execPrivileged([
+    `schtasks /end /tn "ChibaTunnelHelper" *>$null`,
+    `schtasks /delete /tn "ChibaTunnelHelper" /f *>$null`,
+    `schtasks /create /tn "ChibaTunnelHelper" /tr "\\"${helperDest}\\" --service" /sc onstart /ru SYSTEM /rl HIGHEST /f`,
+    `schtasks /run /tn "ChibaTunnelHelper"`
+  ])
+
+  if (result.code !== 0) {
+    throw new Error(`Windows Helper install failed: ${result.stderr}`)
+  }
+}
 
 async function installDarwinHelper(): Promise<void> {
   const resourcesPath = app.isPackaged
@@ -389,8 +423,11 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('binary:check', () => checkBinaries())
   ipcMain.handle('binary:browse', async (_e, name: string) => {
+    // Needs a real window to parent the modal dialog. Without one (e.g. headless)
+    // showOpenDialog would block indefinitely on an orphan modal.
+    if (!mainWindow) return { success: false, error: 'No window available for file dialog' }
     const isWin = process.platform === 'win32'
-    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow!, {
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
       title: `Select ${name} executable`,
       filters: isWin ? [{ name: 'Executables', extensions: ['exe'] }] : [],
       properties: ['openFile']
@@ -405,6 +442,21 @@ function registerIpcHandlers(): void {
     const res = await execPrivileged([cmd])
     if (res.code === 0) return { success: true }
     return { success: false, error: res.stderr }
+  })
+  ipcMain.handle('helper:repair', async () => {
+    try {
+      if (process.platform === 'win32') {
+        await installWindowsHelper()
+      } else if (process.platform === 'linux') {
+        await installLinuxHelper()
+      } else if (process.platform === 'darwin') {
+        await installDarwinHelper()
+      }
+      return { success: true }
+    } catch (err: any) {
+      console.error('[helper:repair] Failed to repair helper:', err)
+      return { success: false, error: err.message || String(err) }
+    }
   })
 
   ipcMain.handle('wallet:list', async () => {
@@ -577,13 +629,19 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('sessions:fetch', async () => {
-    if (!walletState.readonlyClient || !walletState.address) return { success: false, sessions: [] }
+    if (!walletState.readonlyClient || !walletState.address) return { success: false, error: walletState.address ? 'No RPC client' : 'Wallet not loaded', sessions: [] }
     try {
-      const r = await walletState.readonlyClient.sentinelQuery?.session.sessionsForAccount(
-        walletState.address, 
-        PageRequest.fromJSON({ limit: 100, reverse: true })
+      const sessionsRaw = await queryAllWithPagination(
+        (pageReq) => walletState.readonlyClient!.sentinelQuery!.session.sessionsForAccount(
+          walletState.address!,
+          pageReq
+        ),
+        (res) => res?.sessions ?? [],
+        'sessions:fetch',
+        PAGINATION_LIMIT,
+        true
       )
-      const sessions = (r?.sessions ?? []).map(anyVal => {
+      const sessions = sessionsRaw.map(anyVal => {
         try {
           const decoded = Session.decode(anyVal.value); const bs = decoded.baseSession
           if (!bs) return null
@@ -607,16 +665,23 @@ function registerIpcHandlers(): void {
     if (!walletState.client || !walletState.address) return { success: false, error: 'Wallet not initialized' }
     try {
       const msg = sessionCancel({ from: walletState.address, id: Long.fromNumber(sessionId, true) })
-      const tx  = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
+      const tx  = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', MEMO)
       assertIsDeliverTxSuccess(tx); return { success: true }
     } catch (err: unknown) { return { success: false, error: extractError(err) } }
   })
 
   ipcMain.handle('plans:fetch', async () => {
-    if (!walletState.readonlyClient) return { success: false, plans: [] }
+    if (!walletState.readonlyClient) return { success: false, error: 'No RPC client', plans: [] }
     try {
-      const res = await walletState.readonlyClient.sentinelQuery?.plan.plans(Status.STATUS_ACTIVE, undefined)
-      const plans = (res?.plans ?? []).map(p => ({
+      const plansRaw = await queryAllWithPagination(
+        (pageReq) => walletState.readonlyClient!.sentinelQuery!.plan.plans(
+          Status.STATUS_UNSPECIFIED,
+          pageReq
+        ),
+        (res) => res?.plans ?? [],
+        'plans:fetch'
+      )
+      const plans = plansRaw.map(p => ({
         id: longToNum(p.id),
         provAddress: p.provAddress,
         bytes: p.bytes,
@@ -636,10 +701,17 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('subscriptions:fetch', async () => {
-    if (!walletState.readonlyClient || !walletState.address) return { success: false, subscriptions: [] }
+    if (!walletState.readonlyClient || !walletState.address) return { success: false, error: walletState.address ? 'No RPC client' : 'Wallet not loaded', subscriptions: [] }
     try {
-      const res = await walletState.readonlyClient.sentinelQuery?.subscription.subscriptionsForAccount(walletState.address, undefined)
-      const subscriptions = (res?.subscriptions ?? []).map(s => {
+      const subscriptionsRaw = await queryAllWithPagination(
+        (pageReq) => walletState.readonlyClient!.sentinelQuery!.subscription.subscriptionsForAccount(
+          walletState.address!,
+          pageReq
+        ),
+        (res) => res?.subscriptions ?? [],
+        'subscriptions:fetch'
+      )
+      const subscriptions = subscriptionsRaw.map(s => {
         try {
           return {
             id: longToNum(s.id),
@@ -667,7 +739,7 @@ function registerIpcHandlers(): void {
         denom: denom,
         renewalPricePolicy: policy
       })
-      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
+      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', MEMO)
       assertIsDeliverTxSuccess(tx)
       console.log(`[Plan:Subscribe] Success! TX: ${tx.transactionHash}`)
       return { success: true, txHash: tx.transactionHash }
@@ -678,12 +750,20 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('plan:nodes', async (_e, planId: number) => {
-    if (!walletState.readonlyClient) return { success: false, nodes: [] }
+    if (!walletState.readonlyClient) return { success: false, error: 'No RPC client', nodes: [] }
     try {
       const id = Long.fromNumber(planId, true)
-      const res = await walletState.readonlyClient.sentinelQuery?.node.nodesForPlan(id, Status.STATUS_ACTIVE, undefined)
-      
-      const nodes = (res?.nodes ?? []).map(n => ({
+      const nodesRaw = await queryAllWithPagination(
+        (pageReq) => walletState.readonlyClient!.sentinelQuery!.node.nodesForPlan(
+          id,
+          Status.STATUS_UNSPECIFIED,
+          pageReq
+        ),
+        (res) => res?.nodes ?? [],
+        `plan:nodes#${planId}`
+      )
+
+      const nodes = nodesRaw.map(n => ({
         address: n.address,
         moniker: n.address.slice(0, 12) + '...',
         version: (n as any).version || '',
@@ -710,20 +790,32 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('plans:scanNodes', async (_e, planIds: number[]) => {
-    if (!walletState.readonlyClient) return { success: false, nodesMap: {} }
+    if (!walletState.readonlyClient) return { success: false, error: 'No RPC client', nodesMap: {} }
     const nodesMap: Record<number, any[]> = {}
     
-    // Concurrency limit: 10
+    // Concurrency limit: 5 — keep fan-out small to stay under RPC 429 rate limits.
+    const CHUNK_SIZE = 5
     const chunks = []
-    for (let i = 0; i < planIds.length; i += 10) {
-      chunks.push(planIds.slice(i, i + 10))
+    for (let i = 0; i < planIds.length; i += CHUNK_SIZE) {
+      chunks.push(planIds.slice(i, i + CHUNK_SIZE))
     }
 
-    for (const chunk of chunks) {
+    for (let ci = 0; ci < chunks.length; ci++) {
+      const chunk = chunks[ci]
+      // Pace successive chunks so a large plan set doesn't hammer the endpoint.
+      if (ci > 0) await delay(250)
       await Promise.all(chunk.map(async (id) => {
         try {
-          const res = await walletState.readonlyClient!.sentinelQuery?.node.nodesForPlan(Long.fromNumber(id, true), Status.STATUS_ACTIVE, undefined)
-          nodesMap[id] = (res?.nodes ?? []).map(n => ({
+          const nodesRaw = await queryAllWithPagination(
+            (pageReq) => walletState.readonlyClient!.sentinelQuery!.node.nodesForPlan(
+              Long.fromNumber(id, true),
+              Status.STATUS_UNSPECIFIED,
+              pageReq
+            ),
+            (res) => res?.nodes ?? [],
+            `scanNodes#${id}`
+          )
+          nodesMap[id] = nodesRaw.map(n => ({
             address: n.address,
             moniker: n.address.slice(0, 12) + '...',
             version: (n as any).version || '',
@@ -772,19 +864,25 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('providers:fetchBatch', async (_e, addresses: string[]) => {
-    if (!walletState.readonlyClient) return { success: false, providers: {} }
+    if (!walletState.readonlyClient) return { success: false, error: 'No RPC client', providers: {} }
     const providers: Record<string, any> = {}
     
-    // Concurrency limit: 20 (providers are simpler)
+    // Concurrency limit: 10 — providers are simpler reads, but still rate-limited.
+    const CHUNK_SIZE = 10
     const chunks = []
-    for (let i = 0; i < addresses.length; i += 20) {
-      chunks.push(addresses.slice(i, i + 20))
+    for (let i = 0; i < addresses.length; i += CHUNK_SIZE) {
+      chunks.push(addresses.slice(i, i + CHUNK_SIZE))
     }
 
-    for (const chunk of chunks) {
+    for (let ci = 0; ci < chunks.length; ci++) {
+      const chunk = chunks[ci]
+      if (ci > 0) await delay(200)
       await Promise.all(chunk.map(async (addr) => {
         try {
-          const res = await walletState.readonlyClient!.sentinelQuery?.provider.provider(addr)
+          const res = await rpcWithRetry(
+            () => walletState.readonlyClient!.sentinelQuery?.provider.provider(addr),
+            `provider#${addr.slice(0, 12)}`
+          )
           if (res) {
             providers[addr] = {
               name: res.name,
@@ -809,7 +907,7 @@ function registerIpcHandlers(): void {
           id: Long.fromNumber(subscriptionId, true)
         }
       }
-      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
+      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', MEMO)
       assertIsDeliverTxSuccess(tx)
       console.log(`[Subscription:Cancel] Success! TX: ${tx.transactionHash}`)
 
@@ -850,7 +948,7 @@ function registerIpcHandlers(): void {
           renewalPricePolicy: policy
         }
       }
-      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
+      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', MEMO)
       assertIsDeliverTxSuccess(tx)
       console.log(`[Subscription:Update] Success! TX: ${tx.transactionHash}`)
       return { success: true, txHash: tx.transactionHash }
@@ -872,7 +970,7 @@ function registerIpcHandlers(): void {
         id: Long.fromNumber(subscriptionId, true),
         nodeAddress: nodeAddress
       })
-      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
+      const tx = await walletState.client.signAndBroadcast(walletState.address, [msg], 'auto', MEMO)
       assertIsDeliverTxSuccess(tx)
 
       mainWindow?.webContents.send('vpn:status', { step: 'extracting_tx' })
@@ -1014,28 +1112,112 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('network:getPublicIp', async () => {
-    const fetchIp = async () => {
-      const res = await fetch('https://ipapi.co/json/', {
-        headers: { 'User-Agent': 'Chiba Tunnel (Sentinel dVPN Desktop Client)' },
+    // Multiple providers so a single rate-limit / block / captive portal does not
+    // take out IP detection entirely. Each maps its response onto the ipapi.co
+    // shape the renderer expects ({ ip, country_name, ... }).
+    const providers: Array<{ url: string; map: (j: any) => any }> = [
+      // Ordered by reliability of GEO data + tolerance to rate limits. The free tiers
+      // of ipapi.co / ipwho.is throttle aggressively (429/403), which would otherwise
+      // fall through to ipify (IP only, no location -> empty LOCATION / PROVIDER in the
+      // UI). ip-api.com and ipinfo.io return full geo without a key. Each map()
+      // normalizes onto the shape the renderer reads: { ip, city, country_name, org, asn }.
+      {
+        url: 'http://ip-api.com/json/?fields=status,message,query,city,regionName,country,isp,org,as',
+        map: j => ({
+          ip: j.query,
+          city: j.city,
+          country_name: j.country,
+          region: j.regionName,
+          org: j.org || j.isp || '',
+          asn: j.as ? String(j.as).split(' ')[0] : ''
+        })
+      },
+      {
+        url: 'https://ipinfo.io/json',
+        map: j => ({
+          ip: j.ip,
+          city: j.city,
+          country_name: j.country,
+          region: j.region,
+          org: j.org ? String(j.org).replace(/^AS\d+\s*/, '') : '',
+          asn: j.org ? (String(j.org).match(/^AS\d+/)?.[0] || '') : ''
+        })
+      },
+      {
+        url: 'https://ipwho.is/',
+        map: j => ({
+          ip: j.ip,
+          city: j.city,
+          country_name: j.country,
+          region: j.region,
+          org: j.connection?.org || j.connection?.isp || '',
+          asn: j.connection?.asn ? `AS${j.connection.asn}` : ''
+        })
+      },
+      { url: 'https://ipapi.co/json/', map: j => j },
+      { url: 'https://api.ipify.org?format=json', map: j => ({ ip: j.ip }) }
+    ]
+
+    const fetchIp = async (url: string, map: (j: any) => any) => {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': MEMO,
+          'Accept': 'application/json'
+        },
         signal: AbortSignal.timeout(5000)
       })
-      return await res.json() as any
+      // A rate-limited / blocked endpoint (or a captive portal) often replies with
+      // a non-JSON body like "Please contact ...". Reading it as JSON would throw
+      // an opaque SyntaxError, so guard on status and content type and read text
+      // first, then parse explicitly for a clean, actionable error.
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status} ${res.statusText}`)
+      }
+      const body = (await res.text()).trim()
+      const looksJson = body.startsWith('{') || body.startsWith('[')
+      if (!looksJson) {
+        const snippet = body.slice(0, 80)
+        throw new Error(`Non-JSON response (likely rate-limited or blocked): ${snippet}`)
+      }
+      let parsed: any
+      try {
+        parsed = JSON.parse(body)
+      } catch {
+        throw new Error('Invalid JSON in IP service response')
+      }
+      // ipapi.co signals throttling with { error: true, reason: "RateLimited" }.
+      if (parsed && parsed.error) {
+        throw new Error(`IP service error: ${parsed.reason || parsed.message || 'unknown'}`)
+      }
+      // ipwho.is signals failure with { success: false, message }.
+      if (parsed && parsed.success === false) {
+        throw new Error(`IP service error: ${parsed.message || 'request failed'}`)
+      }
+      // ip-api.com signals failure with { status: "fail", message }.
+      if (parsed && parsed.status === 'fail') {
+        throw new Error(`IP service error: ${parsed.message || 'request failed'}`)
+      }
+      return map(parsed)
     }
 
     console.log('[Main] Fetching public IP info...')
-    // Retry logic for IP fetch during routing transitions
+    let lastErr = 'Unknown error'
+    // Retry across providers and routing transitions.
     for (let i = 0; i < 3; i++) {
-      try {
-        if (i > 0) await new Promise(r => setTimeout(r, 1500 * i))
-        const data = await fetchIp()
-        console.log('[Main] IP info fetched successfully:', data?.ip)
-        return data
-      } catch (err: unknown) {
-        console.warn(`[Main] IP fetch attempt ${i+1} failed:`, String(err))
-        if (i === 2) return { error: String(err) }
+      if (i > 0) await new Promise(r => setTimeout(r, 1500 * i))
+      for (const { url, map } of providers) {
+        try {
+          const data = await fetchIp(url, map)
+          if (!data?.ip) throw new Error('Response missing ip field')
+          console.log(`[Main] IP info fetched successfully via ${url}:`, data.ip)
+          return data
+        } catch (err: unknown) {
+          lastErr = String(err instanceof Error ? err.message : err)
+          console.warn(`[Main] IP fetch via ${url} (attempt ${i + 1}) failed:`, lastErr)
+        }
       }
     }
-    return { error: 'Unknown error' }
+    return { error: lastErr }
   })
 
   ipcMain.handle('killswitch:enable', async () => {
@@ -1056,17 +1238,26 @@ function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('vpn:status', () => ({
-    v2rayActive: isV2RayRunning(),
-    v2rayPid: getV2RayPid(),
-    wgActive: !!activeWgConfigFile,
-    wgInterface: activeWgConfigFile ? path.basename(activeWgConfigFile, '.conf') : null,
-    tunActive: activeTun2Socks !== null,
-    tunPid: activeTun2Socks,
-    tunInterface: activeTunInterface,
-    sessionId: activeSessionId,
-    nodeAddress: activeNodeAddress
-  }))
+  ipcMain.handle('vpn:status', () => {
+    let inbounds: any = null
+    if (activeV2Ray?.config?.inbounds) {
+      inbounds = activeV2Ray.config.inbounds
+        .filter((ib: any) => ib.protocol !== 'dokodemo-door')
+        .map((ib: any) => ({ protocol: ib.protocol, listen: ib.listen, port: ib.port }))
+    }
+    return {
+      v2rayActive: isV2RayRunning(),
+      v2rayPid: getV2RayPid(),
+      wgActive: !!activeWgConfigFile,
+      wgInterface: activeWgConfigFile ? path.basename(activeWgConfigFile, '.conf') : null,
+      tunActive: activeTun2Socks !== null,
+      tunPid: activeTun2Socks,
+      tunInterface: activeTunInterface,
+      sessionId: activeSessionId,
+      nodeAddress: activeNodeAddress,
+      inbounds
+    }
+  })
 }
 
 function getNextTunInterface(): string {
@@ -1170,19 +1361,19 @@ async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabyt
     if (!remoteAddr) return { success: false, error: 'Node has no remote addresses' }
     const chainPrices = (args.subscriptionType === 'gigabytes' ? chainNode.gigabytePrices : chainNode.hourlyPrices) ?? []
     const udvpnPrice = chainPrices.find((p: Price) => p.denom === 'udvpn')
-    if (!udvpnPrice) return { success: false, error: `No udvpn price on chain` }
+    if (!udvpnPrice) return { success: false, error: `No up2p price on chain` }
 
     mainWindow?.webContents.send('vpn:status', { step: 'preparing_tx' })
     const txArgs: TxNodeStartSession = {
       from: walletState.address!, nodeAddress: args.nodeAddress,
       gigabytes: args.subscriptionType === 'gigabytes' ? Long.fromNumber(Math.max(1, args.amount), true) : undefined,
       hours: args.subscriptionType === 'hours' ? Long.fromNumber(Math.max(1, args.amount), true) : undefined,
-      maxPrice: udvpnPrice, fee: 'auto', memo: 'Chiba Tunnel (Sentinel dVPN Desktop Client)'
+      maxPrice: udvpnPrice, fee: 'auto', memo: MEMO
     }
 
     mainWindow?.webContents.send('vpn:status', { step: 'signing_tx' })
     mainWindow?.webContents.send('vpn:status', { step: 'broadcasting_tx' })
-    const tx = await walletState.client!.signAndBroadcast(walletState.address!, [nodeStartSession(txArgs)], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
+    const tx = await walletState.client!.signAndBroadcast(walletState.address!, [nodeStartSession(txArgs)], 'auto', MEMO)
     assertIsDeliverTxSuccess(tx)
 
     mainWindow?.webContents.send('vpn:status', { step: 'extracting_tx' })
@@ -1285,8 +1476,8 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
             if (donationAmount > 0n && !recipientValid) {
               console.log(`[SUPPORT] Donation skipped: invalid recipient address "${PROJECT_WALLET_ADDRESS}"`)
             } else if (donationAmount > 0n) {
-              console.log(`[SUPPORT] Calculated Donation: ${donationAmount.toString()} udvpn`)
-              mainWindow?.webContents.send('vpn:warning', { message: `Project donation triggered: ${donationAmount.toString()} udvpn` })
+              console.log(`[SUPPORT] Calculated Donation: ${donationAmount.toString()} up2p`)
+              mainWindow?.webContents.send('vpn:warning', { message: `Project donation triggered: ${donationAmount.toString()} up2p` })
 
               walletState.client.sendTokens(
                 walletState.address, 
@@ -1359,6 +1550,9 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
 }
 
 async function getTrafficStats(): Promise<{ rx: number; tx: number; source: string }> {
+  const { promisify } = require('util')
+  const execFileAsync = promisify(execFile)
+
   // 1. WireGuard Stats
   if (activeWgConfigFile && activeWgInstance) {
     const ifName = path.basename(activeWgConfigFile, '.conf')
@@ -1370,7 +1564,8 @@ async function getTrafficStats(): Promise<{ rx: number; tx: number; source: stri
       } catch { /* Fallback */ }
     }
     try {
-      const lines = execSync('wg show all transfer', { stdio: 'pipe' }).toString().trim().split('\n')
+      const { stdout } = await execFileAsync('wg', ['show', 'all', 'transfer'])
+      const lines = stdout.trim().split('\n')
       let rx = 0, tx = 0; for (const line of lines) { const parts = line.trim().split(/\s+/); if (parts.length >= 3) { rx += parseInt(parts[1]) || 0; tx += parseInt(parts[2]) || 0 } }
       return { rx, tx, source: 'wireguard' }
     } catch { }
@@ -1387,8 +1582,8 @@ async function getTrafficStats(): Promise<{ rx: number; tx: number; source: stri
     } else if (process.platform === 'darwin') {
       try {
         // netstat -ibI <iface> returns a table. We want the 7th (IBytes) and 10th (OBytes) columns.
-        const output = execSync(`netstat -ibI ${activeTunInterface}`, { stdio: 'pipe' }).toString().trim()
-        const lines = output.split('\n')
+        const { stdout } = await execFileAsync('netstat', ['-ibI', activeTunInterface])
+        const lines = stdout.trim().split('\n')
         if (lines.length > 1) {
           const stats = lines[1].split(/\s+/)
           return { rx: parseInt(stats[6]) || 0, tx: parseInt(stats[9]) || 0, source: 'tun2socks' }
@@ -1653,6 +1848,89 @@ async function setupWallet(mnemonic: string, label: string, rpc: string) {
 
 function withTimeout<T>(promise: Promise<T> | undefined, ms: number, msg: string): Promise<T> { if (!promise) return Promise.reject(new Error(msg)); return Promise.race([promise, new Promise<never>((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]) }
 
+// ── RPC retry / backoff ───────────────────────────────────────────────────────
+// The Sentinel RPC endpoints rate-limit bursty fan-out (HTTP 429) and may briefly
+// drop connections (ECONNRESET / ETIMEDOUT / EAI_AGAIN). A single transient hiccup
+// shouldn't surface as "no nodes for this plan" in the UI, so wrap chain reads in a
+// bounded exponential backoff that ONLY retries transient failures — never on-chain
+// logic errors (those are returned verbatim so callers see the real cause).
+
+function isTransientNetworkError(err: unknown): boolean {
+  const e = err as { code?: string; message?: string; status?: number; response?: { status?: number } }
+  const status = e?.status ?? e?.response?.status
+  if (status === 429 || (typeof status === 'number' && status >= 500)) return true
+  const code = e?.code
+  if (code && ['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EAI_AGAIN', 'ENOTFOUND', 'EPIPE'].includes(code)) return true
+  const msg = String(e?.message ?? err ?? '').toLowerCase()
+  return (
+    msg.includes('429') ||
+    msg.includes('too many requests') ||
+    msg.includes('rate limit') ||
+    msg.includes('socket hang up') ||
+    msg.includes('timeout') ||
+    msg.includes('econnreset') ||
+    msg.includes('service unavailable') ||
+    msg.includes('bad gateway')
+  )
+}
+
+/**
+ * Runs an RPC read with exponential backoff on transient failures only.
+ * Non-transient (on-chain/logic) errors reject immediately so the real cause
+ * is preserved. Backoff grows 400ms → 800ms → 1600ms (+ jitter), capped at 3 tries.
+ */
+async function rpcWithRetry<T>(fn: () => Promise<T>, label = 'rpc', maxRetries = 3): Promise<T> {
+  let lastErr: unknown
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (err) {
+      lastErr = err
+      if (!isTransientNetworkError(err) || attempt === maxRetries - 1) throw err
+      const backoff = 400 * 2 ** attempt + Math.floor(Math.random() * 200)
+      console.warn(`[rpc:retry] ${label} transient failure (attempt ${attempt + 1}/${maxRetries}), retrying in ${backoff}ms:`, extractError(err))
+      await new Promise((r) => setTimeout(r, backoff))
+    }
+  }
+  throw lastErr
+}
+
+/**
+ * Automatically pages through Cosmos RPC queries using key-based pagination.
+ * Runs page requests sequentially with rpcWithRetry.
+ */
+async function queryAllWithPagination<T = any>(
+  queryFn: (pageReq: PageRequest) => Promise<any>,
+  extractor: (res: any) => T[],
+  label = 'query',
+  limit = PAGINATION_LIMIT,
+  reverse = false
+): Promise<T[]> {
+  const allItems: T[] = []
+  let nextKey: Uint8Array | undefined = undefined
+  let isFirst = true
+
+  while (isFirst || (nextKey && nextKey.length > 0)) {
+    isFirst = false
+    const pageReq = PageRequest.fromPartial({
+      key: nextKey,
+      limit: Long.fromNumber(limit),
+      reverse
+    })
+    const res = await rpcWithRetry(() => queryFn(pageReq), `${label}:page`, 3)
+    const items = extractor(res)
+    if (items) {
+      allItems.push(...items)
+    }
+    nextKey = res?.pagination?.nextKey
+  }
+
+  return allItems
+}
+
+/** Sleep helper for inter-chunk pacing to stay under RPC rate limits. */
+function delay(ms: number): Promise<void> { return new Promise((r) => setTimeout(r, ms)) }
+
 /*
  * Drop-in replacement for checkBinaries() in the Electron main process.
  *
@@ -1828,6 +2106,10 @@ export function checkBinaries() {
 
     if (fs.existsSync(geoipDest) && fs.existsSync(geositeDest)) {
       geoDataOk = true
+      process.env.V2RAY_LOCATION_ASSET = v2Dir
+    } else if (isLinux && fs.existsSync('/usr/share/v2ray/geoip.dat') && fs.existsSync('/usr/share/v2ray/geosite.dat')) {
+      geoDataOk = true
+      process.env.V2RAY_LOCATION_ASSET = '/usr/share/v2ray'
     } else {
       // Try copying from resources/bin/
       const geoipSrc   = path.join(resourcesBinDir, 'geoip.dat')
@@ -1839,8 +2121,13 @@ export function checkBinaries() {
           fs.copyFileSync(geositeSrc, geositeDest)
           console.log('[BinaryCheck] Copied geo data files alongside v2ray')
           geoDataOk = true
+          process.env.V2RAY_LOCATION_ASSET = v2Dir
         } catch (e) {
           console.warn('[BinaryCheck] Could not copy geo data files:', e)
+          // Fallback: use geo data files from bundled resources directly
+          console.log('[BinaryCheck] Fallback: using geo data files from resources/bin')
+          geoDataOk = true
+          process.env.V2RAY_LOCATION_ASSET = resourcesBinDir
         }
       }
     }

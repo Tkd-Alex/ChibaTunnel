@@ -34,7 +34,8 @@
     "missing": "ОТСУТСТВУЕТ",
     "checking": "Проверка...",
     "exec": "Выполнить",
-    "browse": "Обзор"
+    "browse": "Обзор",
+    "or": "или"
   },
   "tabs": {
     "globe": "Глобус",
@@ -199,8 +200,8 @@
     "forget_confirm_msg": "Это удалит ВСЕ сохраненные фразы и адреса с этого устройства. Это действие нельзя отменить.",
     "forget_confirm_btn": "Да, удалить все",
     "refresh_info": "Обновить инфо кошелька",
-    "p2p_session": "P2P СЕССИЯ",
-    "p2p_session_plural": "P2P СЕССИИ",
+    "p2p_session": "СЕССИЯ",
+    "p2p_session_plural": "СЕССИИ",
     "active_sessions_hint": "Активные on-chain сессии для этого кошелька",
     "manage_title": "Кошельки",
     "manage_sub": "Управление кошельками Sentinel",
@@ -221,7 +222,9 @@
     "reconnecting": "Переподключение...",
     "status": "Статус VPN",
     "disconnect_btn": "Отключить",
-    "manage_btn": "Управление"
+    "manage_btn": "Управление",
+    "disconnect_confirm_title": "Отключиться?",
+    "disconnect_confirm_msg": "Вы уверены, что хотите отключиться?"
   },
   "settings": {
     "title": "Настройки",
@@ -293,6 +296,10 @@
     "address": "Адрес",
     "endpoint": "Эндпоинт",
     "real_time_status": "Статус в реальном времени",
+    "connection_proto": "Протокол",
+    "connection_proxy": "Тип прокси",
+    "connection_transport": "Транспорт",
+    "connection_security": "Безопасность",
     "polling_node": "ОПРОС УЗЛА...",
     "node_unreachable": "Узел недоступен",
     "live_peers": "Текущие пиры",
@@ -316,7 +323,7 @@
     "per_hr": "За Час",
     "indicative_prices": "Ориентировочные цены из кэша.",
     "support_project": "Поддержать разработку проекта",
-    "support_desc": "Добавьте 10% ({{amount}} DVPN) к этой транзакции, чтобы поддержать проект ChibaTunnel. Ваш вклад помогает нам поддерживать и улучшать это приложение!",
+    "support_desc": "Добавьте 10% ({{amount}} P2P) к этой транзакции, чтобы поддержать проект ChibaTunnel. Ваш вклад помогает нам поддерживать и улучшать это приложение!",
     "subscription_type": "Тип подписки",
     "gigabytes": "Гигабайты",
     "hours": "Часы",
@@ -338,12 +345,29 @@
       "handshaking": "Выполнение handshake с узлом {{name}}...",
       "generating_config": "Генерация конфигурации VPN..."
     },
-    "hide_qr": "Скрыть QR",
-    "show_qr": "Показать QR",
-    "qr_only": "Только QR",
-    "start_proxy": "Запустить локальный прокси",
-    "start_transparent": "Запустить прозрачный режим",
-    "or_start_proxy": "или запустить локальный прокси",
+    "handshake_success_banner": "Handshake выполнен, ваш ID сессии — #{{sessionId}}. Выберите, что и как вы хотите защитить:",
+    "connect_mode_title": "How do you want to connect?",
+    "mode_full_title": "Protect this entire device",
+    "mode_full_desc": "All apps and system traffic go through the tunnel.",
+    "mode_full_badge": "Recommended",
+    "mode_full_missing_badge": "Requires extra component",
+    "mode_proxy_title": "Protect only some apps",
+    "mode_proxy_desc": "Only apps you manually configure will use this connection.",
+    "mode_proxy_badge": "Advanced",
+    "mode_proxy_info": "After connecting you'll get an address and port to set manually in your browser or app's proxy settings.",
+    "other_device_title": "Use on another device",
+    "other_device_desc": "Scan the QR code or copy the link into a compatible app.",
+    "other_device_v2ray_hint": "On Android, import the link/QR into v2rayNG. On iOS/macOS, use Shadowrocket or Streisand.",
+    "other_device_wg_hint": "Scan the QR or import the file using the official WireGuard app (Android, iOS, Windows, macOS, Linux).",
+    "close_use_other_device": "Close — I'll connect from another device",
+    "proxy_active_hint": "Manually set this proxy in the network settings of the app or browser you want to protect.",
+    "proxy_howto_link": "How do I set this up?",
+    "proxy_howto_chrome": "Chrome / Edge: Settings → System → Open your computer's proxy settings",
+    "proxy_howto_firefox": "Firefox: Settings → Network Settings → Manual proxy configuration",
+    "repair_helper": "ВОССТАНОВИТЬ СЛУЖБУ",
+    "repairing_helper": "ВОССТАНОВЛЕНИЕ...",
+    "repair_failed": "Сбой восстановления:",
+    "repair_success": "Восстановление успешно! Повторное подключение...",
     "currently_connected": "В данный момент подключен к этому узлу"
   },
   "binary": {
@@ -380,5 +404,14 @@
     "desc_other": "Продвинутая политика на основе изменения цен.",
     "update_btn": "Обновить политику",
     "updating": "Обновление..."
+  },
+  "boot": {
+    "verifying_environment": "Проверка окружения...",
+    "loading_wallet": "Загрузка кошелька...",
+    "fetching_nodes": "Получение узлов...",
+    "fetching_plans": "Получение планов...",
+    "analyzing_plans": "Анализ планов...",
+    "fetching_subs": "Получение подписок...",
+    "fetching_sessions": "Получение сессий..."
   }
 }

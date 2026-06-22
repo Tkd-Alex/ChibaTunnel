@@ -34,7 +34,8 @@
     "missing": "MISSING",
     "checking": "Checking...",
     "exec": "Execute",
-    "browse": "Browse"
+    "browse": "Browse",
+    "or": "or"
   },
   "tabs": {
     "globe": "Globe",
@@ -199,8 +200,8 @@
     "forget_confirm_msg": "This will delete ALL stored mnemonics and addresses from this device. This action cannot be undone.",
     "forget_confirm_btn": "Yes, remove everything",
     "refresh_info": "Refresh wallet info",
-    "p2p_session": "P2P SESSION",
-    "p2p_session_plural": "P2P SESSIONS",
+    "p2p_session": "SESSION",
+    "p2p_session_plural": "SESSIONS",
     "active_sessions_hint": "Active on-chain sessions for this wallet",
     "manage_title": "Wallets",
     "manage_sub": "Manage multiple Sentinel wallets",
@@ -221,7 +222,9 @@
     "reconnecting": "Reconnecting...",
     "status": "VPN Status",
     "disconnect_btn": "Disconnect",
-    "manage_btn": "Manage"
+    "manage_btn": "Manage",
+    "disconnect_confirm_title": "Disconnect?",
+    "disconnect_confirm_msg": "Are you sure you want to disconnect?"
   },
   "settings": {
     "title": "Settings",
@@ -293,6 +296,10 @@
     "address": "Address",
     "endpoint": "Endpoint",
     "real_time_status": "Real-time Status",
+    "connection_proto": "Protocol",
+    "connection_proxy": "Proxy Type",
+    "connection_transport": "Transport",
+    "connection_security": "Security",
     "polling_node": "POLLING NODE...",
     "node_unreachable": "Node unreachable",
     "live_peers": "Live peers",
@@ -316,7 +323,7 @@
     "per_hr": "Per Hour",
     "indicative_prices": "Indicative prices from API cache.",
     "support_project": "Support Project Development",
-    "support_desc": "Add 10% ({{amount}} DVPN) to this transaction to support the ChibaTunnel project. Your contribution helps us maintain and improve this app!",
+    "support_desc": "Add 10% ({{amount}} P2P) to this transaction to support the ChibaTunnel project. Your contribution helps us maintain and improve this app!",
     "subscription_type": "Subscription Type",
     "gigabytes": "Gigabytes",
     "hours": "Hours",
@@ -338,12 +345,29 @@
       "handshaking": "Performing handshake with {{name}} node...",
       "generating_config": "Generating local VPN configuration..."
     },
-    "hide_qr": "Hide QR",
-    "show_qr": "Show QR",
-    "qr_only": "QR only",
-    "start_proxy": "Start local proxy",
-    "start_transparent": "Start Transparent",
-    "or_start_proxy": "or start local proxy",
+    "handshake_success_banner": "Handshake completed, your Session ID is #{{sessionId}}. Choose what you want to protect and how:",
+    "connect_mode_title": "How do you want to connect?",
+    "mode_full_title": "Protect this entire device",
+    "mode_full_desc": "All apps and system traffic go through the tunnel.",
+    "mode_full_badge": "Recommended",
+    "mode_full_missing_badge": "Requires extra component",
+    "mode_proxy_title": "Protect only some apps",
+    "mode_proxy_desc": "Only apps you manually configure will use this connection.",
+    "mode_proxy_badge": "Advanced",
+    "mode_proxy_info": "After connecting you'll get an address and port to set manually in your browser or app's proxy settings.",
+    "other_device_title": "Use on another device",
+    "other_device_desc": "Scan the QR code or copy the link into a compatible app.",
+    "other_device_v2ray_hint": "On Android, import the link/QR into v2rayNG. On iOS/macOS, use Shadowrocket or Streisand.",
+    "other_device_wg_hint": "Scan the QR or import the file using the official WireGuard app (Android, iOS, Windows, macOS, Linux).",
+    "close_use_other_device": "Close — I'll connect from another device",
+    "proxy_active_hint": "Manually set this proxy in the network settings of the app or browser you want to protect.",
+    "proxy_howto_link": "How do I set this up?",
+    "proxy_howto_chrome": "Chrome / Edge: Settings → System → Open your computer's proxy settings",
+    "proxy_howto_firefox": "Firefox: Settings → Network Settings → Manual proxy configuration",
+    "repair_helper": "REPAIR PRIVILEGED SERVICE",
+    "repairing_helper": "REPAIRING...",
+    "repair_failed": "Repair failed:",
+    "repair_success": "Repair successful! Retrying connection...",
     "currently_connected": "Currently connected to this node"
   },
   "binary": {
@@ -380,5 +404,14 @@
     "desc_other": "Advanced policy based on price movement.",
     "update_btn": "Update Policy",
     "updating": "Updating..."
+  },
+  "boot": {
+    "verifying_environment": "Verifying environment...",
+    "loading_wallet": "Loading wallet...",
+    "fetching_nodes": "Fetching nodes...",
+    "fetching_plans": "Fetching plans...",
+    "analyzing_plans": "Analyzing plans...",
+    "fetching_subs": "Fetching subscriptions...",
+    "fetching_sessions": "Fetching sessions..."
   }
 }

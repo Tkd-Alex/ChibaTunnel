@@ -33,7 +33,7 @@ function fmtPrice(price: ChainSession['price'], isHourly: boolean): string {
   const suffix = isHourly ? '/ hr' : '/ GB'
   // Use quoteValue (udvpn) for the actual user price
   const val = parseFloat(price.quoteValue || '0') / 1_000_000
-  return `${val.toFixed(2)} DVPN ${suffix}`
+  return `${val.toFixed(2)} P2P ${suffix}`
 }
 
 function statusInfo(s: number): { label: string; cls: string } {

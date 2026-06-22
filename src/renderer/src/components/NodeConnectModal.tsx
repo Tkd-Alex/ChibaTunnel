@@ -17,9 +17,13 @@ import {
   Play, 
   ChevronUp, 
   ChevronDown,
-  Info
+  Info,
+  ShieldCheck,
+  Smartphone,
+  QrCode
 } from 'lucide-react'
 import TrafficStatsWidget from './TrafficStats'
+import ConfirmModal from './ConfirmModal'
 
 // ── UsageProgress helper ──────────────────────────────────────────────────
 function UsageProgress({ session }: { session: any }) {
@@ -52,8 +56,13 @@ function UsageProgress({ session }: { session: any }) {
 function ConnectedDetails({ conn, onDisconnect }: { conn: ConnectionState; onDisconnect: () => void }) {
   const { t } = useTranslation()
   const [sys, setSys] = useState<any>(null)
+  const [showProxyHowto, setShowProxyHowto] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
   const isWg   = conn.vpnType === 'wireguard'
   const color  = isWg ? 'var(--purple)' : 'var(--green)'
+
+  const activeInbounds = sys?.inbounds || conn.inbounds
+  const isLoadingProxy = !isWg && !sys?.tunActive && (!activeInbounds || activeInbounds.length === 0)
 
   useEffect(() => {
     window.api.getVpnStatus().then(setSys)
@@ -95,23 +104,54 @@ function ConnectedDetails({ conn, onDisconnect }: { conn: ConnectionState; onDis
                   </div>
                 </>
               )}
-              {conn.inbounds && conn.inbounds.length > 0 && !sys?.tunActive && (
-                <div style={{ marginTop: 4 }}>
-                  <div className="cd-section-label" style={{ fontSize: 8, opacity: 0.6, marginBottom: 4 }}>{t('node_modal.active_listeners')}</div>
-                  {conn.inbounds.map((ib, i) => (
-                    <div key={i} className="cd-row" style={{ marginBottom: 4 }}>
-                      <span style={{ fontSize: 10 }}>{ib.protocol.toUpperCase()}</span>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <code style={{ color, fontSize: 10 }}>{ib.listen}:{ib.port}</code>
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          style={{ padding: '2px 6px', fontSize: 8 }}
-                          onClick={() => navigator.clipboard.writeText(`${ib.listen}:${ib.port}`)}
-                        ><Copy size={10} /></button>
-                      </span>
-                    </div>
-                  ))}
+              {isLoadingProxy ? (
+                <div style={{ padding: '12px 0', display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-3)' }}>
+                  <div className="spinner" style={{ width: 12, height: 12 }} />
+                  <span style={{ fontSize: 10 }}>{t('node_modal.fetching_session_info')}</span>
                 </div>
+              ) : (
+                activeInbounds && activeInbounds.length > 0 && !sys?.tunActive && (
+                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div className="form-hint" style={{ margin: 0, padding: 8, background: 'rgba(168,85,247,0.05)', border: '1px solid rgba(168,85,247,0.15)', borderRadius: 'var(--radius-sm)', color: 'var(--text-2)', display: 'block', lineHeight: 1.4 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: 'var(--purple)', textTransform: 'uppercase', fontSize: 8, letterSpacing: '0.05em', marginBottom: 4 }}>
+                        <Info size={10} /> {t('node_modal.mode_proxy_badge')}
+                      </div>
+                      {t('node_modal.proxy_active_hint')}
+                      <div style={{ marginTop: 6 }}>
+                        <button 
+                          className="btn btn-secondary btn-sm" 
+                          style={{ padding: '2px 6px', fontSize: 9, height: 'auto', textTransform: 'none', letterSpacing: 'normal' }}
+                          onClick={() => setShowProxyHowto(v => !v)}
+                        >
+                          {t('node_modal.proxy_howto_link')} {showProxyHowto ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                        </button>
+                      </div>
+                      {showProxyHowto && (
+                        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(168,85,247,0.1)', fontSize: 9, color: 'var(--text-3)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <div>• {t('node_modal.proxy_howto_chrome')}</div>
+                          <div>• {t('node_modal.proxy_howto_firefox')}</div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ marginTop: 4 }}>
+                      <div className="cd-section-label" style={{ fontSize: 8, opacity: 0.6, marginBottom: 4 }}>{t('node_modal.active_listeners')}</div>
+                      {activeInbounds.map((ib, i) => (
+                        <div key={i} className="cd-row" style={{ marginBottom: 4 }}>
+                          <span style={{ fontSize: 10 }}>{ib.protocol.toUpperCase()}</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <code style={{ color, fontSize: 10 }}>{ib.listen}:{ib.port}</code>
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              style={{ padding: '2px 6px', fontSize: 8 }}
+                              onClick={() => navigator.clipboard.writeText(`${ib.listen}:${ib.port}`)}
+                            ><Copy size={10} /></button>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
               )}
             </>
           )}
@@ -123,9 +163,24 @@ function ConnectedDetails({ conn, onDisconnect }: { conn: ConnectionState; onDis
         <TrafficStatsWidget />
       </div>
 
-      <button className="btn btn-danger btn-full" onClick={onDisconnect} style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+      <button className="btn btn-danger btn-full" onClick={() => setShowConfirm(true)} style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
         <X size={14} /> {t('node_modal.disconnect_close')}
       </button>
+
+      {showConfirm && (
+        <ConfirmModal
+          title={t('vpn.disconnect_confirm_title')}
+          message={t('vpn.disconnect_confirm_msg')}
+          confirmLabel={t('vpn.disconnect_btn')}
+          cancelLabel={t('common.cancel')}
+          danger
+          onConfirm={() => {
+            setShowConfirm(false)
+            onDisconnect()
+          }}
+          onCancel={() => setShowConfirm(false)}
+        />
+      )}
     </div>
   )
 }
@@ -213,6 +268,43 @@ function LivePanel({ node, initialSessionId }: { node: ApiNode, initialSessionId
           {vpnTypeLabel(node.type)}
         </span>
       </div>
+
+      {node.connection && (
+        <>
+          {node.connection.proto && (
+            <div className="ncm-stat-row">
+              <span>{t('node_modal.connection_proto')}</span>
+              <span className="tag tag-cyan" style={{ fontSize: 9, textTransform: 'uppercase' }}>
+                {node.connection.proto}
+              </span>
+            </div>
+          )}
+          {node.connection.proxy && (
+            <div className="ncm-stat-row">
+              <span>{t('node_modal.connection_proxy')}</span>
+              <span className="tag tag-purple" style={{ fontSize: 9, textTransform: 'uppercase' }}>
+                {node.connection.proxy}
+              </span>
+            </div>
+          )}
+          {node.connection.transport && (
+            <div className="ncm-stat-row">
+              <span>{t('node_modal.connection_transport')}</span>
+              <span className="ncm-stat-mono" style={{ fontSize: 10 }}>
+                {node.connection.transport}
+              </span>
+            </div>
+          )}
+          {node.connection.security && (
+            <div className="ncm-stat-row">
+              <span>{t('node_modal.connection_security')}</span>
+              <span className="ncm-stat-mono" style={{ fontSize: 10, opacity: node.connection.security === 'none' ? 0.6 : 1 }}>
+                {node.connection.security}
+              </span>
+            </div>
+          )}
+        </>
+      )}
       <div className="ncm-stat-row">
         <span>{t('common.version')}</span>
         <a 
@@ -324,23 +416,73 @@ function LivePanel({ node, initialSessionId }: { node: ApiNode, initialSessionId
 
 function ErrorStep({ error, onRetryTunnel, onRetryFull, onClose, hasConfig }: any) {
   const { t } = useTranslation()
+  const [repairing, setRepairing] = useState(false)
+  const [repairError, setRepairError] = useState<string | null>(null)
+  const [repairSuccess, setRepairSuccess] = useState(false)
+
+  const errorText = String(error || '').toLowerCase()
+  const isHelperError = errorText.includes('helper') || 
+                        errorText.includes('service is not running') || 
+                        errorText.includes('connection refused') || 
+                        errorText.includes('pipe')
+
+  const handleRepair = async () => {
+    setRepairing(true)
+    setRepairError(null)
+    try {
+      const res = await window.api.repairHelper()
+      if (res.success) {
+        setRepairSuccess(true)
+        setTimeout(() => {
+          onRetryTunnel()
+        }, 1500)
+      } else {
+        setRepairError(res.error || 'Failed to repair helper service')
+      }
+    } catch (err: any) {
+      setRepairError(err.message || String(err))
+    } finally {
+      setRepairing(false)
+    }
+  }
+
   return (
     <>
       <div className="error-box" style={{ whiteSpace: 'pre-wrap' }}>
         <div className="error-label">{t('common.error')}</div>
         {error}
+        {repairError && (
+          <div style={{ marginTop: 10, color: 'var(--red)', borderTop: '1px solid rgba(255,0,0,0.2)', paddingTop: 8 }}>
+            <strong>{t('node_modal.repair_failed')}</strong> {repairError}
+          </div>
+        )}
+        {repairSuccess && (
+          <div style={{ marginTop: 10, color: 'var(--green)', borderTop: '1px solid rgba(0,255,0,0.2)', paddingTop: 8 }}>
+            <strong>{t('node_modal.repair_success')}</strong>
+          </div>
+        )}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {hasConfig && (
-          <button className="btn btn-primary btn-full" onClick={onRetryTunnel}>
+        {isHelperError && !repairSuccess && (
+          <button 
+            className={`btn btn-primary btn-full ${repairing ? 'loading' : ''}`} 
+            onClick={handleRepair}
+            disabled={repairing}
+            style={{ borderColor: 'var(--orange)', color: 'var(--orange)' }}
+          >
+            {repairing ? t('node_modal.repairing_helper') : `🔧 ${t('node_modal.repair_helper')}`}
+          </button>
+        )}
+        {hasConfig && !repairSuccess && (
+          <button className="btn btn-primary btn-full" onClick={onRetryTunnel} disabled={repairing}>
             ↺ {t('node_modal.retry_tunnel')}
           </button>
         )}
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-secondary" style={{ flex: 1 }} onClick={onRetryFull}>
+          <button className="btn btn-secondary" style={{ flex: 1 }} onClick={onRetryFull} disabled={repairing}>
             ⚡ {t('node_modal.new_subscription')}
           </button>
-          <button className="btn btn-secondary" onClick={onClose}>{t('common.close')}</button>
+          <button className="btn btn-secondary" onClick={onClose} disabled={repairing}>{t('common.close')}</button>
         </div>
       </div>
     </>
@@ -356,16 +498,19 @@ interface Props {
   infoOnly?:       boolean
   initialSessionId?: string | null
   initialSubscriptionId?: string | null
+  onOpenBinaryGuide?: () => void
+  onRefreshData?:  () => void
 }
 
 export default function NodeConnectModal({
-  node, bookmarked, onBookmark, onClose, onConnected, infoOnly = false, initialSessionId = null, initialSubscriptionId = null
+  node, bookmarked, onBookmark, onClose, onConnected, infoOnly = false, initialSessionId = null, initialSubscriptionId = null, onOpenBinaryGuide, onRefreshData
 }: Props) {
   const { t } = useTranslation()
   const autoStart = !!initialSessionId || !!initialSubscriptionId
   const [conn, setConn]               = useState<ConnectionState>({ ...INITIAL_CONNECTION, node, sessionId: initialSessionId, step: autoStart ? 'fetching_node' : 'choose-type' })
   const [showWgQr, setShowWgQr]       = useState(false)
   const [expandedQr, setExpandedQr]   = useState<number | null>(null)
+  const [expandedQrTab, setExpandedQrTab] = useState<number | null>(null)
   const [tunnelBusy, setTunnelBusy]   = useState(false)
   const [binaries, setBinaries]       = useState<BinaryStatus | null>(null)
   const [hasConfig, setHasConfig]     = useState(false)
@@ -430,6 +575,7 @@ export default function NodeConnectModal({
         setConn(s => ({ ...s, step: 'error', error: res.error ?? 'Failed' }))
         return
       }
+      onRefreshData?.()
       setHasConfig(false)
       if (res.vpnType === 'wireguard') {
         setHasConfig(true)
@@ -704,46 +850,204 @@ export default function NodeConnectModal({
 
                 {conn.step === 'wg-options' && (
                   <>
-                    <div className="session-banner" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Check size={14} /> {t('vpn.status')} #{conn.sessionId}</div>
-                    {conn.configStr && <div className="wg-config-block" style={{ fontSize: 9, maxHeight: 130, overflowY: 'auto' }}>{conn.configStr}</div>}
-                    <button className="btn btn-purple btn-sm" style={{ marginBottom: 10, display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => setShowWgQr(v => !v)}>{showWgQr ? <ChevronUp size={12} /> : <ChevronDown size={12} />} {showWgQr ? t('node_modal.hide_qr') : t('node_modal.show_qr')}</button>
-                    {showWgQr && conn.wgQrCode && <div className="qr-container" style={{ marginBottom: 14 }}><img src={conn.wgQrCode} alt="WG QR" style={{ width: 200, height: 200 }} /></div>}
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button className="btn btn-primary" style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} disabled={tunnelBusy} onClick={handleWgConnect}>{tunnelBusy ? t('vpn.connecting') : <><Hexagon size={14} /> {vpnName} up</>}</button>
-                      <button className="btn btn-secondary btn-sm" onClick={onClose}>{t('node_modal.qr_only')}</button>
+                    <div className="session-banner" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, lineHeight: 1.4 }}><Check size={14} style={{ flexShrink: 0 }} /> {t('node_modal.handshake_success_banner', { sessionId: conn.sessionId })}</div>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+                      <div className="form-label" style={{ marginBottom: 4 }}>{t('node_modal.connect_mode_title')}</div>
+                      
+                      {/* Card 1: Full device VPN */}
+                      <div 
+                        className={`mode-card recommended ${tunnelBusy ? 'disabled' : ''}`}
+                        onClick={() => {
+                          if (tunnelBusy) return;
+                          handleWgConnect();
+                        }}
+                      >
+                        <div className="mode-card-icon">
+                          {tunnelBusy ? <div className="spinner" style={{ width: 14, height: 14, borderTopColor: 'var(--green)' }} /> : <ShieldCheck size={20} />}
+                        </div>
+                        <div className="mode-card-content">
+                          <div className="mode-card-header">
+                            <span className="mode-card-title">{t('node_modal.mode_full_title')}</span>
+                            <span className="tag tag-green">{t('node_modal.mode_full_badge')}</span>
+                          </div>
+                          <div className="mode-card-desc">
+                            {tunnelBusy ? t('vpn.connecting') : t('node_modal.mode_full_desc')}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="ncm-divider">{t('common.or') || 'OR'}</div>
+
+                    {/* Section 2: QR code / another device */}
+                    <div style={{ marginTop: 12 }}>
+                      <button 
+                        className="btn btn-secondary btn-sm btn-full" 
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 8 }} 
+                        onClick={() => setShowWgQr(v => !v)}
+                      >
+                        <QrCode size={12} /> {t('node_modal.other_device_title')} {showWgQr ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                      </button>
+
+                      {showWgQr && (
+                        <div className="form-hint" style={{ display: 'block', padding: 12, background: 'var(--bg-1)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: 8 }}>
+                          <div style={{ fontWeight: 700, color: 'var(--text-1)', marginBottom: 4 }}>{t('node_modal.other_device_title')}</div>
+                          <div style={{ color: 'var(--text-2)', marginBottom: 8, fontSize: 10 }}>{t('node_modal.other_device_desc')}</div>
+                          
+                          {conn.wgQrCode && (
+                            <div className="qr-container" style={{ padding: 12, marginBottom: 8 }}>
+                              <img src={conn.wgQrCode} alt="WG QR" style={{ width: 160, height: 160 }} />
+                              {conn.configStr && (
+                                <button 
+                                  className="btn btn-secondary btn-sm" 
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6 }} 
+                                  onClick={() => navigator.clipboard.writeText(conn.configStr ?? '')}
+                                >
+                                  <Copy size={10} /> {t('common.copy')} Config
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          <div style={{ fontSize: 9, color: 'var(--text-3)', marginTop: 8, lineHeight: 1.4 }}>
+                            {t('node_modal.other_device_wg_hint')}
+                          </div>
+                          
+                          <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 8, textAlign: 'center' }}>
+                            <button className="btn btn-secondary btn-sm" style={{ fontSize: 10, textTransform: 'none', border: 'none', background: 'transparent' }} onClick={onClose}>
+                              {t('node_modal.close_use_other_device')}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </>
                 )}
 
                 {conn.step === 'v2ray-options' && (
                   <>
-                    <div className="session-banner" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Check size={14} /> {t('vpn.status')} #{conn.sessionId}</div>
-                    {conn.v2rayQrCodes.length > 0 && (
-                      <div style={{ marginBottom: 14 }}>
-                        {conn.v2rayQrCodes.map((qr, i) => {
-                          const isVMess = conn.shareLinks[i]?.startsWith('vmess://')
-                          return (
-                            <div key={i} style={{ marginBottom: 8 }}>
-                              <button className="btn btn-purple btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => setExpandedQr(expandedQr === i ? null : i)}>
-                                {expandedQr === i ? <ChevronUp size={12} /> : <ChevronDown size={12} />} Link {isVMess ? 'VMess' : 'VLess'}
-                              </button>
-                              {expandedQr === i && (
-                                <div className="qr-container" style={{ padding: 12 }}>
-                                  <img src={qr} alt={`QR ${i}`} style={{ width: 180, height: 180 }} />
-                                  <div style={{ fontSize: 9, wordBreak: 'break-all' }}>{conn.shareLinks[i]}</div>
-                                  <button className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => navigator.clipboard.writeText(conn.shareLinks[i] ?? '')}><Copy size={12} /> {t('common.copy')}</button>
-                                </div>
-                              )}
-                            </div>
-                          )
-                        })}
+                    <div className="session-banner" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, lineHeight: 1.4 }}><Check size={14} style={{ flexShrink: 0 }} /> {t('node_modal.handshake_success_banner', { sessionId: conn.sessionId })}</div>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+                      <div className="form-label" style={{ marginBottom: 4 }}>{t('node_modal.connect_mode_title')}</div>
+                      
+                      {/* Card 1: Full device VPN */}
+                      <div 
+                        className={`mode-card recommended ${tunnelBusy ? 'disabled' : ''}`}
+                        onClick={() => {
+                          if (tunnelBusy) return;
+                          if (!binaries?.tun2socksPath) {
+                            onOpenBinaryGuide?.();
+                          } else {
+                            handleV2RayConnect(true);
+                          }
+                        }}
+                      >
+                        <div className="mode-card-icon">
+                          {tunnelBusy ? <div className="spinner" style={{ width: 14, height: 14, borderTopColor: 'var(--green)' }} /> : <ShieldCheck size={20} />}
+                        </div>
+                        <div className="mode-card-content">
+                          <div className="mode-card-header">
+                            <span className="mode-card-title">{t('node_modal.mode_full_title')}</span>
+                            {binaries?.tun2socksPath ? (
+                              <span className="tag tag-green">{t('node_modal.mode_full_badge')}</span>
+                            ) : (
+                              <span className="tag tag-yellow" style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><AlertTriangle size={8} /> {t('node_modal.mode_full_missing_badge')}</span>
+                            )}
+                          </div>
+                          <div className="mode-card-desc">
+                            {tunnelBusy ? t('common.starting') : t('node_modal.mode_full_desc')}
+                          </div>
+                        </div>
                       </div>
-                    )}
-                    <div className="ncm-divider">{t('node_modal.or_start_proxy')}</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <button className="btn btn-primary" style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} disabled={tunnelBusy} onClick={() => handleV2RayConnect(false)}>{tunnelBusy ? t('common.starting') : <><Play size={14} fill="currentColor" /> {t('node_modal.start_proxy')}</>}</button>
-                      <button className="btn btn-purple" style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }} disabled={tunnelBusy || !binaries?.tun2socksPath} onClick={() => handleV2RayConnect(true)}>{tunnelBusy ? t('common.starting') : <><Shield size={14} /> {t('node_modal.start_transparent')}</>}</button>
-                      <button className="btn btn-secondary btn-sm" onClick={onClose}>{t('node_modal.qr_only')}</button>
+
+                      {/* Card 2: Local proxy */}
+                      <div 
+                        className={`mode-card advanced ${tunnelBusy ? 'disabled' : ''}`}
+                        onClick={() => {
+                          if (tunnelBusy) return;
+                          handleV2RayConnect(false);
+                        }}
+                      >
+                        <div className="mode-card-icon">
+                          {tunnelBusy ? <div className="spinner" style={{ width: 14, height: 14, borderTopColor: 'var(--purple)' }} /> : <Smartphone size={20} />}
+                        </div>
+                        <div className="mode-card-content">
+                          <div className="mode-card-header">
+                            <span className="mode-card-title">{t('node_modal.mode_proxy_title')}</span>
+                            <span className="tag tag-purple">{t('node_modal.mode_proxy_badge')}</span>
+                            <div 
+                              title={t('node_modal.mode_proxy_info')}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                              }}
+                              style={{ display: 'inline-flex', alignSelf: 'center', cursor: 'help', color: 'var(--text-3)' }}
+                            >
+                              <Info size={12} style={{ marginLeft: 2 }} />
+                            </div>
+                          </div>
+                          <div className="mode-card-desc">
+                            {tunnelBusy ? t('common.starting') : t('node_modal.mode_proxy_desc')}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="ncm-divider">{t('common.or') || 'OR'}</div>
+
+                    {/* Section 3: QR code / another device */}
+                    <div style={{ marginTop: 12 }}>
+                      <button 
+                        className="btn btn-secondary btn-sm btn-full" 
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 8 }} 
+                        onClick={() => setExpandedQr(expandedQr === 999 ? null : 999)}
+                      >
+                        <QrCode size={12} /> {t('node_modal.other_device_title')} {expandedQr === 999 ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                      </button>
+
+                      {expandedQr === 999 && (
+                        <div className="form-hint" style={{ display: 'block', padding: 12, background: 'var(--bg-1)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: 8 }}>
+                          <div style={{ fontWeight: 700, color: 'var(--text-1)', marginBottom: 4 }}>{t('node_modal.other_device_title')}</div>
+                          <div style={{ color: 'var(--text-2)', marginBottom: 8, fontSize: 10 }}>{t('node_modal.other_device_desc')}</div>
+                          
+                          {conn.v2rayQrCodes.length > 0 && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              {conn.v2rayQrCodes.map((qr, i) => {
+                                const isVMess = conn.shareLinks[i]?.startsWith('vmess://')
+                                const subExpanded = expandedQrTab === i
+                                return (
+                                  <div key={i} style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
+                                    <button 
+                                      className="btn btn-secondary btn-sm btn-full" 
+                                      style={{ display: 'flex', justifyContent: 'space-between', borderRadius: 0, border: 'none', background: 'var(--bg-2)', textTransform: 'none', letterSpacing: 'normal' }} 
+                                      onClick={() => setExpandedQrTab(expandedQrTab === i ? null : i)}
+                                    >
+                                      <span>Link {isVMess ? 'VMess' : 'VLess'}</span>
+                                      {subExpanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                                    </button>
+                                    {subExpanded && (
+                                      <div className="qr-container" style={{ padding: 12, border: 'none', borderRadius: 0 }}>
+                                        <img src={qr} alt={`QR ${i}`} style={{ width: 160, height: 160 }} />
+                                        <div style={{ fontSize: 8, wordBreak: 'break-all', color: 'var(--text-2)' }}>{conn.shareLinks[i]}</div>
+                                        <button className="btn btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6 }} onClick={() => navigator.clipboard.writeText(conn.shareLinks[i] ?? '')}><Copy size={10} /> {t('common.copy')}</button>
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                          <div style={{ fontSize: 9, color: 'var(--text-3)', marginTop: 8, lineHeight: 1.4 }}>
+                            {t('node_modal.other_device_v2ray_hint')}
+                          </div>
+                          
+                          <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 8, textAlign: 'center' }}>
+                            <button className="btn btn-secondary btn-sm" style={{ fontSize: 10, textTransform: 'none', border: 'none', background: 'transparent' }} onClick={onClose}>
+                              {t('node_modal.close_use_other_device')}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </>
                 )}
