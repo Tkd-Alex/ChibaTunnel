@@ -236,15 +236,29 @@ export default function Globe({ nodes, bookmarks, onSelect }: Props) {
     let last = performance.now()
     const loop = (ts: number) => {
       const dt = ts - last; last = ts
-      if (autoRotRef.current && !dragRef.current) {
+
+      const isRotating   = autoRotRef.current && !dragRef.current
+      const isDragging   = !!dragRef.current
+      const hasPulseAnim = hovered !== null || bookmarks.length > 0
+
+      if (isRotating) {
         rotRef.current = [rotRef.current[0] + dt * 0.006, rotRef.current[1]]
       }
-      draw()
+
+      if (isRotating || isDragging || hasPulseAnim) {
+        draw()
+      }
+
       animRef.current = requestAnimationFrame(loop)
     }
     animRef.current = requestAnimationFrame(loop)
     return () => cancelAnimationFrame(animRef.current)
-  }, [worldLoaded, draw])
+  }, [worldLoaded, draw, hovered, bookmarks.length])
+
+  // Redraw when base properties update
+  useEffect(() => {
+    if (worldLoaded) draw()
+  }, [worldLoaded, draw, size, pins])
 
   // ── Event handlers ──────────────────────────────────────────────────────
   const onMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -288,18 +302,21 @@ export default function Globe({ nodes, bookmarks, onSelect }: Props) {
     e.preventDefault()
     const factor = e.deltaY < 0 ? 1.1 : 0.9
     zoomRef.current = Math.max(0.5, Math.min(6, zoomRef.current * factor))
-  }, [])
+    draw()
+  }, [draw])
 
   // Keyboard zoom
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === '+' || e.key === '=') zoomRef.current = Math.min(6, zoomRef.current * 1.15)
-      if (e.key === '-')                   zoomRef.current = Math.max(0.5, zoomRef.current * 0.87)
-      if (e.key === '0')                   { zoomRef.current = 1; autoRotRef.current = true }
+      let changed = false
+      if (e.key === '+' || e.key === '=') { zoomRef.current = Math.min(6, zoomRef.current * 1.15); changed = true }
+      if (e.key === '-')                   { zoomRef.current = Math.max(0.5, zoomRef.current * 0.87); changed = true }
+      if (e.key === '0')                   { zoomRef.current = 1; autoRotRef.current = true; changed = true }
+      if (changed) draw()
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [])
+  }, [draw])
 
   return (
     <div ref={containerRef} className="globe-container">
@@ -333,9 +350,9 @@ export default function Globe({ nodes, bookmarks, onSelect }: Props) {
 
       {/* Zoom controls */}
       <div className="globe-zoom-btns">
-        <button className="globe-zoom-btn" onClick={() => { zoomRef.current = Math.min(6, zoomRef.current * 1.25) }}>+</button>
-        <button className="globe-zoom-btn" onClick={() => { zoomRef.current = 1; autoRotRef.current = true }}>⊙</button>
-        <button className="globe-zoom-btn" onClick={() => { zoomRef.current = Math.max(0.5, zoomRef.current * 0.8) }}>−</button>
+        <button className="globe-zoom-btn" onClick={() => { zoomRef.current = Math.min(6, zoomRef.current * 1.25); draw() }}>+</button>
+        <button className="globe-zoom-btn" onClick={() => { zoomRef.current = 1; autoRotRef.current = true; draw() }}>⊙</button>
+        <button className="globe-zoom-btn" onClick={() => { zoomRef.current = Math.max(0.5, zoomRef.current * 0.8); draw() }}>−</button>
       </div>
 
       {/* Tooltip */}
