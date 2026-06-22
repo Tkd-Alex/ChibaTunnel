@@ -583,12 +583,18 @@ export default function App() {
           onClose={() => { setModalNode(null); setModalInfoOnly(false); setReuseSessionId(null); setReuseSubscriptionId(null) }}
           onConnected={state => {
             setActiveConnection(state); setModalNode(null); setModalInfoOnly(false); setReuseSessionId(null); setReuseSubscriptionId(null)
+            fetchSubscriptions()
+            fetchSessions()
             setTimeout(refreshIp, 2000)
           }}
           infoOnly={modalInfoOnly}
           initialSessionId={reuseSessionId ? reuseSessionId.toString() : null}
           initialSubscriptionId={reuseSubscriptionId ? reuseSubscriptionId.toString() : null}
           onOpenBinaryGuide={() => { setBinaryCheckFocusId('tun2socks'); setShowBinaryCheck(true) }}
+          onRefreshData={() => {
+            fetchSubscriptions()
+            fetchSessions()
+          }}
         />
       )}
 

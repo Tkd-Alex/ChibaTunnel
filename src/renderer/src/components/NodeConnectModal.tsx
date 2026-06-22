@@ -444,10 +444,11 @@ interface Props {
   initialSessionId?: string | null
   initialSubscriptionId?: string | null
   onOpenBinaryGuide?: () => void
+  onRefreshData?:  () => void
 }
 
 export default function NodeConnectModal({
-  node, bookmarked, onBookmark, onClose, onConnected, infoOnly = false, initialSessionId = null, initialSubscriptionId = null, onOpenBinaryGuide
+  node, bookmarked, onBookmark, onClose, onConnected, infoOnly = false, initialSessionId = null, initialSubscriptionId = null, onOpenBinaryGuide, onRefreshData
 }: Props) {
   const { t } = useTranslation()
   const autoStart = !!initialSessionId || !!initialSubscriptionId
@@ -519,6 +520,7 @@ export default function NodeConnectModal({
         setConn(s => ({ ...s, step: 'error', error: res.error ?? 'Failed' }))
         return
       }
+      onRefreshData?.()
       setHasConfig(false)
       if (res.vpnType === 'wireguard') {
         setHasConfig(true)
