@@ -23,6 +23,7 @@ import {
   QrCode
 } from 'lucide-react'
 import TrafficStatsWidget from './TrafficStats'
+import ConfirmModal from './ConfirmModal'
 
 // ── UsageProgress helper ──────────────────────────────────────────────────
 function UsageProgress({ session }: { session: any }) {
@@ -56,6 +57,7 @@ function ConnectedDetails({ conn, onDisconnect }: { conn: ConnectionState; onDis
   const { t } = useTranslation()
   const [sys, setSys] = useState<any>(null)
   const [showProxyHowto, setShowProxyHowto] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
   const isWg   = conn.vpnType === 'wireguard'
   const color  = isWg ? 'var(--purple)' : 'var(--green)'
 
@@ -161,9 +163,24 @@ function ConnectedDetails({ conn, onDisconnect }: { conn: ConnectionState; onDis
         <TrafficStatsWidget />
       </div>
 
-      <button className="btn btn-danger btn-full" onClick={onDisconnect} style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+      <button className="btn btn-danger btn-full" onClick={() => setShowConfirm(true)} style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
         <X size={14} /> {t('node_modal.disconnect_close')}
       </button>
+
+      {showConfirm && (
+        <ConfirmModal
+          title={t('vpn.disconnect_confirm_title')}
+          message={t('vpn.disconnect_confirm_msg')}
+          confirmLabel={t('vpn.disconnect_btn')}
+          cancelLabel={t('common.cancel')}
+          danger
+          onConfirm={() => {
+            setShowConfirm(false)
+            onDisconnect()
+          }}
+          onCancel={() => setShowConfirm(false)}
+        />
+      )}
     </div>
   )
 }

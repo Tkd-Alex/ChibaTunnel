@@ -222,7 +222,9 @@
     "reconnecting": "Reconnexion...",
     "status": "Statut VPN",
     "disconnect_btn": "Déconnecter",
-    "manage_btn": "Gérer"
+    "manage_btn": "Gérer",
+    "disconnect_confirm_title": "Se déconnecter?",
+    "disconnect_confirm_msg": "Êtes-vous sûr de vouloir vous déconnecter?"
   },
   "settings": {
     "title": "Paramètres",

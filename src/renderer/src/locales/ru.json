@@ -222,7 +222,9 @@
     "reconnecting": "Переподключение...",
     "status": "Статус VPN",
     "disconnect_btn": "Отключить",
-    "manage_btn": "Управление"
+    "manage_btn": "Управление",
+    "disconnect_confirm_title": "Отключиться?",
+    "disconnect_confirm_msg": "Вы уверены, что хотите отключиться?"
   },
   "settings": {
     "title": "Настройки",

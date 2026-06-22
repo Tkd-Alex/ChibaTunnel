@@ -222,7 +222,9 @@
     "reconnecting": "جاري إعادة الاتصال...",
     "status": "حالة VPN",
     "disconnect_btn": "قطع الاتصال",
-    "manage_btn": "إدارة"
+    "manage_btn": "إدارة",
+    "disconnect_confirm_title": "قطع الاتصال؟",
+    "disconnect_confirm_msg": "هل أنت متأكد أنك تريد قطع الاتصال؟"
   },
   "settings": {
     "title": "الإعدادات",

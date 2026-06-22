@@ -222,7 +222,9 @@
     "reconnecting": "正在重新连接...",
     "status": "VPN 状态",
     "disconnect_btn": "断开连接",
-    "manage_btn": "管理"
+    "manage_btn": "管理",
+    "disconnect_confirm_title": "断开连接？",
+    "disconnect_confirm_msg": "您确定要断开连接吗？"
   },
   "settings": {
     "title": "设置",

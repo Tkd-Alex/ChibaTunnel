@@ -232,11 +232,11 @@ export default function SplashScreen({ status }: Props) {
           97%  { text-shadow: 0 0 10px #ff0055dd, 0 0 28px #ff005555; }
         }
         .splash-screen .scramble-title {
-          font-size: 11px;
+          font-size: 13px;
           font-weight: 700;
           letter-spacing: .25em;
           text-transform: uppercase;
-          height: 18px;
+          height: 20px;
           display: flex;
           justify-content: center;
           align-items: center;

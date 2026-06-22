@@ -222,7 +222,9 @@
     "reconnecting": "Wiederverbindung...",
     "status": "VPN-Status",
     "disconnect_btn": "Trennen",
-    "manage_btn": "Verwalten"
+    "manage_btn": "Verwalten",
+    "disconnect_confirm_title": "Verbindung trennen?",
+    "disconnect_confirm_msg": "Sind Sie sicher, dass Sie die Verbindung trennen möchten?"
   },
   "settings": {
     "title": "Einstellungen",
