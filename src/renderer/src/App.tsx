@@ -63,6 +63,7 @@ export default function App() {
   const [activeTab, setActiveTab]   = useState<Tab>('globe')
   const [binaries, setBinaries]     = useState<BinaryStatus | null>(null)
   const [showBinaryCheck, setShowBinaryCheck] = useState(false)
+  const [binaryCheckFocusId, setBinaryCheckFocusId] = useState<string | null>(null)
 
   const [nodes, setNodes]               = useState<ApiNode[]>([])
   const [nodesLoading, setNodesLoading] = useState(false)
@@ -374,7 +375,8 @@ export default function App() {
       {showBinaryCheck && binaries && (
         <BinarySetup
           status={binaries}
-          onDismiss={() => setShowBinaryCheck(false)}
+          focusId={binaryCheckFocusId || undefined}
+          onDismiss={() => { setShowBinaryCheck(false); setBinaryCheckFocusId(null) }}
           onRecheck={async () => {
             const b = await window.api.checkBinaries() as BinaryStatus
             setBinaries(b); return b
@@ -580,6 +582,7 @@ export default function App() {
           infoOnly={modalInfoOnly}
           initialSessionId={reuseSessionId ? reuseSessionId.toString() : null}
           initialSubscriptionId={reuseSubscriptionId ? reuseSubscriptionId.toString() : null}
+          onOpenBinaryGuide={() => { setBinaryCheckFocusId('tun2socks'); setShowBinaryCheck(true) }}
         />
       )}
 

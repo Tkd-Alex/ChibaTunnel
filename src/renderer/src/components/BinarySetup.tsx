@@ -109,13 +109,14 @@ interface Props {
   onDismiss?: () => void
   onRecheck: () => Promise<BinaryStatus>
   embedded?: boolean
+  focusId?:  string
 }
 
-export default function BinarySetup({ status, onDismiss, onRecheck, embedded = false }: Props) {
+export default function BinarySetup({ status, onDismiss, onRecheck, embedded = false, focusId }: Props) {
   const { t } = useTranslation()
   const [current, setCurrent]   = useState(status)
   const [checking, setChecking] = useState(false)
-  const [expanded, setExpanded] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<string | null>(focusId || null)
 
   useEffect(() => {
     if (embedded) return
