@@ -617,7 +617,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('node:info', async (_e, remoteAddr: string) => {
     try {
-      const info = await withTimeout(nodeInfo(remoteAddr), 8000, 'Node info timeout')
+      const info = await nodeInfoWithRetry(remoteAddr)
       return { success: true, info }
     } catch (err: unknown) { return { success: false, error: extractError(err) } }
   })
@@ -930,12 +930,12 @@ function registerIpcHandlers(): void {
       }
 
       const parsed = SubscriptionEventCreateSession.parse(event)
-      const sessionId = parsed.value.sessionId
+      let sessionId = parsed.value.sessionId
 
       activeSessionId = sessionId.toString()
       activeNodeAddress = nodeAddress
 
-      // Handshake with a small retry loop for propagation delay
+      // Handshake with a small retry loop for propagation delay.
       let lastErr: any = null
       for (let i = 0; i < 5; i++) {
         try {
@@ -945,8 +945,18 @@ function registerIpcHandlers(): void {
         } catch (err: any) {
           lastErr = err
           const msg = (err.message || '').toLowerCase()
-          if (msg.includes('not exist') || msg.includes('404')) {
-            console.warn(`[Subscription:Connect] Session not indexed yet, retrying...`)
+
+          // Config-less 409: the node holds a STALE peer for this session and will not
+          // release it on re-handshake. We do NOT mint a fresh session here — that would
+          // charge the user again for a session they already paid for (see
+          // stalePeerFailure / docs/STALE-PEER-409.md). Surface the node-side bug.
+          if (isStalePeer409(err)) {
+            console.warn(`[Subscription:Connect] Stale node peer for Session #${sessionId} (409, no config) — not auto-spending; surfacing to user.`)
+            return stalePeerFailure(sessionId)
+          }
+
+          if (msg.includes('not exist') || msg.includes('404') || msg.includes('409') || msg.includes('already exists')) {
+            console.warn(`[Subscription:Connect] Session not ready, retrying...`)
             continue
           }
           throw err // Other errors fail immediately
@@ -976,11 +986,73 @@ function registerIpcHandlers(): void {
     lastConnectArgs = args; reconnectAttempts = 0; wasConnected = false; return doConnect(args)
   })
 
-  ipcMain.handle('node:connectSession', async (_e, args: { nodeAddress: string; sessionId: number }) => {
+  ipcMain.handle('node:connectSession', async (_e, args: { nodeAddress: string; sessionId: number; subscriptionType?: 'gigabytes' | 'hours'; amount?: number }) => {
     if (!walletState.client || !walletState.address || !walletState.privkey) return { success: false, error: 'Wallet not initialized' }
     activeSessionId = args.sessionId.toString(); activeNodeAddress = args.nodeAddress;
     reconnectAttempts = 0; wasConnected = false;
-    return doHandshake(args.nodeAddress, Long.fromNumber(args.sessionId, true))
+
+    let sessionId: Long = Long.fromNumber(args.sessionId, true)
+    let lastErr: any = null
+
+    // Handshake the chosen session. If the node holds a STALE peer for it (config-less
+    // 409 "already exists"), re-handshaking the same session 409s forever. We do NOT
+    // mint a fresh session to escape it — that re-charges the user (see stalePeerFailure
+    // / docs/STALE-PEER-409.md). Surface the node-side bug instead.
+    for (let i = 0; i < 6; i++) {
+      try {
+        if (i > 0) await new Promise(r => setTimeout(r, 2000))
+        console.log(`[Node:ConnectSession] Handshake attempt ${i + 1} for Session #${sessionId}`)
+        return await doHandshake(args.nodeAddress, sessionId, false, args.amount, args.subscriptionType, true)
+      } catch (err: any) {
+        lastErr = err
+        const msg = (err.message || '').toLowerCase()
+
+        if (isStalePeer409(err)) {
+          console.warn(`[Node:ConnectSession] Stale node peer for Session #${sessionId} (409, no config) — not auto-spending; surfacing to user.`)
+          return stalePeerFailure(sessionId)
+        }
+
+        // 404 / "not exist": propagation lag. 409 / "already exists" (with config): node
+        // still settling. A short delay may let the handshake attach. Retry.
+        if (msg.includes('not exist') || msg.includes('404') || msg.includes('409') || msg.includes('already exists')) {
+          console.warn(`[Node:ConnectSession] Session not ready, retrying...`)
+          continue
+        }
+
+        // Transport-level failure reaching the node's remote API (TLS reset, socket
+        // hang-up, ECONNRESET, timeout). nodeInfoWithRetry already rode out a single
+        // bad window (4 inner attempts over ~5s), but a node that is genuinely up can
+        // still drop one whole window — busurnode/RPC hiccups, a momentary route flap.
+        // Do NOT bail here: fall through to the OUTER loop's 2s-delayed retry so a
+        // node we already have a session with gets every one of the 6 attempts. We
+        // only conclude "offline" after the loop is fully exhausted (below).
+        if (msg.includes('[nodeinfo]') || msg.includes('socket disconnected before secure tls') ||
+            msg.includes('econnreset') || msg.includes('econnrefused') || msg.includes('etimedout') ||
+            msg.includes('node info timeout') || msg.includes('socket hang up') ||
+            msg.includes('network socket disconnected')) {
+          console.warn(`[Node:ConnectSession] Transport blip reaching ${args.nodeAddress} (attempt ${i + 1}/6): ${msg}. Retrying handshake...`)
+          continue
+        }
+        throw err
+      }
+    }
+
+    // Every one of the 6 handshake attempts failed. If the last failure was a
+    // transport-level error, the node's remote API never answered across the full
+    // retry window — only now is "offline/unreachable" a fair conclusion.
+    const lastMsg = (lastErr?.message || '').toLowerCase()
+    if (lastMsg.includes('[nodeinfo]') || lastMsg.includes('socket disconnected before secure tls') ||
+        lastMsg.includes('econnreset') || lastMsg.includes('econnrefused') || lastMsg.includes('etimedout') ||
+        lastMsg.includes('node info timeout') || lastMsg.includes('socket hang up') ||
+        lastMsg.includes('network socket disconnected')) {
+      console.error(`[Node:ConnectSession] Node ${args.nodeAddress} remote API unreachable across all 6 attempts — node appears offline.`)
+      return {
+        success: false,
+        error: 'This node is offline or unreachable right now. Please pick another node.',
+        nodeUnreachable: true,
+      }
+    }
+    return { success: false, error: extractError(lastErr), details: lastErr?.response?.data }
   })
 
   ipcMain.handle('node:connectWireguard', async () => {
@@ -1206,6 +1278,92 @@ function extractError(err: unknown): string {
   return String(err).replace(/^Error:\s*/i, '')
 }
 
+// Returns the Long id of an existing ACTIVE session on `nodeAddress` for the active
+// wallet that still has budget left, or null if none — so doConnect can reuse it
+// instead of creating a duplicate (which the node rejects with 409 "already exists").
+async function findReusableSession(nodeAddress: string): Promise<Long | null> {
+  try {
+    if (!walletState.readonlyClient || !walletState.address) return null
+    const r = await withTimeout(
+      walletState.readonlyClient.sentinelQuery?.session.sessionsForAccount(
+        walletState.address, PageRequest.fromJSON({ limit: 100, reverse: true })
+      ),
+      RPC_TIMEOUT_MS, 'RPC timeout fetching sessions'
+    )
+    const all = r?.sessions ?? []
+    console.log(`[Reuse] querying sessions for ${walletState.address} target node=${nodeAddress}: ${all.length} session(s) returned`)
+    for (const anyVal of all) {
+      let bs: any
+      try { bs = Session.decode(anyVal.value).baseSession } catch (e) { console.log('[Reuse] decode failed:', e); continue }
+      if (!bs) { console.log('[Reuse] no baseSession'); continue }
+      const maxBytes = longToNum(bs.maxBytes)
+      const usedBytes = longToNum(bs.downloadBytes) + longToNum(bs.uploadBytes)
+      console.log(`[Reuse]  candidate id=${longToNum(bs.id)} node=${bs.nodeAddress} status=${bs.status} used=${usedBytes}/${maxBytes}`)
+      if (bs.nodeAddress !== nodeAddress) { console.log('[Reuse]   skip: node mismatch'); continue }
+      if (bs.status !== Status.STATUS_ACTIVE) { console.log(`[Reuse]   skip: status ${bs.status} != ACTIVE(${Status.STATUS_ACTIVE})`); continue }
+      if (maxBytes > 0 && usedBytes >= maxBytes) { console.log('[Reuse]   skip: budget exhausted'); continue }
+      console.log(`[Reuse]   MATCH -> reusing id=${longToNum(bs.id)}`)
+      return bs.id
+    }
+    console.log('[Reuse] no reusable session found -> will create new')
+    return null
+  } catch (err: unknown) {
+    console.warn('[Node:Connect] findReusableSession failed, will create new session:', err)
+    return null
+  }
+}
+
+// Mint a brand-new on-chain session for `nodeAddress` and return its session ID.
+// Used to recover from a config-less stale-peer 409: the node keys its peer record
+// by session ID. A new session ID WOULD side-step the stale peer — but minting one
+// means a fresh nodeStartSession TX, i.e. the user PAYS AGAIN for a session they already
+// bought, and the orphaned session keeps billing until it expires. That is a paid
+// workaround for a NODE-SIDE bug (the dVPN node fails to evict a stale WireGuard peer
+// when the same account re-handshakes an existing session), so we must NOT silently
+// spend the user's funds to paper over it. The honest behaviour is to surface the bug
+// with an actionable message and let the user decide. Root cause + intended node-side
+// fix are documented in docs/STALE-PEER-409.md.
+//
+// User-facing message for a config-less stale-peer 409. No on-chain spend.
+const STALE_PEER_409_MESSAGE =
+  'This node is holding a stale connection from a previous session and is refusing ' +
+  'the handshake (HTTP 409). Reusing your existing session is the correct, free path, ' +
+  'but the node will not release the old peer on its own. Try reconnecting in a minute, ' +
+  'or pick another node. (This is a node-side issue: the dVPN node should evict a stale ' +
+  'peer when the same account re-handshakes an existing session.)'
+
+// Build the failure envelope for a config-less stale-peer 409. Marked stalePeer so the
+// renderer can offer "try another node" without implying the user must pay again.
+function stalePeerFailure(sessionId: Long | number): { success: false; error: string; stalePeer: true; sessionId: string } {
+  return { success: false, error: STALE_PEER_409_MESSAGE, stalePeer: true, sessionId: sessionId.toString() }
+}
+
+// When a node returns HTTP 409 "already exists" it may still include the peer
+// config under `result.data` (the node already holds our peer and hands the same
+// config back). In that case the handshake succeeded for all practical purposes —
+// return the `result` payload in the shape the SDK's handshake() resolves to
+// ({ data, addrs }). If the 409 body carries no config (the node just echoes our
+// request), return null so the caller falls through to stale-peer recovery.
+function recoverHandshake409(e: any): { data: string; addrs: any } | null {
+  if (e?.response?.status !== 409) return null
+  let body: any = e.response.data
+  if (typeof body === 'string') { try { body = JSON.parse(body) } catch { return null } }
+  const result = body?.result
+  if (result && typeof result.data === 'string') return result
+  return null
+}
+
+// True when the error is a config-less 409 — the node holds a stale peer for this
+// session (typically left by a prior process that exited without disconnecting).
+// Re-handshaking the same session will 409 forever; the fix is to cancel the
+// session on-chain (releasing the node peer) and create a fresh one.
+function isStalePeer409(err: any): boolean {
+  const status = err?.response?.status
+  const msg = (err?.message || '').toLowerCase()
+  const is409 = status === 409 || msg.includes('409') || msg.includes('already exists')
+  return is409 && !recoverHandshake409(err)
+}
+
 async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabytes' | 'hours'; amount: number; donate?: boolean }) {
   connectInProgress = true
   try {
@@ -1218,32 +1376,44 @@ async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabyt
     const udvpnPrice = chainPrices.find((p: Price) => p.denom === 'udvpn')
     if (!udvpnPrice) return { success: false, error: `No udvpn price on chain` }
 
-    mainWindow?.webContents.send('vpn:status', { step: 'preparing_tx' })
-    const txArgs: TxNodeStartSession = {
-      from: walletState.address!, nodeAddress: args.nodeAddress,
-      gigabytes: args.subscriptionType === 'gigabytes' ? Long.fromNumber(Math.max(1, args.amount), true) : undefined,
-      hours: args.subscriptionType === 'hours' ? Long.fromNumber(Math.max(1, args.amount), true) : undefined,
-      maxPrice: udvpnPrice, fee: 'auto', memo: 'Chiba Tunnel (Sentinel dVPN Desktop Client)'
+    // Reuse an existing ACTIVE session for this node instead of minting a new one.
+    // The node keeps one session per account; broadcasting a second nodeStartSession
+    // makes the node reject the handshake with 409 "already exists". So if the wallet
+    // already holds an active, non-exhausted session on this node, attach to it —
+    // no new TX, no extra tokens spent.
+    let sessionId = await findReusableSession(args.nodeAddress)
+
+    if (sessionId) {
+      console.log(`[Node:Connect] Reusing existing active Session #${sessionId} on ${args.nodeAddress} (no new TX)`)
+      mainWindow?.webContents.send('vpn:status', { step: 'reusing_session' })
+    } else {
+      mainWindow?.webContents.send('vpn:status', { step: 'preparing_tx' })
+      const txArgs: TxNodeStartSession = {
+        from: walletState.address!, nodeAddress: args.nodeAddress,
+        gigabytes: args.subscriptionType === 'gigabytes' ? Long.fromNumber(Math.max(1, args.amount), true) : undefined,
+        hours: args.subscriptionType === 'hours' ? Long.fromNumber(Math.max(1, args.amount), true) : undefined,
+        maxPrice: udvpnPrice, fee: 'auto', memo: 'Chiba Tunnel (Sentinel dVPN Desktop Client)'
+      }
+
+      mainWindow?.webContents.send('vpn:status', { step: 'signing_tx' })
+      mainWindow?.webContents.send('vpn:status', { step: 'broadcasting_tx' })
+      const tx = await walletState.client!.signAndBroadcast(walletState.address!, [nodeStartSession(txArgs)], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
+      assertIsDeliverTxSuccess(tx)
+
+      mainWindow?.webContents.send('vpn:status', { step: 'extracting_tx' })
+      const event = searchEvent(NodeEventCreateSession.type, tx.events)
+      if (!event) {
+        return { success: false, error: 'Session creation event not found' }
+      }
+
+      const parsed = NodeEventCreateSession.parse(event)
+      sessionId = parsed.value.sessionId
     }
-
-    mainWindow?.webContents.send('vpn:status', { step: 'signing_tx' })
-    mainWindow?.webContents.send('vpn:status', { step: 'broadcasting_tx' })
-    const tx = await walletState.client!.signAndBroadcast(walletState.address!, [nodeStartSession(txArgs)], 'auto', 'Chiba Tunnel (Sentinel dVPN Desktop Client)')
-    assertIsDeliverTxSuccess(tx)
-
-    mainWindow?.webContents.send('vpn:status', { step: 'extracting_tx' })
-    const event = searchEvent(NodeEventCreateSession.type, tx.events)
-    if (!event) {
-      return { success: false, error: 'Session creation event not found' }
-    }
-
-    const parsed = NodeEventCreateSession.parse(event)
-    const sessionId = parsed.value.sessionId
 
     activeSessionId = sessionId.toString()
     activeNodeAddress = args.nodeAddress
 
-    // Handshake with a small retry loop for propagation delay
+    // Handshake with a small retry loop for propagation delay.
     let lastErr: any = null
     for (let i = 0; i < 5; i++) {
       try {
@@ -1253,8 +1423,22 @@ async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabyt
       } catch (err: any) {
         lastErr = err
         const msg = (err.message || '').toLowerCase()
-        if (msg.includes('not exist') || msg.includes('404')) {
-          console.warn(`[Node:Connect] Session not indexed yet, retrying...`)
+
+        // Config-less 409: the node holds a STALE peer for this session (left by a
+        // prior process that exited without disconnecting). Re-handshaking the same
+        // session 409s forever. We do NOT mint a fresh session to escape it — that
+        // re-charges the user for a session they already paid for (see stalePeerFailure
+        // / docs/STALE-PEER-409.md). Surface the node-side bug instead.
+        if (isStalePeer409(err)) {
+          console.warn(`[Node:Connect] Stale node peer for Session #${sessionId} (409, no config) — not auto-spending; surfacing to user.`)
+          return stalePeerFailure(sessionId)
+        }
+
+        // 404 / "not exist": node hasn't indexed the session yet (propagation lag).
+        // 409 / "already exists": node still settling; a short delay may let the
+        // handshake attach to the existing session instead of hard-failing.
+        if (msg.includes('not exist') || msg.includes('404') || msg.includes('409') || msg.includes('already exists')) {
+          console.warn(`[Node:Connect] Session not ready (${msg.includes('409') || msg.includes('already exists') ? 'already exists' : 'not indexed'}), retrying...`)
           continue
         }
         throw err // Other errors fail immediately
@@ -1288,7 +1472,7 @@ function getNextWgInterface(): string {
   return 'chibatunnel9'
 }
 
-async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolean, amount?: number, subType?: 'gigabytes' | 'hours') {
+async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolean, amount?: number, subType?: 'gigabytes' | 'hours', _healedStalePeer?: boolean): Promise<any> {
   try {
     activeSessionId = sessionId.toString(); activeNodeAddress = nodeAddress
     mainWindow?.webContents.send('vpn:status', { status: 'node_handshake', step: 'handshaking', sessionId: activeSessionId })
@@ -1298,7 +1482,7 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
     if (!remoteAddr) return { success: false, error: 'Node has no remote addresses' }
 
     mainWindow?.webContents.send('vpn:status', { step: 'fetching_node_info' })
-    const nInfo = await nodeInfo(remoteAddr).catch(e => {
+    const nInfo = await nodeInfoWithRetry(remoteAddr).catch(e => {
       const err: any = new Error(`[nodeInfo] ${extractError(e)}`); err.response = e.response; throw err
     })
     const settings = getSettings()
@@ -1354,6 +1538,13 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
       mainWindow?.webContents.send('vpn:status', { step: 'generating_config' })
       if (activeWgConfigFile) { try { await wgQuickDown(activeWgConfigFile) } catch (_) {}; activeWgConfigFile = null }
       const wg = new Wireguard(); const result = await handshake(sessionId, { public_key: wg.publicKey }, walletState.privkey!, remoteAddr).catch(e => {
+        // Some nodes return 409 "already exists" but still include the peer config
+        // under result.data — the node accepted our key, it's just already registered.
+        // Treat that as success (mirrors the verified SDK). A config-less 409 (the node
+        // echoes our request with no result) means a stale node-side peer and is handled
+        // by the retry loop's cancel-and-recreate recovery below.
+        const recovered = recoverHandshake409(e)
+        if (recovered) { console.log('[handshake] 409 carried config -> using existing node peer'); return recovered }
         const err: any = new Error(`[handshake] ${extractError(e)}`); err.response = e.response; throw err
       })
       const hd = JSON.parse(Buffer.from(result.data, 'base64').toString('utf8'))
@@ -1372,6 +1563,8 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
       if (activeV2Ray) { try { /* activeV2Ray.disconnect() */ killV2Ray() } catch (_) {}; activeV2Ray = null }
       checkBinaries()
       const v2ray = new V2Ray(); const result = await handshake(sessionId, { uuid: v2ray.getKey() }, walletState.privkey!, remoteAddr).catch(e => {
+        const recovered = recoverHandshake409(e)
+        if (recovered) { console.log('[handshake] 409 carried config -> using existing node peer'); return recovered }
         const err: any = new Error(`[handshake] ${extractError(e)}`); err.response = e.response; throw err
       })
       const hd = JSON.parse(Buffer.from(result.data, 'base64').toString('utf8')); await v2ray.parseConfig(hd, result.addrs)
@@ -1398,6 +1591,17 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
     }
     return { success: false, error: `Unknown VPN type: ${nInfo.service_type}` }
   } catch (err: any) {
+    // Config-less stale-peer 409: the node holds a peer for this session that it will
+    // never release on its own (left by a prior process that exited without
+    // disconnecting). Re-handshaking the SAME session 409s forever — the fix is to mint
+    // a FRESH session ID and handshake that (Sentinel C# SDK Connect.cs:250-271). Session
+    // creation needs node-pricing context, so it lives in the wrapping connect loops
+    // (doConnect, node:connectSession, subscription:connect). RE-THROW here so those
+    // loops can run their fresh-session recovery instead of swallowing the 409.
+    if (isStalePeer409(err)) {
+      if (activeWgConfigFile) { try { fs.rmSync(path.dirname(activeWgConfigFile), { recursive: true, force: true }) } catch (_) {}; activeWgConfigFile = null; activeWgInstance = null }
+      throw err
+    }
     console.error('[doHandshake] Error:', err)
     if (activeWgConfigFile) { try { fs.rmSync(path.dirname(activeWgConfigFile), { recursive: true, force: true }) } catch (_) {}; activeWgConfigFile = null; activeWgInstance = null }
     return { success: false, error: extractError(err), details: err?.response?.data }
@@ -1698,6 +1902,49 @@ async function setupWallet(mnemonic: string, label: string, rpc: string) {
 }
 
 function withTimeout<T>(promise: Promise<T> | undefined, ms: number, msg: string): Promise<T> { if (!promise) return Promise.reject(new Error(msg)); return Promise.race([promise, new Promise<never>((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]) }
+
+// A node's remote API (nodeInfo) is reached over its own TLS endpoint, which can
+// flake: "Client network socket disconnected before secure TLS connection was
+// established", ECONNRESET, ETIMEDOUT, etc. A single blip should not fail a whole
+// connect. Retry transient transport errors a few times with a short backoff —
+// matching how the C# SDK treats node-API calls as retryable transport, while
+// letting genuine application errors (4xx/5xx with a body) surface immediately.
+function isTransientNetworkError(e: any): boolean {
+  const msg = (e?.message || String(e) || '').toLowerCase()
+  const code = (e?.code || e?.cause?.code || '').toString().toUpperCase()
+  // A 429 (rate limit) IS retryable — the chain RPC is throttling us, back off and retry.
+  const status = e?.response?.status ?? e?.cause?.status
+  if (status === 429 || msg.includes('rate limit') || msg.includes('429')) return true
+  // Any other HTTP status means the server answered deliberately — not a transport blip.
+  if (status) return false
+  return (
+    msg.includes('socket disconnected before secure tls') ||
+    msg.includes('socket hang up') ||
+    msg.includes('network socket disconnected') ||
+    msg.includes('timeout') ||
+    code === 'ECONNRESET' || code === 'ETIMEDOUT' || code === 'ECONNREFUSED' ||
+    code === 'EAI_AGAIN' || code === 'ENOTFOUND' || code === 'EPIPE'
+  )
+}
+
+async function nodeInfoWithRetry(remoteAddr: string, attempts = 4): Promise<any> {
+  let lastErr: any = null
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await withTimeout(nodeInfo(remoteAddr), 8000, 'Node info timeout')
+    } catch (e: any) {
+      lastErr = e
+      if (i < attempts - 1 && isTransientNetworkError(e)) {
+        const delay = 600 * (i + 1) // 600ms, 1200ms, 1800ms
+        console.warn(`[nodeInfo] transient transport error (attempt ${i + 1}/${attempts}), retrying in ${delay}ms: ${extractError(e)}`)
+        await new Promise(r => setTimeout(r, delay))
+        continue
+      }
+      throw e
+    }
+  }
+  throw lastErr
+}
 
 /*
  * Drop-in replacement for checkBinaries() in the Electron main process.
