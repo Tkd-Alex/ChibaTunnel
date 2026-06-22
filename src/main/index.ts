@@ -661,7 +661,9 @@ function registerIpcHandlers(): void {
   ipcMain.handle('plans:fetch', async () => {
     if (!walletState.readonlyClient) return { success: false, plans: [] }
     try {
-      const res = await walletState.readonlyClient.sentinelQuery?.plan.plans(Status.STATUS_ACTIVE, undefined)
+      // Explicit high limit — undefined pagination truncates the global plan list at the
+      // default page size (100), silently dropping plans. Verified: 100 → 110 plans.
+      const res = await walletState.readonlyClient.sentinelQuery?.plan.plans(Status.STATUS_ACTIVE, PageRequest.fromJSON({ limit: 10000 }))
       const plans = (res?.plans ?? []).map(p => ({
         id: longToNum(p.id),
         provAddress: p.provAddress,
@@ -727,8 +729,11 @@ function registerIpcHandlers(): void {
     if (!walletState.readonlyClient) return { success: false, nodes: [] }
     try {
       const id = Long.fromNumber(planId, true)
-      const res = await walletState.readonlyClient.sentinelQuery?.node.nodesForPlan(id, Status.STATUS_ACTIVE, undefined)
-      
+      // STATUS_UNSPECIFIED (0 = all linked nodes) for the true plan size; STATUS_ACTIVE
+      // undercounts and can read 0 for a populated plan. Explicit high limit — undefined
+      // pagination truncates at the default page size. Verified: plan 36 → 726 nodes.
+      const res = await walletState.readonlyClient.sentinelQuery?.node.nodesForPlan(id, Status.STATUS_UNSPECIFIED, PageRequest.fromJSON({ limit: 10000 }))
+
       const nodes = (res?.nodes ?? []).map(n => ({
         address: n.address,
         moniker: n.address.slice(0, 12) + '...',
@@ -758,43 +763,59 @@ function registerIpcHandlers(): void {
   ipcMain.handle('plans:scanNodes', async (_e, planIds: number[]) => {
     if (!walletState.readonlyClient) return { success: false, nodesMap: {} }
     const nodesMap: Record<number, any[]> = {}
-    
-    // Concurrency limit: 10
-    const chunks = []
-    for (let i = 0; i < planIds.length; i += 10) {
-      chunks.push(planIds.slice(i, i + 10))
+    // Plans whose scan ultimately FAILED (vs. genuinely 0 nodes). The renderer hides
+    // empty plans; if it cannot tell "throttled away" from "truly empty" it hides the
+    // entire list on a transient RPC hiccup ("plans/nodes empty, no error"). Surface
+    // these so the UI keeps a failed plan visible instead of dropping it.
+    const failed: number[] = []
+
+    // Gentler fan-out: most plans have 0 nodes, but the ~handful that DO can return
+    // hundreds (e.g. plan 36 → 726 nodes), and a 110-plan list at concurrency 10 was
+    // bursty enough to trip public-RPC rate limits — every call would then reject, the
+    // map came back all-empty, and the renderer filtered out every plan. Concurrency 5
+    // + a single retry on transient failure keeps the real plans surfacing reliably.
+    const CONCURRENCY = 5
+    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+    const scanOne = async (id: number, attempt = 0): Promise<void> => {
+      try {
+        // STATUS_UNSPECIFIED (0 = all linked nodes), not STATUS_ACTIVE — the active
+        // subset can momentarily be 0 even for a populated plan, which would wrongly
+        // hide it. Explicit high limit: undefined pagination truncates at page size.
+        const res = await walletState.readonlyClient!.sentinelQuery?.node.nodesForPlan(
+          Long.fromNumber(id, true), Status.STATUS_UNSPECIFIED, PageRequest.fromJSON({ limit: 10000 })
+        )
+        nodesMap[id] = (res?.nodes ?? []).map(n => ({
+          address: n.address,
+          moniker: n.address.slice(0, 12) + '...',
+          version: (n as any).version || '',
+          type: 1,
+          isActive: n.status === Status.STATUS_ACTIVE,
+          isHealthy: true,
+          country: '??',
+          city: '',
+          gigabytePrices: n.gigabytePrices.map(p => ({ denom: p.denom, value: p.quoteValue })),
+          hourlyPrices: n.hourlyPrices.map(p => ({ denom: p.denom, value: p.quoteValue })),
+          sessions: 0,
+          peers: 0,
+          isResidential: false,
+          isWhitelisted: false,
+          isDuplicate: false,
+          errorMessage: null,
+          fetchedAt: new Date().toISOString()
+        }))
+      } catch (err) {
+        if (attempt < 1) { await sleep(400 * (attempt + 1)); return scanOne(id, attempt + 1) }
+        console.error(`[IPC] Error scanning plan ${id} (after retry):`, err)
+        nodesMap[id] = []
+        failed.push(id)
+      }
     }
 
-    for (const chunk of chunks) {
-      await Promise.all(chunk.map(async (id) => {
-        try {
-          const res = await walletState.readonlyClient!.sentinelQuery?.node.nodesForPlan(Long.fromNumber(id, true), Status.STATUS_ACTIVE, undefined)
-          nodesMap[id] = (res?.nodes ?? []).map(n => ({
-            address: n.address,
-            moniker: n.address.slice(0, 12) + '...',
-            version: (n as any).version || '',
-            type: 1, 
-            isActive: n.status === Status.STATUS_ACTIVE,
-            isHealthy: true,
-            country: '??',
-            city: '',
-            gigabytePrices: n.gigabytePrices.map(p => ({ denom: p.denom, value: p.quoteValue })),
-            hourlyPrices: n.hourlyPrices.map(p => ({ denom: p.denom, value: p.quoteValue })),
-            sessions: 0,
-            peers: 0,
-            isResidential: false,
-            isWhitelisted: false,
-            isDuplicate: false,
-            errorMessage: null,
-            fetchedAt: new Date().toISOString()
-          }))
-        } catch (err) {
-          console.error(`[IPC] Error scanning plan ${id}:`, err)
-          nodesMap[id] = []
-        }
-      }))
+    for (let i = 0; i < planIds.length; i += CONCURRENCY) {
+      await Promise.all(planIds.slice(i, i + CONCURRENCY).map(id => scanOne(id)))
     }
-    return { success: true, nodesMap }
+    return { success: true, nodesMap, failed }
   })
 
   ipcMain.handle('provider:info', async (_e, address: string) => {
