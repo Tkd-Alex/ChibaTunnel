@@ -64,12 +64,16 @@ h1,h2,h3 { letter-spacing: .08em; text-transform: uppercase; }
     0deg, transparent, transparent 2px,
     rgba(255,0,85,.015) 2px, rgba(255,0,85,.015) 4px
   );
-  animation: scanline-flicker 0.1s infinite;
+  animation: scanline-flicker 4s ease-in-out infinite;
 }
 @keyframes scanline-flicker {
   0% { opacity: 0.8; }
   50% { opacity: 1; }
   100% { opacity: 0.9; }
+}
+/* Pausa l'animazione quando la finestra non è in foreground */
+body.window-blurred .app-shell::after {
+  animation-play-state: paused;
 }
 
 /* ── TitleBar ──────────────────────────────────────── */
@@ -88,6 +92,9 @@ h1,h2,h3 { letter-spacing: .08em; text-transform: uppercase; }
 @keyframes pulse-logo {
   0%,100% { filter: drop-shadow(0 0 4px rgba(255,0,85,.5)); }
   50%     { filter: drop-shadow(0 0 10px rgba(255,0,85,.9)) drop-shadow(0 0 4px rgba(0,204,255,.5)); }
+}
+body.window-blurred .logo-mark {
+  animation-play-state: paused;
 }
 .logo-text { font-size: 13px; font-weight: 700; letter-spacing: .15em; color: var(--magenta); text-shadow: var(--glow-magenta); }
 .logo-sub  { font-size: 9px; color: var(--text-3); letter-spacing: .2em; margin-top: 1px; }
