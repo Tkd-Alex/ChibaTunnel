@@ -50,6 +50,10 @@ export default function PlansPanel({
   
   const [selectedPolicy, setSelectedPolicy] = useState(0) // Default: Unspecified
   const [showPolicyDropdown, setShowPolicyDropdown] = useState(false)
+  // Plan ids whose node scan FAILED (transient RPC throttle) rather than returning a
+  // genuine 0-node result. These must NOT be hidden by the "empty plan" filter — doing
+  // so on a throttled scan blanked the entire list ("plans/nodes empty, no error").
+  const [scanFailed, setScanFailed] = useState<Set<number>>(new Set())
 
   // Batch Scan logic
   const performBatchScan = useCallback(async () => {
@@ -69,8 +73,9 @@ export default function PlansPanel({
       const nodesRes = await window.api.scanPlanNodes(planIds)
       if (nodesRes.success) {
         setPlanNodesCache(prev => ({ ...prev, ...nodesRes.nodesMap }))
+        setScanFailed(new Set((nodesRes as any).failed ?? []))
       }
-      
+
       setScannedOnce(true)
     } catch (e) {
       console.error('Batch scan failed', e)
@@ -101,14 +106,16 @@ export default function PlansPanel({
         }
       }
 
-      if (scannedOnce) {
+      if (scannedOnce && !scanFailed.has(plan.id)) {
+        // Hide genuinely-empty plans, but keep ones whose scan failed (throttled) —
+        // otherwise a transient RPC hiccup empties the whole list.
         const nodes = planNodesCache[plan.id]
         if (!nodes || nodes.length === 0) return false
       }
-      
+
       return true
     })
-  }, [plans, providerNamesCache, scannedOnce, planNodesCache, searchTerm, showPrivate])
+  }, [plans, providerNamesCache, scannedOnce, planNodesCache, searchTerm, showPrivate, scanFailed])
 
   // Select first filtered plan by default
   useEffect(() => {

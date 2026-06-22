@@ -29,8 +29,29 @@ import {
   PageRequest
 } from '@sentinel-official/sentinel-js-sdk'
 import { DirectSecp256k1HdWallet } from '@cosmjs/proto-signing'
-import { assertIsDeliverTxSuccess } from '@cosmjs/stargate'
-import { fromBech32 } from '@cosmjs/encoding'
+// Test-harness only: lease msg protos for the provider E2E (create plan → lease+link node →
+// subscribe → connect → delink). The bundled SentinelRegistry omits the lease module, so the
+// CHIBA_TEST broadcast handler registers these typeUrls onto the signing client at runtime.
+import {
+  MsgStartLeaseRequest as TestMsgStartLeaseRequest,
+  MsgEndLeaseRequest as TestMsgEndLeaseRequest
+} from '@sentinel-official/sentinel-js-sdk/dist/protobuf/sentinel/lease/v1/msg'
+// Test-harness only: lease QUERY service. The lease module is absent from the bundled
+// SentinelQueryClient, so the CHIBA_TEST reconcile handler builds it on top of the existing
+// cosmjs QueryClient (createProtobufRpcClient) to look up pre-existing leases by node.
+import {
+  QueryServiceClientImpl as TestLeaseQueryClient,
+  QueryLeasesForNodeRequest as TestQueryLeasesForNodeRequest
+} from '@sentinel-official/sentinel-js-sdk/dist/protobuf/sentinel/lease/v1/querier'
+// Test-harness only: provider v3 register/status msgs. A wallet must be a REGISTERED + ACTIVE
+// provider (sentprov-prefixed) before it can create plans. The bundled SentinelRegistry omits
+// the provider module, so the CHIBA_TEST handler registers these typeUrls at runtime.
+import {
+  MsgRegisterProviderRequest as TestMsgRegisterProviderRequest,
+  MsgUpdateProviderStatusRequest as TestMsgUpdateProviderStatusRequest
+} from '@sentinel-official/sentinel-js-sdk/dist/protobuf/sentinel/provider/v3/msg'
+import { assertIsDeliverTxSuccess, createProtobufRpcClient } from '@cosmjs/stargate'
+import { fromBech32, toBech32 } from '@cosmjs/encoding'
 import { MsgSend } from 'cosmjs-types/cosmos/bank/v1beta1/tx'
 import Long from 'long'
 import QRCode from 'qrcode'
@@ -224,12 +245,25 @@ function ensureBinariesUnquarantined(): void {
   }
 }
 
+// Test harness hook: when CHIBA_TEST is set, register the IPC handlers (so the
+// Chiba Testing harness can drive the real handler code path) but skip the
+// window and the privileged-helper auto-install. This avoids mutating the host
+// machine's network stack / scheduled tasks during automated end-to-end runs.
+// It changes nothing about normal app behaviour.
+const IS_TEST_HARNESS = process.env.CHIBA_TEST === '1'
+
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.chibatunnel')
   app.on('browser-window-created', (_, w) => optimizer.watchWindowShortcuts(w))
   registerIpcHandlers()
 
   ensureBinariesUnquarantined()
+
+  if (IS_TEST_HARNESS) {
+    // Signal the harness that handlers are registered and ready to be invoked.
+    app.emit('chiba-test:ready')
+    return
+  }
 
   const alive = await pingHelper()
   if (!alive) {
@@ -420,8 +454,11 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('binary:check', () => checkBinaries())
   ipcMain.handle('binary:browse', async (_e, name: string) => {
+    // Needs a real window to parent the modal dialog. Without one (e.g. headless
+    // / test harness) showOpenDialog would block indefinitely on an orphan modal.
+    if (!mainWindow) return { success: false, error: 'No window available for file dialog' }
     const isWin = process.platform === 'win32'
-    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow!, {
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
       title: `Select ${name} executable`,
       filters: isWin ? [{ name: 'Executables', extensions: ['exe'] }] : [],
       properties: ['openFile']
@@ -661,7 +698,9 @@ function registerIpcHandlers(): void {
   ipcMain.handle('plans:fetch', async () => {
     if (!walletState.readonlyClient) return { success: false, plans: [] }
     try {
-      const res = await walletState.readonlyClient.sentinelQuery?.plan.plans(Status.STATUS_ACTIVE, undefined)
+      // Explicit high limit — undefined pagination truncates the global plan list at the
+      // default page size (100), silently dropping plans. Verified: 100 → 110 plans.
+      const res = await walletState.readonlyClient.sentinelQuery?.plan.plans(Status.STATUS_ACTIVE, PageRequest.fromJSON({ limit: 10000 }))
       const plans = (res?.plans ?? []).map(p => ({
         id: longToNum(p.id),
         provAddress: p.provAddress,
@@ -727,8 +766,11 @@ function registerIpcHandlers(): void {
     if (!walletState.readonlyClient) return { success: false, nodes: [] }
     try {
       const id = Long.fromNumber(planId, true)
-      const res = await walletState.readonlyClient.sentinelQuery?.node.nodesForPlan(id, Status.STATUS_ACTIVE, undefined)
-      
+      // STATUS_UNSPECIFIED (0 = all linked nodes) for the true plan size; STATUS_ACTIVE
+      // undercounts and can read 0 for a populated plan. Explicit high limit — undefined
+      // pagination truncates at the default page size. Verified: plan 36 → 726 nodes.
+      const res = await walletState.readonlyClient.sentinelQuery?.node.nodesForPlan(id, Status.STATUS_UNSPECIFIED, PageRequest.fromJSON({ limit: 10000 }))
+
       const nodes = (res?.nodes ?? []).map(n => ({
         address: n.address,
         moniker: n.address.slice(0, 12) + '...',
@@ -758,43 +800,59 @@ function registerIpcHandlers(): void {
   ipcMain.handle('plans:scanNodes', async (_e, planIds: number[]) => {
     if (!walletState.readonlyClient) return { success: false, nodesMap: {} }
     const nodesMap: Record<number, any[]> = {}
-    
-    // Concurrency limit: 10
-    const chunks = []
-    for (let i = 0; i < planIds.length; i += 10) {
-      chunks.push(planIds.slice(i, i + 10))
+    // Plans whose scan ultimately FAILED (vs. genuinely 0 nodes). The renderer hides
+    // empty plans; if it cannot tell "throttled away" from "truly empty" it hides the
+    // entire list on a transient RPC hiccup ("plans/nodes empty, no error"). Surface
+    // these so the UI keeps a failed plan visible instead of dropping it.
+    const failed: number[] = []
+
+    // Gentler fan-out: most plans have 0 nodes, but the ~handful that DO can return
+    // hundreds (e.g. plan 36 → 726 nodes), and a 110-plan list at concurrency 10 was
+    // bursty enough to trip public-RPC rate limits — every call would then reject, the
+    // map came back all-empty, and the renderer filtered out every plan. Concurrency 5
+    // + a single retry on transient failure keeps the real plans surfacing reliably.
+    const CONCURRENCY = 5
+    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+    const scanOne = async (id: number, attempt = 0): Promise<void> => {
+      try {
+        // STATUS_UNSPECIFIED (0 = all linked nodes), not STATUS_ACTIVE — the active
+        // subset can momentarily be 0 even for a populated plan, which would wrongly
+        // hide it. Explicit high limit: undefined pagination truncates at page size.
+        const res = await walletState.readonlyClient!.sentinelQuery?.node.nodesForPlan(
+          Long.fromNumber(id, true), Status.STATUS_UNSPECIFIED, PageRequest.fromJSON({ limit: 10000 })
+        )
+        nodesMap[id] = (res?.nodes ?? []).map(n => ({
+          address: n.address,
+          moniker: n.address.slice(0, 12) + '...',
+          version: (n as any).version || '',
+          type: 1,
+          isActive: n.status === Status.STATUS_ACTIVE,
+          isHealthy: true,
+          country: '??',
+          city: '',
+          gigabytePrices: n.gigabytePrices.map(p => ({ denom: p.denom, value: p.quoteValue })),
+          hourlyPrices: n.hourlyPrices.map(p => ({ denom: p.denom, value: p.quoteValue })),
+          sessions: 0,
+          peers: 0,
+          isResidential: false,
+          isWhitelisted: false,
+          isDuplicate: false,
+          errorMessage: null,
+          fetchedAt: new Date().toISOString()
+        }))
+      } catch (err) {
+        if (attempt < 1) { await sleep(400 * (attempt + 1)); return scanOne(id, attempt + 1) }
+        console.error(`[IPC] Error scanning plan ${id} (after retry):`, err)
+        nodesMap[id] = []
+        failed.push(id)
+      }
     }
 
-    for (const chunk of chunks) {
-      await Promise.all(chunk.map(async (id) => {
-        try {
-          const res = await walletState.readonlyClient!.sentinelQuery?.node.nodesForPlan(Long.fromNumber(id, true), Status.STATUS_ACTIVE, undefined)
-          nodesMap[id] = (res?.nodes ?? []).map(n => ({
-            address: n.address,
-            moniker: n.address.slice(0, 12) + '...',
-            version: (n as any).version || '',
-            type: 1, 
-            isActive: n.status === Status.STATUS_ACTIVE,
-            isHealthy: true,
-            country: '??',
-            city: '',
-            gigabytePrices: n.gigabytePrices.map(p => ({ denom: p.denom, value: p.quoteValue })),
-            hourlyPrices: n.hourlyPrices.map(p => ({ denom: p.denom, value: p.quoteValue })),
-            sessions: 0,
-            peers: 0,
-            isResidential: false,
-            isWhitelisted: false,
-            isDuplicate: false,
-            errorMessage: null,
-            fetchedAt: new Date().toISOString()
-          }))
-        } catch (err) {
-          console.error(`[IPC] Error scanning plan ${id}:`, err)
-          nodesMap[id] = []
-        }
-      }))
+    for (let i = 0; i < planIds.length; i += CONCURRENCY) {
+      await Promise.all(planIds.slice(i, i + CONCURRENCY).map(id => scanOne(id)))
     }
-    return { success: true, nodesMap }
+    return { success: true, nodesMap, failed }
   })
 
   ipcMain.handle('provider:info', async (_e, address: string) => {
@@ -1113,6 +1171,265 @@ function registerIpcHandlers(): void {
     sessionId: activeSessionId,
     nodeAddress: activeNodeAddress
   }))
+
+  // ─── Test-harness only: generic provider broadcast ───
+  // ChibaTunnel ships as a consumer-only client, so it exposes no create-plan / lease /
+  // link IPC. The chiba-testing provider E2E needs to broadcast those msgs with the REAL
+  // wallet WITHOUT the mnemonic ever leaving walletState. This handler — registered only
+  // under CHIBA_TEST — registers the lease typeUrls (absent from the bundled
+  // SentinelRegistry) onto the already-initialised signing client, then signs+broadcasts a
+  // caller-supplied [{ typeUrl, value }] array through the same path every other tx uses.
+  // It is dead code in production (the env guard means it is never registered).
+  if (IS_TEST_HARNESS) {
+    // Full on-chain hourly Price for a node ({ denom, baseValue, quoteValue }). The public
+    // node:info channel drops baseValue (returns only { denom, value }), but MsgStartLease's
+    // maxPrice needs the full Price. The harness uses this to (a) enforce the lease-cost
+    // ceiling and (b) build the lease msg's maxPrice. Read-only; same query doConnect uses.
+    ipcMain.handle('test:nodeHourlyPrice', async (_e, nodeAddress: string) => {
+      if (!walletState.client) return { success: false, error: 'Wallet not initialized' }
+      try {
+        const chainNode = await withTimeout(
+          walletState.client.sentinelQuery?.node.node(nodeAddress),
+          RPC_TIMEOUT_MS,
+          'RPC timeout fetching node'
+        )
+        if (!chainNode) return { success: false, error: `Node not found: ${nodeAddress}` }
+        const hourly = (chainNode.hourlyPrices ?? []) as Price[]
+        const udvpn = hourly.find((p) => p.denom === 'udvpn')
+        if (!udvpn) return { success: false, error: 'Node has no udvpn hourly price' }
+        return {
+          success: true,
+          price: { denom: udvpn.denom, baseValue: String(udvpn.baseValue), quoteValue: String(udvpn.quoteValue) },
+          remote: chainNode.remoteAddrs?.[0] ?? null
+        }
+      } catch (err: unknown) {
+        return { success: false, error: extractError(err) }
+      }
+    })
+
+    // Query the on-chain leases attached to a node. The lease module is NOT part of the bundled
+    // SentinelQueryClient, so build the lease QueryService on top of the existing cosmjs
+    // QueryClient (sentinelQuery extends @cosmjs/stargate's QueryClient → has the abci RPC the
+    // protobuf rpc client needs). The provider e2e uses this to RECONCILE a pre-existing lease:
+    // a crashed prior run can orphan a lease on the chosen node, and StartLease then reverts with
+    // "duplicate lease". Returning existing leases lets the harness end/reuse before re-leasing.
+    ipcMain.handle('test:leasesForNode', async (_e, nodeAddress: string) => {
+      if (!walletState.client?.sentinelQuery) return { success: false, error: 'Read client not initialized' }
+      if (!nodeAddress || !nodeAddress.startsWith('sentnode')) return { success: false, error: 'Invalid node address' }
+      try {
+        const rpc = createProtobufRpcClient(walletState.client.sentinelQuery as unknown as Parameters<typeof createProtobufRpcClient>[0])
+        const leaseQuery = new TestLeaseQueryClient(rpc)
+        const res = await withTimeout(
+          leaseQuery.QueryLeasesForNode(TestQueryLeasesForNodeRequest.fromJSON({ address: nodeAddress })),
+          RPC_TIMEOUT_MS,
+          'RPC timeout fetching leases for node'
+        )
+        const leases = (res?.leases ?? []).map((l) => ({
+          id: longToNum(l.id),
+          provAddress: l.provAddress,
+          nodeAddress: l.nodeAddress,
+          hours: longToNum(l.hours),
+          maxHours: longToNum(l.maxHours)
+        }))
+        return { success: true, leases }
+      } catch (err: unknown) {
+        return { success: false, error: extractError(err) }
+      }
+    })
+
+    ipcMain.handle(
+      'test:providerBroadcast',
+      async (_e, args: { msgs: Array<{ typeUrl: string; value: unknown }>; memo?: string }) => {
+        if (!walletState.client || !walletState.address) {
+          return { success: false, error: 'Wallet not initialized' }
+        }
+        const msgs = Array.isArray(args?.msgs) ? args.msgs : []
+        if (!msgs.length) return { success: false, error: 'No msgs supplied' }
+        try {
+          // Register lease types onto the signing client's registry if missing. The cosmjs
+          // Registry throws on a duplicate register, so guard with a lookup first.
+          const reg = (walletState.client as unknown as { registry: { lookupType(t: string): unknown; register(t: string, g: unknown): void } }).registry
+          const leaseTypes: Array<[string, unknown]> = [
+            ['/sentinel.lease.v1.MsgStartLeaseRequest', TestMsgStartLeaseRequest],
+            ['/sentinel.lease.v1.MsgEndLeaseRequest', TestMsgEndLeaseRequest]
+          ]
+          for (const [typeUrl, gen] of leaseTypes) {
+            if (!reg.lookupType(typeUrl)) reg.register(typeUrl, gen)
+          }
+          const memo = args?.memo ?? 'Chiba Tunnel (Sentinel dVPN Desktop Client)'
+          const tx = await walletState.client.signAndBroadcast(
+            walletState.address,
+            msgs as Array<{ typeUrl: string; value: unknown }>,
+            'auto',
+            memo
+          )
+          assertIsDeliverTxSuccess(tx)
+          return { success: true, txHash: tx.transactionHash, height: tx.height, rawLog: tx.rawLog, events: tx.events }
+        } catch (err: unknown) {
+          return { success: false, error: extractError(err) }
+        }
+      }
+    )
+
+    // Consolidate udvpn from every OTHER stored wallet into the provider/target wallet so the
+    // provider e2e (plan create + node lease + subscribe + gas) has enough spendable balance.
+    // Decrypts each wallet (safeStorage/DPAPI — only works inside this user's Electron process),
+    // builds a per-source signing client, and bank-sends to `target`. NEVER prints a mnemonic.
+    // Leaves `keep` udvpn in each source (for that wallet's own gas). Read-balances first so we
+    // only broadcast from wallets that actually have a movable surplus.
+    ipcMain.handle(
+      'test:fundProvider',
+      async (_e, args: { target: string; keep?: string }) => {
+        const target = args?.target
+        if (!target || !target.startsWith('sent1')) return { success: false, error: 'Invalid target address' }
+        if (!walletState.readonlyClient) return { success: false, error: 'Read client not initialized' }
+        const keep = BigInt(args?.keep ?? '500000') // leave 0.5 DVPN in each source for its own gas
+        const FEE_BUFFER = 200000n                  // reserve ~0.2 DVPN to cover the send's own gas
+        const rpc = (store.get(STORE_KEY_RPC) as string | undefined) ?? DEFAULT_RPC
+        const wallets = getWalletList()
+        const moves: Array<{ from: string; label: string; amount: string; txHash?: string; error?: string; skipped?: string }> = []
+
+        for (const w of wallets) {
+          const mn = decryptMnemonic(w.encrypted)
+          if (!mn) { moves.push({ from: '(decrypt failed)', label: w.label, amount: '0', skipped: 'decrypt failed' }); continue }
+          let from = ''
+          try {
+            const probe = await DirectSecp256k1HdWallet.fromMnemonic(mn.trim(), { prefix: 'sent' })
+            from = (await probe.getAccounts())[0].address
+          } catch (e) { moves.push({ from: '(addr failed)', label: w.label, amount: '0', skipped: extractError(e) }); continue }
+
+          if (from === target) { moves.push({ from, label: w.label, amount: '0', skipped: 'is target' }); continue }
+
+          let spendable = 0n
+          try {
+            const bal = await walletState.readonlyClient!.getBalance(from, 'udvpn')
+            spendable = BigInt(bal?.amount ?? '0')
+          } catch (e) { moves.push({ from, label: w.label, amount: '0', skipped: `balance: ${extractError(e)}` }); continue }
+
+          const movable = spendable - keep - FEE_BUFFER
+          if (movable <= 0n) { moves.push({ from, label: w.label, amount: '0', skipped: `only ${spendable} udvpn (<= keep+fee)` }); continue }
+
+          try {
+            const signer = await DirectSecp256k1HdWallet.fromMnemonic(mn.trim(), { prefix: 'sent' })
+            const sClient = await withTimeout(
+              SigningSentinelClient.connectWithSigner(rpc, signer, { gasPrice: makeGasPrice('0.2udvpn') as any }),
+              RPC_TIMEOUT_MS,
+              'RPC timeout'
+            )
+            const tx = await sClient.sendTokens(
+              from,
+              target,
+              [{ denom: 'udvpn', amount: movable.toString() }],
+              'auto',
+              'Chiba provider-e2e funding'
+            )
+            assertIsDeliverTxSuccess(tx)
+            moves.push({ from, label: w.label, amount: movable.toString(), txHash: tx.transactionHash })
+          } catch (e) { moves.push({ from, label: w.label, amount: movable.toString(), error: extractError(e) }) }
+        }
+
+        let targetBalance = '0'
+        try {
+          const tb = await walletState.readonlyClient!.getBalance(target, 'udvpn')
+          targetBalance = tb?.amount ?? '0'
+        } catch { /* best-effort */ }
+
+        return { success: true, target, targetBalance, moves }
+      }
+    )
+
+    // Ensure the loaded wallet is a REGISTERED + ACTIVE provider before the provider e2e tries to
+    // create a plan. Provider/plan messages require the `from` field to use the bech32 `sentprov`
+    // prefix (NOT `sent`); the chain rejects a plan-create whose from is the plain `sent` account
+    // address with "expected sentprov, got sent". This handler:
+    //   1. derives the sentprov provider address from the wallet's sent address,
+    //   2. queries the chain for an existing provider record (RPC-first via sentinelQuery),
+    //   3. if absent OR not ACTIVE, broadcasts a SINGLE atomic tx that registers the provider
+    //      (MsgRegisterProviderRequest, from = sent account addr) AND activates it
+    //      (MsgUpdateProviderStatusRequest status=ACTIVE, from = sentprov provider addr).
+    // Idempotent: if already active it broadcasts nothing. Returns the sentprov `provAddr` the
+    // caller must use as `from` for MsgCreatePlanRequest / MsgLinkNodeRequest.
+    ipcMain.handle('test:ensureProvider', async (_e, args?: { name?: string }) => {
+      if (!walletState.client || !walletState.address) {
+        return { success: false, error: 'Wallet not initialized' }
+      }
+      const sentAddr = walletState.address
+      let provAddr = ''
+      try {
+        provAddr = toBech32('sentprov', fromBech32(sentAddr).data)
+      } catch (err: unknown) {
+        return { success: false, error: `Could not derive sentprov address: ${extractError(err)}` }
+      }
+      try {
+        // RPC-first existence + status probe. sentinelQuery.provider.provider takes the
+        // sentprov address and returns the Provider record (with .status) or undefined.
+        let existing: { status?: Status } | undefined
+        try {
+          existing = await withTimeout(
+            (walletState.client as unknown as {
+              sentinelQuery?: { provider: { provider(addr: string): Promise<{ status?: Status } | undefined> } }
+            }).sentinelQuery?.provider.provider(provAddr),
+            RPC_TIMEOUT_MS,
+            'RPC timeout fetching provider'
+          )
+        } catch {
+          existing = undefined // treat probe failure as "unknown" → fall through to register/activate
+        }
+        const STATUS_ACTIVE = 1 // sentinel.types.v1.Status.STATUS_ACTIVE
+        if (existing && existing.status === STATUS_ACTIVE) {
+          return { success: true, provAddr, sentAddr, registered: true, alreadyActive: true }
+        }
+
+        // Register provider v3 typeUrls onto the signing client registry (guarded — Registry
+        // throws on duplicate register).
+        const reg = (walletState.client as unknown as { registry: { lookupType(t: string): unknown; register(t: string, g: unknown): void } }).registry
+        const provTypes: Array<[string, unknown]> = [
+          ['/sentinel.provider.v3.MsgRegisterProviderRequest', TestMsgRegisterProviderRequest],
+          ['/sentinel.provider.v3.MsgUpdateProviderStatusRequest', TestMsgUpdateProviderStatusRequest]
+        ]
+        for (const [typeUrl, gen] of provTypes) {
+          if (!reg.lookupType(typeUrl)) reg.register(typeUrl, gen)
+        }
+
+        const msgs: Array<{ typeUrl: string; value: unknown }> = []
+        const name = (args?.name && String(args.name).trim()) || 'Chiba Tunnel Test Provider'
+        if (!existing) {
+          // Fresh registration lands status=inactive; bundle the activation into the SAME tx so
+          // the status msg sees the just-registered provider (atomic, single signature). Register
+          // from the `sent` account address, activate from the `sentprov` provider address.
+          msgs.push({
+            typeUrl: '/sentinel.provider.v3.MsgRegisterProviderRequest',
+            value: { from: sentAddr, name, identity: '', website: '', description: 'ChibaTunnel provider e2e self-test' }
+          })
+        }
+        // Activate (status=1). Always needed when not already active.
+        msgs.push({
+          typeUrl: '/sentinel.provider.v3.MsgUpdateProviderStatusRequest',
+          value: { from: provAddr, status: STATUS_ACTIVE }
+        })
+
+        const tx = await walletState.client.signAndBroadcast(
+          sentAddr,
+          msgs as Array<{ typeUrl: string; value: unknown }>,
+          'auto',
+          'Chiba provider-e2e register+activate'
+        )
+        assertIsDeliverTxSuccess(tx)
+        return {
+          success: true,
+          provAddr,
+          sentAddr,
+          registered: true,
+          activated: true,
+          freshRegistration: !existing,
+          txHash: tx.transactionHash,
+          height: tx.height
+        }
+      } catch (err: unknown) {
+        return { success: false, provAddr, sentAddr, error: extractError(err) }
+      }
+    })
+  }
 }
 
 function getNextTunInterface(): string {
