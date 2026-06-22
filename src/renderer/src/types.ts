@@ -8,6 +8,12 @@ export interface ApiNode {
   gigabytePrices: NodePrice[]; hourlyPrices: NodePrice[]
   leases: number; sessions: number; peers: number
   errorMessage: string | null; fetchedAt: string
+  connection?: {
+    proto?: string
+    proxy?: string
+    transport?: string
+    security?: string
+  }
 }
 
 export interface ApiPlan {

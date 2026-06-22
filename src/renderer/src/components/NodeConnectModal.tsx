@@ -268,6 +268,43 @@ function LivePanel({ node, initialSessionId }: { node: ApiNode, initialSessionId
           {vpnTypeLabel(node.type)}
         </span>
       </div>
+
+      {node.connection && (
+        <>
+          {node.connection.proto && (
+            <div className="ncm-stat-row">
+              <span>{t('node_modal.connection_proto')}</span>
+              <span className="tag tag-cyan" style={{ fontSize: 9, textTransform: 'uppercase' }}>
+                {node.connection.proto}
+              </span>
+            </div>
+          )}
+          {node.connection.proxy && (
+            <div className="ncm-stat-row">
+              <span>{t('node_modal.connection_proxy')}</span>
+              <span className="tag tag-purple" style={{ fontSize: 9, textTransform: 'uppercase' }}>
+                {node.connection.proxy}
+              </span>
+            </div>
+          )}
+          {node.connection.transport && (
+            <div className="ncm-stat-row">
+              <span>{t('node_modal.connection_transport')}</span>
+              <span className="ncm-stat-mono" style={{ fontSize: 10 }}>
+                {node.connection.transport}
+              </span>
+            </div>
+          )}
+          {node.connection.security && (
+            <div className="ncm-stat-row">
+              <span>{t('node_modal.connection_security')}</span>
+              <span className="ncm-stat-mono" style={{ fontSize: 10, opacity: node.connection.security === 'none' ? 0.6 : 1 }}>
+                {node.connection.security}
+              </span>
+            </div>
+          )}
+        </>
+      )}
       <div className="ncm-stat-row">
         <span>{t('common.version')}</span>
         <a 
