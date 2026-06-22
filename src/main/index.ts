@@ -2091,6 +2091,10 @@ export function checkBinaries() {
 
     if (fs.existsSync(geoipDest) && fs.existsSync(geositeDest)) {
       geoDataOk = true
+      process.env.V2RAY_LOCATION_ASSET = v2Dir
+    } else if (isLinux && fs.existsSync('/usr/share/v2ray/geoip.dat') && fs.existsSync('/usr/share/v2ray/geosite.dat')) {
+      geoDataOk = true
+      process.env.V2RAY_LOCATION_ASSET = '/usr/share/v2ray'
     } else {
       // Try copying from resources/bin/
       const geoipSrc   = path.join(resourcesBinDir, 'geoip.dat')
@@ -2102,8 +2106,13 @@ export function checkBinaries() {
           fs.copyFileSync(geositeSrc, geositeDest)
           console.log('[BinaryCheck] Copied geo data files alongside v2ray')
           geoDataOk = true
+          process.env.V2RAY_LOCATION_ASSET = v2Dir
         } catch (e) {
           console.warn('[BinaryCheck] Could not copy geo data files:', e)
+          // Fallback: use geo data files from bundled resources directly
+          console.log('[BinaryCheck] Fallback: using geo data files from resources/bin')
+          geoDataOk = true
+          process.env.V2RAY_LOCATION_ASSET = resourcesBinDir
         }
       }
     }
