@@ -142,7 +142,8 @@
     },
     "hint": "Trascina · Scorri per zoom · +/- tasti · Doppio clic auto-rotazione · 0 per reset",
     "tooltip": {
-      "click_details": "Clicca per i dettagli →"
+      "click_details": "Clicca per i dettagli →",
+      "click_choose": "Clicca per scegliere un nodo →"
     }
   },
   "rpc": {

@@ -1,0 +1,1101 @@
+{
+  "algiers||Algeria": [
+    3.059,
+    36.773
+  ],
+  "almaty||Kazakhstan": [
+    76.946,
+    43.236
+  ],
+  "amman||Jordan": [
+    35.924,
+    31.952
+  ],
+  "amsterdam||Netherlands": [
+    4.892,
+    52.373
+  ],
+  "ankara||Turkey": [
+    32.854,
+    39.921
+  ],
+  "apodaca||Mexico": [
+    -100.189,
+    25.782
+  ],
+  "arlington||United States": [
+    -97.107,
+    32.736
+  ],
+  "ashburn||United States": [
+    -83.654,
+    31.706
+  ],
+  "athens||Greece": [
+    23.735,
+    37.976
+  ],
+  "auckland||New Zealand": [
+    174.763,
+    -36.852
+  ],
+  "babice||Czech Republic": [
+    15.765,
+    49.133
+  ],
+  "bad soden am taunus||Germany": [
+    8.49,
+    50.152
+  ],
+  "ban phan don||Thailand": [
+    102.614,
+    16.156
+  ],
+  "bandar seri begawan||Brunei": [
+    114.942,
+    4.89
+  ],
+  "bangkok||Thailand": [
+    100.494,
+    13.752
+  ],
+  "barnsley||United Kingdom": [
+    -1.483,
+    53.553
+  ],
+  "batam||Indonesia": [
+    104.038,
+    1.103
+  ],
+  "belgrade||Serbia": [
+    20.457,
+    44.818
+  ],
+  "bengaluru||India": [
+    77.59,
+    12.977
+  ],
+  "berlin||Germany": [
+    13.395,
+    52.517
+  ],
+  "bern||Switzerland": [
+    7.452,
+    46.948
+  ],
+  "bishkek||Kyrgyzstan": [
+    74.604,
+    42.876
+  ],
+  "bogor||Indonesia": [
+    106.797,
+    -6.596
+  ],
+  "bogotá||Colombia": [],
+  "boston||United States": [
+    -71.058,
+    42.359
+  ],
+  "bratislava||Slovakia": [
+    17.109,
+    48.152
+  ],
+  "bridgeview||United States": [
+    -87.804,
+    41.75
+  ],
+  "bucharest||Romania": [
+    26.103,
+    44.436
+  ],
+  "budapest||Hungary": [
+    19.04,
+    47.498
+  ],
+  "buffalo||United States": [
+    -78.878,
+    42.886
+  ],
+  "burgas||Bulgaria": [
+    27.472,
+    42.494
+  ],
+  "bursa||Turkey": [
+    29.068,
+    40.183
+  ],
+  "bydgoszcz||Poland": [
+    18.0,
+    53.122
+  ],
+  "cairo||Egypt": [
+    31.236,
+    30.044
+  ],
+  "canary wharf||United Kingdom": [
+    -0.019,
+    51.505
+  ],
+  "central||DR Congo": [
+    27.466,
+    -11.71
+  ],
+  "chang-hua||Taiwan": [
+    121.532,
+    25.045
+  ],
+  "changhua||Taiwan": [
+    120.542,
+    24.081
+  ],
+  "chennai||India": [
+    80.27,
+    13.084
+  ],
+  "chicago||United States": [
+    -87.624,
+    41.876
+  ],
+  "chihuahua city||Mexico": [
+    -106.077,
+    28.637
+  ],
+  "chincha alta||Peru": [
+    -76.133,
+    -13.418
+  ],
+  "chisinau||Moldova": [
+    28.832,
+    47.025
+  ],
+  "chiyoda city||Japan": [],
+  "chojnice||Poland": [
+    17.561,
+    53.695
+  ],
+  "chuncheon||South Korea": [
+    127.73,
+    37.881
+  ],
+  "city of westminster||United Kingdom": [
+    -0.137,
+    51.497
+  ],
+  "ciudad juárez||Mexico": [],
+  "clorinda||Argentina": [
+    -57.713,
+    -25.29
+  ],
+  "columbus||United States": [
+    -83.001,
+    39.962
+  ],
+  "copenhagen||Denmark": [
+    12.57,
+    55.687
+  ],
+  "cota||Colombia": [
+    -74.104,
+    4.808
+  ],
+  "council bluffs||United States": [
+    -95.852,
+    41.259
+  ],
+  "courbevoie||France": [
+    2.256,
+    48.895
+  ],
+  "coventry||United Kingdom": [
+    -1.51,
+    52.408
+  ],
+  "cremona||Italy": [
+    10.025,
+    45.133
+  ],
+  "cầu diễn||Vietnam": [],
+  "dallas||United States": [
+    -96.797,
+    32.776
+  ],
+  "denver||United States": [
+    -104.985,
+    39.739
+  ],
+  "detroit||United States": [
+    -83.047,
+    42.332
+  ],
+  "dhaka||Bangladesh": [
+    90.389,
+    23.764
+  ],
+  "dnipro||Ukraine": [
+    35.042,
+    48.468
+  ],
+  "doha||Qatar": [
+    51.526,
+    25.286
+  ],
+  "douglas||Isle of Man": [
+    -4.478,
+    54.15
+  ],
+  "dronten||Netherlands": [
+    5.716,
+    52.524
+  ],
+  "dubai||United Arab Emirates": [
+    55.292,
+    25.265
+  ],
+  "dublin||Ireland": [
+    -6.261,
+    53.349
+  ],
+  "durham||United States": [
+    -78.902,
+    35.997
+  ],
+  "düsseldorf||Germany": [],
+  "eindhoven||Netherlands": [
+    5.479,
+    51.439
+  ],
+  "elk grove village||United States": [
+    -88.004,
+    42.004
+  ],
+  "englewood cliffs||United States": [
+    -73.952,
+    40.885
+  ],
+  "essen||Germany": [
+    7.016,
+    51.458
+  ],
+  "eton wick||United Kingdom": [
+    -0.636,
+    51.497
+  ],
+  "eygelshoven||Netherlands": [
+    6.06,
+    50.894
+  ],
+  "fairview park||Hong Kong": [],
+  "falkenstein||Germany": [
+    7.874,
+    49.608
+  ],
+  "fes||Morocco": [
+    -5.016,
+    34.035
+  ],
+  "fort worth||United States": [
+    -97.333,
+    32.753
+  ],
+  "frankfurt (oder)||Germany": [
+    14.549,
+    52.341
+  ],
+  "frankfurt am main||Germany": [
+    8.682,
+    50.111
+  ],
+  "fremont||United States": [
+    -121.989,
+    37.548
+  ],
+  "frosinone||Italy": [
+    13.351,
+    41.641
+  ],
+  "gland||Switzerland": [
+    6.266,
+    46.424
+  ],
+  "gloucestershire||United Kingdom": [],
+  "guatemala city||Guatemala": [
+    -90.513,
+    14.642
+  ],
+  "haarlem||Netherlands": [
+    4.644,
+    52.384
+  ],
+  "hamilton||Canada": [
+    -79.873,
+    43.256
+  ],
+  "hanoi||Vietnam": [
+    105.854,
+    21.028
+  ],
+  "helsinki||Finland": [
+    24.944,
+    60.167
+  ],
+  "hermosillo||Mexico": [
+    -110.969,
+    29.095
+  ],
+  "ho chi minh city||Vietnam": [
+    106.717,
+    10.774
+  ],
+  "hong kong||Hong Kong": [],
+  "houston||United States": [
+    -95.368,
+    29.759
+  ],
+  "hudiksvall||Sweden": [
+    17.106,
+    61.728
+  ],
+  "hénin-beaumont||France": [],
+  "irvine||United States": [
+    -117.826,
+    33.686
+  ],
+  "islamabad||Pakistan": [
+    73.065,
+    33.694
+  ],
+  "islington||United Kingdom": [
+    -0.1,
+    51.538
+  ],
+  "istanbul||Turkey": [
+    28.976,
+    41.006
+  ],
+  "jacksonville||United States": [
+    -81.658,
+    30.326
+  ],
+  "jakarta||Indonesia": [
+    106.827,
+    -6.175
+  ],
+  "jeddah||Saudi Arabia": [
+    39.174,
+    21.55
+  ],
+  "jerusalem||Israel": [
+    35.226,
+    31.779
+  ],
+  "johannesburg||South Africa": [
+    28.05,
+    -26.205
+  ],
+  "johor bahru||Malaysia": [
+    103.765,
+    1.458
+  ],
+  "kansas city||United States": [
+    -94.578,
+    39.1
+  ],
+  "karachi||Pakistan": [
+    67.021,
+    24.855
+  ],
+  "karlsruhe||Germany": [
+    8.403,
+    49.007
+  ],
+  "kathmandu||Nepal": [
+    85.321,
+    27.708
+  ],
+  "khwaeng thung song hong||Thailand": [],
+  "kingston||Jamaica": [
+    -76.793,
+    17.971
+  ],
+  "kinshasa||Congo (DRC)": [
+    15.312,
+    -4.322
+  ],
+  "kitchener||Canada": [
+    -80.493,
+    43.451
+  ],
+  "kota kinabalu||Malaysia": [
+    116.073,
+    5.978
+  ],
+  "kragujevac||Serbia": [
+    20.92,
+    44.013
+  ],
+  "kuala lumpur||Malaysia": [
+    101.694,
+    3.152
+  ],
+  "kwai chung||Hong Kong": [],
+  "la cañada||Mexico": [],
+  "la paz||Bolivia": [
+    -68.134,
+    -16.496
+  ],
+  "lam tin||Hong Kong": [],
+  "larnaca||Cyprus": [
+    33.624,
+    34.924
+  ],
+  "las vegas||United States": [
+    -115.148,
+    36.167
+  ],
+  "lauterbourg||France": [
+    8.177,
+    48.975
+  ],
+  "liberec||Czech Republic": [
+    15.058,
+    50.77
+  ],
+  "ligné||France": [],
+  "lille||France": [
+    3.064,
+    50.637
+  ],
+  "lima||Peru": [
+    -77.031,
+    -12.046
+  ],
+  "limburg||Germany": [
+    8.064,
+    50.388
+  ],
+  "linden||United States": [
+    -94.365,
+    33.012
+  ],
+  "ljubljana||Slovenia": [
+    14.507,
+    46.05
+  ],
+  "lochem||Netherlands": [
+    6.344,
+    52.172
+  ],
+  "logroño||Spain": [],
+  "london||United Kingdom": [
+    -0.128,
+    51.507
+  ],
+  "los angeles||United States": [
+    -118.243,
+    34.054
+  ],
+  "luxembourg||Luxembourg": [
+    6.13,
+    49.611
+  ],
+  "macao||Macau": [],
+  "madrid||Spain": [
+    -3.704,
+    40.417
+  ],
+  "manama||Bahrain": [
+    50.582,
+    26.224
+  ],
+  "manila||Philippines": [
+    120.98,
+    14.59
+  ],
+  "manitou springs||United States": [
+    -104.918,
+    38.859
+  ],
+  "mannheim||Germany": [
+    8.467,
+    49.489
+  ],
+  "maple valley||United States": [
+    -122.044,
+    47.366
+  ],
+  "marietta||United States": [
+    -84.55,
+    33.953
+  ],
+  "markham||Canada": [
+    -79.338,
+    43.856
+  ],
+  "marousi||Greece": [
+    23.808,
+    38.055
+  ],
+  "marseille||France": [
+    5.378,
+    43.296
+  ],
+  "mascot||Australia": [
+    151.195,
+    -33.929
+  ],
+  "masdar city||United Arab Emirates": [
+    54.623,
+    24.427
+  ],
+  "mayfield west||Australia": [
+    151.726,
+    -32.89
+  ],
+  "melbourne||Australia": [
+    144.963,
+    -37.814
+  ],
+  "mendoza||Argentina": [
+    -68.845,
+    -32.889
+  ],
+  "mexico city||Mexico": [
+    -99.133,
+    19.433
+  ],
+  "mhaswad||India": [],
+  "miami||United States": [
+    -80.194,
+    25.774
+  ],
+  "milan||Italy": [
+    9.19,
+    45.464
+  ],
+  "milano||Italy": [
+    9.19,
+    45.464
+  ],
+  "mission viejo||United States": [
+    -117.659,
+    33.597
+  ],
+  "mong kok||Hong Kong": [],
+  "montreal||Canada": [
+    -73.57,
+    45.503
+  ],
+  "moscow||Russia": [
+    37.617,
+    55.751
+  ],
+  "mount juliet||United States": [
+    -86.519,
+    36.2
+  ],
+  "mumbai||India": [
+    72.869,
+    19.055
+  ],
+  "muscat||Oman": [
+    58.594,
+    23.612
+  ],
+  "naaldwijk||Netherlands": [
+    4.207,
+    51.993
+  ],
+  "naumburg||Germany": [
+    11.81,
+    51.153
+  ],
+  "new cairo||Egypt": [
+    31.476,
+    30.028
+  ],
+  "new york||United States": [
+    -74.006,
+    40.713
+  ],
+  "nha trang||Vietnam": [
+    109.194,
+    12.235
+  ],
+  "nicosia||Cyprus": [
+    33.364,
+    35.175
+  ],
+  "noida||India": [
+    77.327,
+    28.571
+  ],
+  "nonthaburi||Thailand": [
+    100.494,
+    13.843
+  ],
+  "north bergen||United States": [
+    -74.012,
+    40.804
+  ],
+  "nuremberg||Germany": [
+    11.077,
+    49.454
+  ],
+  "nørre åby||Denmark": [],
+  "năvodari||Romania": [],
+  "oakland||United States": [
+    -122.271,
+    37.804
+  ],
+  "ontinyent||Spain": [
+    -0.61,
+    38.821
+  ],
+  "oradea||Romania": [
+    21.929,
+    47.055
+  ],
+  "osaka||Japan": [
+    135.501,
+    34.694
+  ],
+  "oslo||Norway": [
+    10.739,
+    59.913
+  ],
+  "padua||Italy": [
+    11.896,
+    45.398
+  ],
+  "palmers green||United Kingdom": [
+    -0.109,
+    51.618
+  ],
+  "pantin||France": [
+    2.402,
+    48.897
+  ],
+  "paris||France": [
+    2.32,
+    48.859
+  ],
+  "phoenix||United States": [
+    -112.074,
+    33.448
+  ],
+  "pierron||United States": [
+    -89.598,
+    38.78
+  ],
+  "podgorica||Montenegro": [
+    19.262,
+    42.442
+  ],
+  "pomezia||Italy": [
+    12.505,
+    41.668
+  ],
+  "pont casse||Dominica": [
+    -61.345,
+    15.39
+  ],
+  "port edwards||United States": [
+    -89.859,
+    44.344
+  ],
+  "portimão||Portugal": [],
+  "portsmouth||United Kingdom": [
+    -1.091,
+    50.8
+  ],
+  "prague||Czech Republic": [
+    14.421,
+    50.087
+  ],
+  "pretoria||South Africa": [
+    28.188,
+    -25.746
+  ],
+  "punta del este||Uruguay": [
+    -54.944,
+    -34.963
+  ],
+  "puxin||Taiwan": [
+    121.184,
+    24.918
+  ],
+  "queens||United States": [
+    -73.828,
+    40.714
+  ],
+  "quito||Ecuador": [
+    -78.512,
+    -0.22
+  ],
+  "rafael perazza||Uruguay": [
+    -56.797,
+    -34.524
+  ],
+  "redditch||United Kingdom": [
+    -1.942,
+    52.306
+  ],
+  "reykjavik||Iceland": [
+    -21.942,
+    64.146
+  ],
+  "riga||Latvia": [
+    24.105,
+    56.949
+  ],
+  "riyadh||Saudi Arabia": [
+    46.716,
+    24.639
+  ],
+  "rochester||United States": [
+    -77.615,
+    43.157
+  ],
+  "roma||Italy": [
+    12.483,
+    41.893
+  ],
+  "rome||Italy": [
+    12.483,
+    41.893
+  ],
+  "rosario||Argentina": [
+    -60.662,
+    -32.959
+  ],
+  "roseville||United States": [
+    -121.288,
+    38.752
+  ],
+  "roubaix||France": [
+    3.174,
+    50.692
+  ],
+  "royse city||United States": [
+    -96.331,
+    32.976
+  ],
+  "saint-gilles||Belgium": [
+    4.345,
+    50.825
+  ],
+  "salisbury||United Kingdom": [
+    -1.795,
+    51.069
+  ],
+  "salt lake city||United States": [
+    -111.887,
+    40.76
+  ],
+  "salvatierra de miño||Spain": [],
+  "san antonio||United States": [
+    -98.495,
+    29.425
+  ],
+  "san jose||United States": [
+    -121.891,
+    37.336
+  ],
+  "san josé||Costa Rica": [],
+  "san juan||Puerto Rico": [],
+  "sandefjord||Norway": [
+    10.28,
+    59.08
+  ],
+  "santa barbara||United States": [
+    -119.703,
+    34.422
+  ],
+  "santa clara||United States": [
+    -121.955,
+    37.354
+  ],
+  "santiago||Chile": [
+    -70.651,
+    -33.438
+  ],
+  "savannah||United States": [
+    -81.092,
+    32.079
+  ],
+  "schaan||Liechtenstein": [
+    9.51,
+    47.166
+  ],
+  "seattle||United States": [
+    -122.33,
+    47.604
+  ],
+  "secaucus||United States": [
+    -74.057,
+    40.79
+  ],
+  "selçuklu||Turkey": [],
+  "seoul||South Korea": [
+    126.978,
+    37.567
+  ],
+  "shatin||Hong Kong": [],
+  "shinagawa||Japan": [
+    139.73,
+    35.609
+  ],
+  "si lom||Thailand": [
+    100.528,
+    13.726
+  ],
+  "singapore||Singapore": [
+    103.852,
+    1.29
+  ],
+  "siziano||Italy": [
+    9.201,
+    45.317
+  ],
+  "skopje||Macedonia": [
+    21.432,
+    41.996
+  ],
+  "sky tower||Hong Kong": [],
+  "sofia||Bulgaria": [
+    23.322,
+    42.698
+  ],
+  "solihull||United Kingdom": [
+    -1.777,
+    52.413
+  ],
+  "solna||Sweden": [
+    18.017,
+    59.367
+  ],
+  "south jakarta||Indonesia": [
+    106.805,
+    -6.284
+  ],
+  "southfield||United States": [
+    -83.222,
+    42.473
+  ],
+  "spokane||United States": [
+    -117.424,
+    47.657
+  ],
+  "spálené poříčí||Czech Republic": [],
+  "st louis||United States": [
+    -90.1,
+    38.625
+  ],
+  "stavropol||Russia": [
+    41.969,
+    45.043
+  ],
+  "stockholm||Sweden": [
+    18.071,
+    59.325
+  ],
+  "strasbourg||France": [
+    7.751,
+    48.585
+  ],
+  "sulphur springs||United States": [
+    -95.601,
+    33.138
+  ],
+  "sydney||Australia": [
+    151.208,
+    -33.87
+  ],
+  "são paulo||Brazil": [],
+  "taipei||Taiwan": [
+    121.564,
+    25.038
+  ],
+  "tallinn||Estonia": [
+    24.757,
+    59.437
+  ],
+  "tampa||United States": [
+    -82.458,
+    27.945
+  ],
+  "taraz||Kazakhstan": [
+    71.377,
+    42.902
+  ],
+  "tbilisi||Georgia": [
+    44.801,
+    41.693
+  ],
+  "tekirdağ||Turkey": [],
+  "tel aviv||Israel": [
+    34.782,
+    32.085
+  ],
+  "ternopil||Ukraine": [
+    25.592,
+    49.556
+  ],
+  "timișoara||Romania": [],
+  "tirana||Albania": [
+    19.818,
+    41.328
+  ],
+  "tokyo||Japan": [
+    139.764,
+    35.677
+  ],
+  "toronto||Canada": [
+    -79.384,
+    43.653
+  ],
+  "tours||France": [
+    0.689,
+    47.39
+  ],
+  "trang||Thailand": [
+    99.608,
+    7.556
+  ],
+  "travnik||Bosnia and Herzegovina": [
+    17.666,
+    44.226
+  ],
+  "trenton||United States": [
+    -74.766,
+    40.22
+  ],
+  "tripoli||Libya": [
+    13.178,
+    32.897
+  ],
+  "tsing yi||Hong Kong": [],
+  "tsuen wan||Hong Kong": [],
+  "turku||Finland": [
+    22.267,
+    60.452
+  ],
+  "týniště nad orlicí||Czech Republic": [],
+  "ulan bator||Mongolia": [
+    106.918,
+    47.918
+  ],
+  "uppsala||Sweden": [
+    17.639,
+    59.859
+  ],
+  "valdivia||Chile": [
+    -73.246,
+    -39.814
+  ],
+  "van nuys||United States": [
+    -118.449,
+    34.187
+  ],
+  "vancouver||Canada": [
+    -123.114,
+    49.261
+  ],
+  "vestec||Czech Republic": [
+    15.146,
+    50.238
+  ],
+  "vienna||Austria": [
+    16.373,
+    48.208
+  ],
+  "vilnius||Lithuania": [
+    25.283,
+    54.687
+  ],
+  "vinhomes times city||Vietnam": [
+    105.868,
+    20.994
+  ],
+  "vinnytsia||Ukraine": [
+    28.468,
+    49.232
+  ],
+  "viterbo||Italy": [
+    12.105,
+    42.417
+  ],
+  "vladivostok||Russia": [
+    131.886,
+    43.115
+  ],
+  "văleni||Romania": [],
+  "warsaw||Poland": [
+    21.007,
+    52.232
+  ],
+  "washington||United States": [
+    -77.036,
+    38.895
+  ],
+  "wepener||South Africa": [
+    27.037,
+    -29.729
+  ],
+  "whittier||United States": [
+    -118.034,
+    33.975
+  ],
+  "winnipeg||Canada": [
+    -97.138,
+    49.896
+  ],
+  "wolverhampton||United Kingdom": [
+    -2.128,
+    52.585
+  ],
+  "woodbridge||Canada": [
+    -79.592,
+    43.785
+  ],
+  "worcester||United Kingdom": [
+    -2.21,
+    52.197
+  ],
+  "wroclaw||Poland": [
+    17.033,
+    51.109
+  ],
+  "yangon||Myanmar": [
+    96.161,
+    16.797
+  ],
+  "yerevan||Armenia": [
+    44.513,
+    40.178
+  ],
+  "yeysk||Russia": [
+    38.275,
+    46.711
+  ],
+  "yonkers||United States": [
+    -73.899,
+    40.931
+  ],
+  "zagreb||Croatia": [
+    15.977,
+    45.813
+  ],
+  "zaragoza||Spain": [
+    -0.91,
+    41.692
+  ],
+  "zawyat an nwaçer||Morocco": [],
+  "zurich||Switzerland": [
+    8.541,
+    47.374
+  ],
+  "ümraniye||Turkey": [],
+  "łęczyca||Poland": [],
+  "šiauliai||Lithuania": []
+}

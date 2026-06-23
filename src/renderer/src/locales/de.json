@@ -142,7 +142,8 @@
     },
     "hint": "Ziehen · Scrollen zum Zoomen · +/- Tasten · Doppelklick Auto-Rotation · 0 zum Zurücksetzen",
     "tooltip": {
-      "click_details": "Klicken für Details →"
+      "click_details": "Klicken für Details →",
+      "click_choose": "Klicken, um einen Knoten auszuwählen →"
     }
   },
   "rpc": {

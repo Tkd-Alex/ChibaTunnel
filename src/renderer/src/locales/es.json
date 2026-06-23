@@ -142,7 +142,8 @@
     },
     "hint": "Arrastrar · Scroll para zoom · +/- teclas · Doble clic rotación auto · 0 para reset",
     "tooltip": {
-      "click_details": "Clic para ver detalles →"
+      "click_details": "Clic para ver detalles →",
+      "click_choose": "Clic para elegir un nodo →"
     }
   },
   "rpc": {

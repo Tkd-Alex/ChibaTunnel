@@ -142,7 +142,8 @@
     },
     "hint": "拖拽旋转 · 滚动缩放 · +/- 键 · 双击自动旋转 · 0 重置",
     "tooltip": {
-      "click_details": "点击查看详情 →"
+      "click_details": "点击查看详情 →",
+      "click_choose": "点击选择节点 →"
     }
   },
   "rpc": {

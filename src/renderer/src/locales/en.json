@@ -142,7 +142,8 @@
     },
     "hint": "Drag · Scroll to zoom · +/- keys · Double-click auto-spin · 0 to reset",
     "tooltip": {
-      "click_details": "Click to view details →"
+      "click_details": "Click to view details →",
+      "click_choose": "Click to choose a node →"
     }
   },
   "rpc": {

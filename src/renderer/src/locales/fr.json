@@ -142,7 +142,8 @@
     },
     "hint": "Glisser · Défiler pour zoomer · Touches +/- · Double-clic rotation auto · 0 pour reset",
     "tooltip": {
-      "click_details": "Cliquer pour les détails →"
+      "click_details": "Cliquer pour les détails →",
+      "click_choose": "Cliquer pour choisir un nœud →"
     }
   },
   "rpc": {
