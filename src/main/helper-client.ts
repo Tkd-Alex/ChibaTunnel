@@ -33,6 +33,23 @@ const HELPER_HOST = '127.0.0.1'
 const HELPER_PORT = 47391
 
 /**
+ * Identity the genuine helper must advertise in its 'ping' response.
+ *
+ * pingHelper() only proves *something* answered on the pipe / TCP port with
+ * `status: 'pong'`. That is not enough: any process can bind 127.0.0.1:47391
+ * (or, before our service starts, the named pipe) and reply 'pong' — most
+ * dangerously a leftover sentinel-helper.exe from a sibling Sentinel app. If we
+ * trusted that ping we would (a) skip installing our real helper at startup and
+ * (b) hand a foreign process privileged wg-up / start-transparent commands.
+ *
+ * verifyHelper() closes that hole by additionally requiring the product tag and
+ * a compatible protocol version. These MUST stay in lockstep with HELPER_PRODUCT
+ * and HELPER_PROTOCOL in helper/chibatunnel-helper.ts.
+ */
+export const HELPER_PRODUCT          = 'chibatunnel'
+export const REQUIRED_HELPER_PROTOCOL = 1
+
+/**
  * Default timeout in milliseconds for a single sendToHelper() call.
  * If the helper does not respond within this window the promise rejects with
  * a timeout error. 10 s is generous enough for heavy operations (route setup)
@@ -224,4 +241,60 @@ export function sendToHelper(
 export async function pingHelper(timeoutMs = 3_000): Promise<boolean> {
   const res = await sendToHelper({ command: 'ping' }, timeoutMs)
   return res.status === 'pong'
+}
+
+// ---------------------------------------------------------------------------
+// Identity-verified health check
+// ---------------------------------------------------------------------------
+
+/**
+ * Result of a verifyHelper() call. `ok` is true only when the responder is the
+ * genuine ChibaTunnel helper running a compatible protocol. When `ok` is false,
+ * `reason` distinguishes *why* so the caller can react appropriately:
+ *
+ *   'unreachable'    Nothing answered (helper not running / not installed).
+ *   'foreign'        Something answered 'pong' but it is NOT our helper — a
+ *                    squatter is holding the pipe / port. The caller should
+ *                    evict it (re-install our helper, which kills the old task)
+ *                    rather than send it privileged commands.
+ *   'incompatible'   It IS our helper, but its protocol version is older/newer
+ *                    than this Electron build expects. Re-install to align.
+ */
+export interface HelperHealth {
+  ok: boolean
+  reason?: 'unreachable' | 'foreign' | 'incompatible'
+  /** Protocol version the responder advertised, when it answered at all. */
+  protocol?: number
+  /** Helper process id, when advertised — useful for diagnostics/logging. */
+  pid?: number
+}
+
+/**
+ * Pings the helper AND validates its identity envelope. Use this — not the bare
+ * pingHelper() boolean — before any privileged operation and at startup. It is
+ * the single source of truth for "is the real, compatible helper up?".
+ *
+ * @param timeoutMs  Optional timeout override. Defaults to 3 s.
+ * @returns          A HelperHealth describing exactly what answered.
+ */
+export async function verifyHelper(timeoutMs = 3_000): Promise<HelperHealth> {
+  const res = await sendToHelper({ command: 'ping' }, timeoutMs)
+
+  if (res.status !== 'pong') {
+    return { ok: false, reason: 'unreachable' }
+  }
+
+  const protocol = typeof res.protocol === 'number' ? res.protocol : undefined
+  const pid      = typeof res.pid === 'number' ? res.pid : undefined
+
+  // A 'pong' without our product tag means a foreign service is squatting.
+  if (res.product !== HELPER_PRODUCT) {
+    return { ok: false, reason: 'foreign', protocol, pid }
+  }
+
+  if (protocol !== REQUIRED_HELPER_PROTOCOL) {
+    return { ok: false, reason: 'incompatible', protocol, pid }
+  }
+
+  return { ok: true, protocol, pid }
 }

@@ -50,6 +50,19 @@ const HELPER_PORT = 47391
 const PIPE_PATH   = '\\\\.\\pipe\\chibatunnel-helper'   // Windows only
 const MAX_CONNECTIONS = 4
 
+// Identity envelope returned in every 'ping' response. The Electron client
+// (helper-client.ts) checks BOTH of these before issuing any privileged
+// command. A foreign service squatting on the pipe / TCP port (e.g. a leftover
+// sentinel-helper.exe) can answer 'pong', but it cannot forge this product tag
+// and matching protocol version — so the client refuses to talk to it and
+// re-installs the genuine helper instead.
+//
+// HELPER_PROTOCOL must be kept in lockstep with REQUIRED_HELPER_PROTOCOL in
+// src/main/helper-client.ts. Bump it whenever the wire contract changes in a
+// way that an older Electron build cannot safely drive.
+const HELPER_PRODUCT  = 'chibatunnel'
+const HELPER_PROTOCOL = 1
+
 const IS_SERVICE_MODE = process.argv.includes('--service')
 const USE_NAMED_PIPE  = process.argv.includes('--namedpipe')
 const PLATFORM        = process.platform   // 'win32' | 'linux' | 'darwin'
@@ -940,10 +953,21 @@ function stopTransparentDarwin(socket: net.Socket): void {
 // Command handlers (platform-agnostic entry points)
 // ---------------------------------------------------------------------------
 
-/** Handles 'ping'. @param socket Connected client socket. */
+/**
+ * Handles 'ping'. Replies 'pong' together with an identity envelope so the
+ * Electron client can confirm it is talking to the genuine ChibaTunnel helper
+ * (and a compatible protocol version) before issuing any privileged command.
+ *
+ * @param socket Connected client socket.
+ */
 function handlePing(socket: net.Socket): void {
   log('INFO', 'Ping received — sending pong.')
-  sendResponse(socket, { status: 'pong' })
+  sendResponse(socket, {
+    status:   'pong',
+    product:  HELPER_PRODUCT,
+    protocol: HELPER_PROTOCOL,
+    pid:      process.pid,
+  })
 }
 
 /**
