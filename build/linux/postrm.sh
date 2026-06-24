@@ -80,4 +80,9 @@ if command -v systemctl &>/dev/null; then
   systemctl reset-failed  2>/dev/null || true
 fi
 
+# Update desktop database for the custom protocols scheme handling
+if command -v update-desktop-database &>/dev/null; then
+  update-desktop-database /usr/share/applications || true
+fi
+
 echo "[postrm] Done."

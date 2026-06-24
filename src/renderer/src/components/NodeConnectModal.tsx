@@ -498,16 +498,31 @@ interface Props {
   infoOnly?:       boolean
   initialSessionId?: string | null
   initialSubscriptionId?: string | null
+  initialSubscriptionType?: 'gigabytes' | 'hours' | null // added
+  initialAmount?:           number | null                 // added
   onOpenBinaryGuide?: () => void
   onRefreshData?:  () => void
 }
 
 export default function NodeConnectModal({
-  node, bookmarked, onBookmark, onClose, onConnected, infoOnly = false, initialSessionId = null, initialSubscriptionId = null, onOpenBinaryGuide, onRefreshData
+  node, bookmarked, onBookmark, onClose, onConnected,
+  infoOnly = false,
+  initialSessionId = null,
+  initialSubscriptionId = null,
+  initialSubscriptionType = null, // added
+  initialAmount = null,            // added
+  onOpenBinaryGuide, onRefreshData
 }: Props) {
   const { t } = useTranslation()
   const autoStart = !!initialSessionId || !!initialSubscriptionId
-  const [conn, setConn]               = useState<ConnectionState>({ ...INITIAL_CONNECTION, node, sessionId: initialSessionId, step: autoStart ? 'fetching_node' : 'choose-type' })
+  const [conn, setConn]               = useState<ConnectionState>({
+    ...INITIAL_CONNECTION,
+    node,
+    sessionId: initialSessionId,
+    step: autoStart ? 'fetching_node' : 'choose-type',
+    subscriptionType: initialSubscriptionType ?? INITIAL_CONNECTION.subscriptionType,
+    amount: initialAmount ?? INITIAL_CONNECTION.amount,
+  })
   const [showWgQr, setShowWgQr]       = useState(false)
   const [expandedQr, setExpandedQr]   = useState<number | null>(null)
   const [expandedQrTab, setExpandedQrTab] = useState<number | null>(null)

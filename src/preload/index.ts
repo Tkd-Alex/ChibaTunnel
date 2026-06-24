@@ -78,6 +78,22 @@ const api = {
   getPublicIp:      () => ipcRenderer.invoke('network:getPublicIp'),
   repairHelper:     () => ipcRenderer.invoke('helper:repair'),
 
+  getDeepLinkPending: () =>
+    ipcRenderer.invoke('deeplink:getPending'),
+
+  clearDeepLinkPending: () =>
+    ipcRenderer.invoke('deeplink:clearPending'),
+
+  onDeepLinkConnect: (callback: (args: {
+    nodeAddress: string
+    subscriptionType: 'gigabytes' | 'hours'
+    amount: number
+  }) => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, args: any) => callback(args)
+    ipcRenderer.on('deeplink:connect', handler)
+    return () => { ipcRenderer.removeListener('deeplink:connect', handler) }
+  },
+
   // Events → renderer
   onVpnStatus:      (cb: (d: unknown) => void) => { 
     const l = (_: any, d: any) => cb(d)

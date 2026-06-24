@@ -44,6 +44,48 @@ import * as crypto from 'crypto'
 import { pingHelper, sendToHelper } from './helper-client'
 import pkg from '../../package.json'
 
+let pendingDeepLink: string | null = null
+
+function parseDeepLink(url: string): {
+  nodeAddress: string
+  subscriptionType: 'gigabytes' | 'hours'
+  amount: number
+} | null {
+  try {
+    const parsed = new URL(url)
+    if (parsed.hostname !== 'connect') return null
+    const nodeAddress = parsed.searchParams.get('node')
+    if (!nodeAddress || !nodeAddress.startsWith('sentnode')) return null
+    const type = parsed.searchParams.get('type')
+    const subscriptionType: 'gigabytes' | 'hours' = type === 'hours' ? 'hours' : 'gigabytes'
+    const amountRaw = parseInt(parsed.searchParams.get('amount') ?? '1', 10)
+    const amount = isNaN(amountRaw) || amountRaw < 1 ? 1 : amountRaw
+    return { nodeAddress, subscriptionType, amount }
+  } catch { return null }
+}
+
+function parseAndSendDeepLink(url: string): void {
+  const args = parseDeepLink(url)
+  if (args) mainWindow?.webContents.send('deeplink:connect', args)
+}
+
+const gotLock = app.requestSingleInstanceLock()
+if (!gotLock) {
+  app.quit()
+  process.exit(0)
+}
+
+app.on('second-instance', (_event, argv) => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
+  }
+  const url = argv.find(a => a.startsWith('chibatun://'))
+  if (!url) return
+  if (mainWindow) parseAndSendDeepLink(url)
+  else pendingDeepLink = url
+})
+
 // ── Project Configuration ─────────────────────────────────────────────────────
 const PROJECT_WALLET_ADDRESS = process.env.PROJECT_WALLET_ADDRESS || 'sent1ppkl...zq7k0v' // Default dev address
 const PROJECT_DONATION_MEMO  = process.env.PROJECT_DONATION_MEMO  || `${pkg.name} (Donation)`
@@ -246,6 +288,19 @@ app.whenReady().then(async () => {
     else if (process.platform === 'linux') await installLinuxHelper()
     else if (process.platform === 'darwin') await installDarwinHelper()
   }
+
+  app.setAsDefaultProtocolClient('chibatun')
+
+  // macOS: deeplink arrives via open-url event
+  app.on('open-url', (event, url) => {
+    event.preventDefault()
+    if (mainWindow) { mainWindow.focus(); parseAndSendDeepLink(url) }
+    else pendingDeepLink = url
+  })
+
+  // Win/Linux cold start: deeplink is in process.argv
+  const coldUrl = process.argv.find(a => a.startsWith('chibatun://'))
+  if (coldUrl) pendingDeepLink = coldUrl
 
   createWindow()
 })
@@ -457,6 +512,15 @@ function registerIpcHandlers(): void {
       console.error('[helper:repair] Failed to repair helper:', err)
       return { success: false, error: err.message || String(err) }
     }
+  })
+
+  ipcMain.handle('deeplink:getPending', () => {
+    if (!pendingDeepLink) return null
+    return parseDeepLink(pendingDeepLink)
+  })
+
+  ipcMain.handle('deeplink:clearPending', () => {
+    pendingDeepLink = null
   })
 
   ipcMain.handle('wallet:list', async () => {

@@ -101,6 +101,11 @@ export default function App() {
   const [modalInfoOnly, setModalInfoOnly]   = useState(false)
   const [reuseSessionId, setReuseSessionId] = useState<number | null>(null)
   const [reuseSubscriptionId, setReuseSubscriptionId] = useState<number | null>(null)
+  const [deepLinkArgs, setDeepLinkArgs] = useState<{
+    nodeAddress: string
+    subscriptionType: 'gigabytes' | 'hours'
+    amount: number
+  } | null>(null)
   
   const [showIpModal, setShowIpModal]           = useState(false)
   
@@ -163,11 +168,100 @@ export default function App() {
     finally { setSessionsLoading(false) }
   }, [])
 
+  const fetchAllBackground = useCallback(async () => {
+    try {
+      const nodesRes = await window.api.fetchNodes()
+      if (nodesRes.success) setNodes(nodesRes.nodes as ApiNode[])
+    } catch { /* silent */ }
+    try {
+      const plansRes = await window.api.fetchPlans()
+      if (plansRes.success) {
+        setPlans(plansRes.plans as ApiPlan[])
+        const planIds = plansRes.plans.map((p: any) => p.id)
+        const uniqueProviders = Array.from(new Set(plansRes.plans.map((p: any) => p.provAddress))) as string[]
+        try {
+          const [provRes, nodesRes] = await Promise.all([
+            window.api.fetchProvidersBatch(uniqueProviders),
+            window.api.scanPlanNodes(planIds)
+          ])
+          if (provRes.success) setProviderNamesCache(prev => ({ ...prev, ...provRes.providers }))
+          if (nodesRes.success) {
+            setPlanNodesCache(prev => ({ ...prev, ...nodesRes.nodesMap }))
+            setScannedOnce(true)
+          }
+        } catch (err) {
+          console.error('Failed to prefetch plan details in background:', err)
+        }
+      }
+    } catch { /* silent */ }
+    try {
+      const sessionsRes = await window.api.fetchSessions()
+      if (sessionsRes.success) {
+        setSessions((sessionsRes.sessions ?? []).filter((s: any) => typeof s.id === 'number'))
+      }
+    } catch { /* silent */ }
+  }, [])
+
   useEffect(() => {
     async function boot() {
       const startTime = Date.now()
       refreshIp()
-      
+
+      // Check for a pending deeplink from cold start
+      const deepLink = await window.api.getDeepLinkPending()
+
+      if (deepLink) {
+        // ── FAST-BOOT PATH ──────────────────────────────────────────────────────
+        // Only run the minimum steps needed to open the connect modal
+
+        setBootStatus(t('boot.verifying_environment'))
+        const [rpc, bins, bms] = await Promise.all([
+          window.api.getCurrentRpc(),
+          window.api.checkBinaries(),
+          window.api.listBookmarks(),
+        ])
+        setCurrentRpc(rpc as string)
+        setBinaries(bins as BinaryStatus)
+        setBookmarks(bms as string[])
+        if (!(bins as BinaryStatus).wireguard || !(bins as BinaryStatus).v2ray) {
+          setShowBinaryCheck(true)
+        }
+
+        setBootStatus(t('boot.loading_wallet'))
+        const walletRes = await window.api.loadStoredWallet()
+        if (!walletRes.success) {
+          // No wallet: go to setup screen exactly like normal boot
+          setTimeout(() => setScreen('setup'), Math.max(0, 1500 - (Date.now() - startTime)))
+          return
+        }
+        setCurrentRpc((walletRes as any).rpc ?? (rpc as string))
+
+        // Fetch only the requested node
+        setBootStatus(t('boot.fetching_node') ?? 'Fetching node...')
+        const nodeRes = await window.api.fetchNodeInfo(deepLink.nodeAddress)
+
+        // Fetch subscriptions to detect if there's an existing sub on this node
+        const subRes = await window.api.fetchSubscriptions()
+        if ((subRes as any).success) {
+          setSubscriptions((subRes as any).subscriptions)
+        }
+
+        const elapsed = Date.now() - startTime
+        setTimeout(() => {
+          setScreen('main')
+          if ((nodeRes as any).success && (nodeRes as any).node) {
+            setDeepLinkArgs(deepLink)
+            setModalInfoOnly(false)
+            setModalNode((nodeRes as any).node)
+          }
+          window.api.clearDeepLinkPending()
+          // Run the rest of the fetches in the background (non-blocking)
+          fetchAllBackground()
+        }, Math.max(0, 800 - elapsed)) // keep splash visible for at least 800ms
+        return
+      }
+
+      // ── NORMAL BOOT PATH ─────────────────────────────────────────────────────
       setBootStatus(t('boot.verifying_environment'))
       const rpcPromise  = window.api.getCurrentRpc()
       const binsPromise = window.api.checkBinaries()
@@ -240,6 +334,28 @@ export default function App() {
     // This is now handled in boot() for the initial load, 
     // but kept for reference if screen state changes later
   }, [screen, fetchNodes, fetchPlans, fetchSubscriptions])
+
+  useEffect(() => {
+    const unsubscribe = window.api.onDeepLinkConnect((args) => {
+      // App is already open: no boot needed, open modal directly
+      const existing = nodes.find(n => n.address === args.nodeAddress)
+      if (existing) {
+        setDeepLinkArgs(args)
+        setModalInfoOnly(false)
+        setModalNode(existing)
+        return
+      }
+      // Node not in list yet: single fetch
+      window.api.fetchNodeInfo(args.nodeAddress).then((res: any) => {
+        if (res?.success && res?.node) {
+          setDeepLinkArgs(args)
+          setModalInfoOnly(false)
+          setModalNode(res.node)
+        }
+      })
+    })
+    return unsubscribe
+  }, [nodes])
 
   useEffect(() => {
     const u1 = window.api.onVpnStatus((d: any) => {
@@ -591,9 +707,16 @@ export default function App() {
         <NodeConnectModal
           node={modalNode} bookmarked={bookmarks.includes(modalNode.address)}
           onBookmark={() => toggleBookmark(modalNode.address)}
-          onClose={() => { setModalNode(null); setModalInfoOnly(false); setReuseSessionId(null); setReuseSubscriptionId(null) }}
+          onClose={() => {
+            setModalNode(null)
+            setModalInfoOnly(false)
+            setReuseSessionId(null)
+            setReuseSubscriptionId(null)
+            setDeepLinkArgs(null) // clear deeplink args
+          }}
           onConnected={state => {
             setActiveConnection(state); setModalNode(null); setModalInfoOnly(false); setReuseSessionId(null); setReuseSubscriptionId(null)
+            setDeepLinkArgs(null) // clear deeplink args
             fetchSubscriptions()
             fetchSessions()
             setTimeout(refreshIp, 2000)
@@ -601,6 +724,8 @@ export default function App() {
           infoOnly={modalInfoOnly}
           initialSessionId={reuseSessionId ? reuseSessionId.toString() : null}
           initialSubscriptionId={reuseSubscriptionId ? reuseSubscriptionId.toString() : null}
+          initialSubscriptionType={deepLinkArgs?.subscriptionType ?? null}
+          initialAmount={deepLinkArgs?.amount ?? null}
           onOpenBinaryGuide={() => { setBinaryCheckFocusId('tun2socks'); setShowBinaryCheck(true) }}
           onRefreshData={() => {
             fetchSubscriptions()
