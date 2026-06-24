@@ -410,6 +410,7 @@
     "verifying_environment": "Verifying environment...",
     "loading_wallet": "Loading wallet...",
     "fetching_nodes": "Fetching nodes...",
+    "fetching_node": "Fetching node details...",
     "fetching_plans": "Fetching plans...",
     "analyzing_plans": "Analyzing plans...",
     "fetching_subs": "Fetching subscriptions...",

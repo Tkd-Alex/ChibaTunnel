@@ -410,6 +410,7 @@
     "verifying_environment": "Проверка окружения...",
     "loading_wallet": "Загрузка кошелька...",
     "fetching_nodes": "Получение узлов...",
+    "fetching_node": "Получение информации об узле...",
     "fetching_plans": "Получение планов...",
     "analyzing_plans": "Анализ планов...",
     "fetching_subs": "Получение подписок...",

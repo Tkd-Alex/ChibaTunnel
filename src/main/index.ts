@@ -692,6 +692,19 @@ function registerIpcHandlers(): void {
     } catch (err: unknown) { return { success: false, error: extractError(err) } }
   })
 
+  ipcMain.handle('node:fetchByAddress', async (_e, address: string) => {
+    try {
+      const res = await fetch(`https://api.sentnodes.com/v2/node/${address}`)
+      const json = await res.json() as { success?: boolean; data?: unknown }
+      if (json.success && json.data) {
+        return { success: true, node: json.data }
+      }
+      return { success: false, error: 'Node not found or API error' }
+    } catch (err: unknown) {
+      return { success: false, error: String(err) }
+    }
+  })
+
   ipcMain.handle('sessions:fetch', async () => {
     if (!walletState.readonlyClient || !walletState.address) return { success: false, error: walletState.address ? 'No RPC client' : 'Wallet not loaded', sessions: [] }
     try {

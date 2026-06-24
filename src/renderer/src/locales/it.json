@@ -410,6 +410,7 @@
     "verifying_environment": "Verifica dell'ambiente...",
     "loading_wallet": "Caricamento portafoglio...",
     "fetching_nodes": "Recupero nodi...",
+    "fetching_node": "Recupero dettagli nodo...",
     "fetching_plans": "Recupero piani...",
     "analyzing_plans": "Analisi dei piani...",
     "fetching_subs": "Recupero abbonamenti...",

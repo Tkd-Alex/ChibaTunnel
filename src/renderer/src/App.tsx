@@ -214,20 +214,19 @@ export default function App() {
 
       if (deepLink) {
         // ── FAST-BOOT PATH ──────────────────────────────────────────────────────
-        // Only run the minimum steps needed to open the connect modal
-
         setBootStatus(t('boot.verifying_environment'))
-        const [rpc, bins, bms, nodesRes] = await Promise.all([
+        const [rpc, bins, bms, nodeRes] = await Promise.all([
           window.api.getCurrentRpc(),
           window.api.checkBinaries(),
           window.api.listBookmarks(),
-          window.api.fetchNodes(), // Fetch all nodes in parallel (very fast HTTP get)
+          window.api.fetchNodeByAddress(deepLink.nodeAddress),
         ])
         setCurrentRpc(rpc as string)
         setBinaries(bins as BinaryStatus)
         setBookmarks(bms as string[])
-        if ((nodesRes as any).success) {
-          setNodes((nodesRes as any).nodes)
+        const targetNode = (nodeRes as any).success ? (nodeRes as any).node as ApiNode : null
+        if (targetNode) {
+          setNodes([targetNode])
         }
         if (!(bins as BinaryStatus).wireguard || !(bins as BinaryStatus).v2ray) {
           setShowBinaryCheck(true)
@@ -242,13 +241,7 @@ export default function App() {
         }
         setCurrentRpc((walletRes as any).rpc ?? (rpc as string))
 
-        // Find the requested node from the list
-        setBootStatus(t('boot.fetching_node') ?? 'Fetching node...')
-        const targetNode = (nodesRes as any).success
-          ? (nodesRes as any).nodes.find((n: any) => n.address === deepLink.nodeAddress)
-          : null
-
-
+        setBootStatus(t('boot.fetching_node'))
 
         // Fetch subscriptions to detect if there's an existing sub on this node
         const subRes = await window.api.fetchSubscriptions()
@@ -266,7 +259,7 @@ export default function App() {
           }
           window.api.clearDeepLinkPending()
           // Run the rest of the fetches in the background (non-blocking)
-          fetchAllBackground({ skipNodes: true })
+          fetchAllBackground()
         }, Math.max(0, 800 - elapsed)) // keep splash visible for at least 800ms
         return
       }
@@ -355,16 +348,17 @@ export default function App() {
         setModalNode(existing)
         return
       }
-      // Node not in list yet: fetch node list to check for new nodes
-      window.api.fetchNodes().then((res: any) => {
-        if (res?.success) {
-          setNodes(res.nodes as ApiNode[])
-          const targetNode = res.nodes.find((n: any) => n.address === args.nodeAddress)
-          if (targetNode) {
-            setDeepLinkArgs(args)
-            setModalInfoOnly(false)
-            setModalNode(targetNode)
-          }
+      // Node not in list yet: fetch single node details by address
+      window.api.fetchNodeByAddress(args.nodeAddress).then((res: any) => {
+        if (res?.success && res.node) {
+          const targetNode = res.node as ApiNode
+          setNodes(prev => {
+            if (prev.some(n => n.address === targetNode.address)) return prev
+            return [...prev, targetNode]
+          })
+          setDeepLinkArgs(args)
+          setModalInfoOnly(false)
+          setModalNode(targetNode)
         }
       })
     })

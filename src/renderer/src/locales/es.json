@@ -410,6 +410,7 @@
     "verifying_environment": "Verificando el entorno...",
     "loading_wallet": "Cargando billetera...",
     "fetching_nodes": "Obteniendo nodos...",
+    "fetching_node": "Obteniendo detalles del nodo...",
     "fetching_plans": "Obteniendo planes...",
     "analyzing_plans": "Analizando planes...",
     "fetching_subs": "Obteniendo suscripciones...",

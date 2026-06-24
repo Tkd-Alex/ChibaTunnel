@@ -410,6 +410,7 @@
     "verifying_environment": "Vérification de l'environnement...",
     "loading_wallet": "Chargement du portefeuille...",
     "fetching_nodes": "Récupération des nœuds...",
+    "fetching_node": "Récupération des détails du nœud...",
     "fetching_plans": "Récupération des plans...",
     "analyzing_plans": "Analyse des plans...",
     "fetching_subs": "Récupération des abonnements...",

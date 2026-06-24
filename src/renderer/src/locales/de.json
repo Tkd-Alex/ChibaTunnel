@@ -410,6 +410,7 @@
     "verifying_environment": "Umgebung überprüfen...",
     "loading_wallet": "Brieftasche laden...",
     "fetching_nodes": "Knoten abrufen...",
+    "fetching_node": "Knotendetails abrufen...",
     "fetching_plans": "Pläne abrufen...",
     "analyzing_plans": "Pläne analysieren...",
     "fetching_subs": "Abonnements abrufen...",

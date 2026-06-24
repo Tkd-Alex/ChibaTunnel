@@ -410,6 +410,7 @@
     "verifying_environment": "التحقق من البيئة...",
     "loading_wallet": "جاري تحميل المحفظة...",
     "fetching_nodes": "جاري جلب العقد...",
+    "fetching_node": "جاري جلب تفاصيل العقدة...",
     "fetching_plans": "جاري جلب الخطط...",
     "analyzing_plans": "جاري تحليل الخطط...",
     "fetching_subs": "جاري جلب الاشتراكات...",

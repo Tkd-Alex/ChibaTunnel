@@ -39,6 +39,7 @@ const api = {
   // Nodes
   fetchNodes:     () => ipcRenderer.invoke('nodes:fetch'),
   fetchNodeInfo:  (remoteAddr: string) => ipcRenderer.invoke('node:info', remoteAddr),
+  fetchNodeByAddress: (address: string) => ipcRenderer.invoke('node:fetchByAddress', address),
 
   // Plans & Subscriptions
   fetchPlans:         () => ipcRenderer.invoke('plans:fetch'),
