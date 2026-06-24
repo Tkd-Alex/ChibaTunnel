@@ -197,34 +197,59 @@ To deliver a seamless experience, ChibaTunnel implements a **Fast-Boot Path** fo
 
 ---
 
-### 🖥️ Integration & Testing
+### 🖥️ Web Portal Integration
 
-You can trigger the protocol scheme using terminal commands or native OS utilities to test integrating portals.
+Online dashboards, explorer websites (like `sentnodes.com`), or custom VPN client panels can launch ChibaTunnel directly to prompt a connection by embedding standard HTML links.
 
-#### 1. CLI/Terminal (Development Mode)
-Simulate deep linking from the command line while running in developer mode:
+#### HTML Anchor Tag (`href`) Example
+Websites can place simple connection buttons using deep links:
 
-```bash
-# Windows (cold start simulation)
-npx electron . "chibatun://connect?node=sentnode1abc123xyz&type=hours&amount=24"
+```html
+<!-- Connect using default values (gigabytes = 1) -->
+<a href="chibatun://connect?node=sentnode1y9nyc42....cupefajg54" class="vpn-btn">
+  Connect to Node
+</a>
 
-# macOS / Linux (cold start simulation)
-npx electron . "chibatun://connect?node=sentnode1abc123xyz&type=gigabytes&amount=5"
+<!-- Connect pre-filling 10 GB bandwidth -->
+<a href="chibatun://connect?node=sentnode1y9nyc42....cupefajg54&type=gigabytes&amount=10" class="vpn-btn">
+  Purchase 10 GB on Node
+</a>
+
+<!-- Connect pre-filling 24 hours duration -->
+<a href="chibatun://connect?node=sentnode1y9nyc42....cupefajg54&type=hours&amount=24" class="vpn-btn">
+  Purchase 24 Hours on Node
+</a>
 ```
 
-#### 2. Native OS Testing (App Running or Built)
-Test using default system protocol dispatchers:
+#### Why Deep Linking is Used
+This mechanism allows external web-based portals to serve as the "frontend explorer" for Sentinel nodes. Instead of forcing users to search for a specific node within ChibaTunnel manually, web dashboards can directly trigger the application connection wizard for any specific node with a single click.
+
+---
+
+### 🧪 How to Test Deep Links in Development
+
+Testing custom URL schemes in a development environment requires launching a helper instance of Electron so the main running instance can intercept the deep link event.
+
+#### Step 1: Start the Development Server
+In your main terminal, start the app in development mode:
+```bash
+npm run dev
+```
+
+#### Step 2: Simulate Deep Link Event
+While the development window is running, open a **second terminal** and launch a command passing the deep link as an argument. Since a single-instance lock is active, the second process will forward the URL to the running dev app and quit:
 
 ```bash
-# macOS
-open "chibatun://connect?node=sentnode1abc123xyz&type=gigabytes&amount=10"
+# Windows
+npx electron . "chibatun://connect?node=sentnode1y9nyc42....cupefajg54&type=hours&amount=24"
 
-# Linux (using xdg-open)
-xdg-open "chibatun://connect?node=sentnode1abc123xyz&type=hours&amount=2"
-
-# Windows (Command Prompt or Run dialog)
-start chibatun://connect?node=sentnode1abc123xyz
+# macOS & Linux
+npx electron . "chibatun://connect?node=sentnode1y9nyc42....cupefajg54&type=gigabytes&amount=5"
 ```
+Once run, your active development app window will immediately bring itself to the front and open the connection modal pre-filled for `sentnode1y9nyc42....cupefajg54`.
+
+#### Step 3: Native Browser Testing (Packaged App)
+Once the app is built and installed locally on the system (`npm run dist:win`, `npm run dist:mac`, or `npm run dist:linux`), the OS registers `chibatun://` globally. At that point, clicking any of the HTML links in a web browser will directly open the installed app and trigger the connection modal.
 
 ---
 
