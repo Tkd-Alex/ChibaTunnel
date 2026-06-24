@@ -160,6 +160,74 @@ npm run build:helper:mac    # helper binary for macOS
 
 ---
 
+## 🔗 Custom Deep Link Protocol (`chibatun://`)
+
+ChibaTunnel supports deep linking via the custom scheme `chibatun://`. This allows external websites, portals, or dashboards to initiate connection flows directly within the client, pre-filling parameters so the user only has to click **Connect**.
+
+### 📡 Protocol Format
+
+```text
+chibatun://connect?node=<sentnode_address>[&type=<type>][&amount=<amount>]
+```
+
+#### Query Parameters
+
+| Parameter | Accepted Values | Required | Default | Description |
+| :--- | :--- | :---: | :--- | :--- |
+| `node` | `sentnode1...` | **Yes** | — | Cosmos/Sentinel address of the target node. |
+| `type` | `gigabytes` \| `hours` | No | `gigabytes` | Subscription type unit. |
+| `amount` | Positive integer (e.g., `5`, `24`) | No | `1` | Subscription duration or bandwidth quantity. |
+
+> [!NOTE]
+> If the `node` parameter does not start with `sentnode`, the deep link is considered invalid and is silently ignored to prevent arbitrary protocol execution or crashes.
+
+---
+
+### ⚡ Fast-Boot Path vs. Standard Boot
+
+To deliver a seamless experience, ChibaTunnel implements a **Fast-Boot Path** for cold starts initiated by deep links.
+
+* **Standard Boot (No Deep Link)**: Performs environment checks, loads stored wallet, fetches all nodes (~200+ nodes), plans, provider batches, subscription details, and active sessions sequentially. This can take several seconds depending on blockchain RPC speed.
+* **Fast-Boot Path (Cold Start Deep Link)**:
+  1. Checks binaries and loads the wallet.
+  2. Bypasses the complete node list, plans, and session histories.
+  3. Queries **only** the target node's info (`fetchNodeInfo`) and existing subscription state.
+  4. Bypasses the standard main screen and immediately opens the **Node Connection Modal** with pre-filled details.
+  5. Triggers standard lists fetching (`fetchAllBackground()`) in the background so lists are ready when the modal is closed.
+
+---
+
+### 🖥️ Integration & Testing
+
+You can trigger the protocol scheme using terminal commands or native OS utilities to test integrating portals.
+
+#### 1. CLI/Terminal (Development Mode)
+Simulate deep linking from the command line while running in developer mode:
+
+```bash
+# Windows (cold start simulation)
+npx electron . "chibatun://connect?node=sentnode1abc123xyz&type=hours&amount=24"
+
+# macOS / Linux (cold start simulation)
+npx electron . "chibatun://connect?node=sentnode1abc123xyz&type=gigabytes&amount=5"
+```
+
+#### 2. Native OS Testing (App Running or Built)
+Test using default system protocol dispatchers:
+
+```bash
+# macOS
+open "chibatun://connect?node=sentnode1abc123xyz&type=gigabytes&amount=10"
+
+# Linux (using xdg-open)
+xdg-open "chibatun://connect?node=sentnode1abc123xyz&type=hours&amount=2"
+
+# Windows (Command Prompt or Run dialog)
+start chibatun://connect?node=sentnode1abc123xyz
+```
+
+---
+
 ## 📦 Distribution
 
 Binaries for Linux, Windows, and macOS are built and published automatically
