@@ -1,4 +1,5 @@
 import type { ChildProcess } from 'node:child_process'
+import type { BinaryCheckResult } from '../../shared/binaries'
 import type { ProtocolDescriptor, ProtocolId, TunnelMode } from '../../shared/protocols'
 
 export type ConnectionPhase =
@@ -52,6 +53,7 @@ export interface PreflightResult {
   ok: boolean
   errors: string[]
   warnings: string[]
+  binaries?: BinaryCheckResult[]
 }
 
 export interface ProtocolAdapter<Client = unknown, HandshakeData = unknown> {

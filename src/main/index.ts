@@ -43,6 +43,14 @@ import * as crypto from 'crypto'
 
 import { pingHelper, sendToHelper } from './helper-client'
 import { isValidNodeAddress, parseDeepLink } from './deep-link'
+import { resolveBinary } from './binaries'
+import { preflightProtocol } from './protocols'
+import {
+  getProtocolDescriptor,
+  normalizeServiceType,
+  type BinaryId,
+  type SupportedPlatform
+} from '../shared/protocols'
 import pkg from '../../package.json'
 
 let pendingDeepLink: string | null = null
@@ -1024,6 +1032,19 @@ function registerIpcHandlers(): void {
     if (connectInProgress) return { success: false, error: 'A connection is already in progress' }
     connectInProgress = true
     try {
+      mainWindow?.webContents.send('vpn:status', { step: 'fetching_node' })
+      const chainNode = await withTimeout(
+        walletState.client.sentinelQuery?.node.node(nodeAddress),
+        RPC_TIMEOUT_MS,
+        'RPC timeout fetching node'
+      )
+      if (!chainNode) return { success: false, error: `Node not found: ${nodeAddress}` }
+      const remoteAddr = chainNode.remoteAddrs?.[0]
+      if (!remoteAddr) return { success: false, error: 'Node has no remote addresses' }
+      mainWindow?.webContents.send('vpn:status', { step: 'fetching_node_info' })
+      const preflight = await preflightNodeRuntime(remoteAddr)
+      if (!preflight.success) return preflight
+
       console.log(`[Subscription:Connect] Starting session with Sub #${subscriptionId} on node ${nodeAddress}`)
       mainWindow?.webContents.send('vpn:status', { step: 'signing_tx' })
       const msg = subscriptionStartSession({
@@ -1412,6 +1433,75 @@ function extractError(err: unknown): string {
   return String(err).replace(/^Error:\s*/i, '')
 }
 
+function getCustomBinaryPaths(): Partial<Record<BinaryId, string>> {
+  const custom = (store.get(STORE_KEY_BINARIES) as Record<string, string>) ?? {}
+  const pick = (...names: string[]): string | undefined => names.map(name => custom[name]).find(Boolean)
+  return {
+    wireguard: pick('wireguard', 'wireguard.exe', 'wg-quick'),
+    v2ray: pick('v2ray', 'v2ray.exe'),
+    tun2socks: pick('tun2socks', 'tun2socks.exe'),
+    wintun: pick('wintun', 'wintun.dll'),
+    openvpn: pick('openvpn', 'openvpn.exe'),
+    xray: pick('xray', 'xray.exe'),
+    amneziawg: pick('amneziawg', 'amneziawg.exe'),
+    'awg-quick': pick('awg-quick'),
+    hysteria2: pick('hysteria2', 'hysteria2.exe', 'hysteria')
+  }
+}
+
+function currentSupportedPlatform(): SupportedPlatform | null {
+  if (process.platform === 'win32' || process.platform === 'linux' || process.platform === 'darwin') {
+    return process.platform
+  }
+  return null
+}
+
+async function preflightNodeRuntime(remoteAddr: string) {
+  const platform = currentSupportedPlatform()
+  if (!platform) {
+    return { success: false as const, error: `Unsupported platform: ${process.platform}` }
+  }
+
+  const info = await withTimeout(nodeInfo(remoteAddr), 8_000, 'Node info timeout')
+  const rawServiceType = String(info.service_type ?? '')
+  const protocol = normalizeServiceType(rawServiceType)
+  if (!protocol) {
+    return {
+      success: false as const,
+      error: `Unsupported node protocol: ${rawServiceType || 'unknown'}`,
+      rawServiceType
+    }
+  }
+
+  const mode = getProtocolDescriptor(protocol).defaultMode
+  const customPaths = getCustomBinaryPaths()
+  const result = await preflightProtocol({
+    protocol,
+    mode,
+    platform,
+    resolveBinary: id => resolveBinary({
+      id,
+      platform,
+      architecture: process.arch,
+      bundledDirectory: getBundledBinDir(),
+      customPaths
+    }),
+    checkHelper: () => pingHelper()
+  })
+
+  if (!result.ok) {
+    return {
+      success: false as const,
+      error: `Runtime preflight failed: ${result.errors.join(', ')}`,
+      protocol,
+      mode,
+      preflight: result
+    }
+  }
+
+  return { success: true as const, protocol, mode, info, preflight: result }
+}
+
 async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabytes' | 'hours'; amount: number; donate?: boolean }) {
   connectInProgress = true
   try {
@@ -1420,6 +1510,9 @@ async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabyt
     if (!chainNode) return { success: false, error: `Node not found: ${args.nodeAddress}` }
     const remoteAddr = chainNode.remoteAddrs?.[0]
     if (!remoteAddr) return { success: false, error: 'Node has no remote addresses' }
+    mainWindow?.webContents.send('vpn:status', { step: 'fetching_node_info' })
+    const preflight = await preflightNodeRuntime(remoteAddr)
+    if (!preflight.success) return preflight
     const chainPrices = (args.subscriptionType === 'gigabytes' ? chainNode.gigabytePrices : chainNode.hourlyPrices) ?? []
     const udvpnPrice = chainPrices.find((p: Price) => p.denom === 'udvpn')
     if (!udvpnPrice) return { success: false, error: `No up2p price on chain` }
