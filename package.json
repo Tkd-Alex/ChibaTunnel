@@ -8,7 +8,7 @@
   "homepage": "https://chibatunnel.xyz",
   "scripts": {
     "dev": "electron-vite dev",
-    "test": "tsc -p tsconfig.test.json && node .test-dist/tests/deep-link.test.js",
+    "test": "tsc -p tsconfig.test.json && node --test .test-dist/tests/*.test.js",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "start": "electron .",
@@ -22,11 +22,13 @@
     "build:helper:mac": "tsc --project helper/tsconfig.json && pkg dist-helper/chibatunnel-helper.js --target node18-macos-x64 --output dist-helper/chibatunnel-helper-mac"
   },
   "dependencies": {
-    "@cosmjs/proto-signing": "^0.32.4",
-    "@cosmjs/stargate": "^0.32.4",
+    "@cosmjs/encoding": "0.38.1",
+    "@cosmjs/proto-signing": "0.38.1",
+    "@cosmjs/stargate": "0.38.1",
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^3.0.0",
-    "@sentinel-official/sentinel-js-sdk": "2.0.4",
+    "@sentinel-official/sentinel-js-sdk": "2.1.0",
+    "cosmjs-types": "0.11.0",
     "d3": "^7.9.0",
     "d3-geo": "^3.1.1",
     "electron-store": "^8.2.0",

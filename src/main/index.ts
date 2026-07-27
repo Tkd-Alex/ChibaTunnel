@@ -29,7 +29,7 @@ import {
   PageRequest
 } from '@sentinel-official/sentinel-js-sdk'
 import { DirectSecp256k1HdWallet } from '@cosmjs/proto-signing'
-import { assertIsDeliverTxSuccess } from '@cosmjs/stargate'
+import { assertIsDeliverTxSuccess, GasPrice } from '@cosmjs/stargate'
 import { fromBech32 } from '@cosmjs/encoding'
 import { MsgSend } from 'cosmjs-types/cosmos/bank/v1beta1/tx'
 import Long from 'long'
@@ -83,14 +83,6 @@ app.on('second-instance', (_event, argv) => {
 // ── Project Configuration ─────────────────────────────────────────────────────
 const PROJECT_WALLET_ADDRESS = process.env.PROJECT_WALLET_ADDRESS || 'sent1ppkl...zq7k0v' // Default dev address
 const PROJECT_DONATION_MEMO  = process.env.PROJECT_DONATION_MEMO  || `${pkg.name} (Donation)`
-
-// ── GasPrice shim ────────────────────────────────────────────────────────────
-function makeGasPrice(str: string): unknown {
-  const sdkDir = require.resolve('@sentinel-official/sentinel-js-sdk').replace(/[/\\]dist[/\\].*/, '')
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { GasPrice } = require(sdkDir + '/node_modules/@cosmjs/stargate')
-  return GasPrice.fromString(str)
-}
 
 const STORE_KEY_BINARIES = 'binaryPaths'
 
@@ -1909,7 +1901,7 @@ async function setupWallet(mnemonic: string, label: string, rpc: string) {
   try {
     const wallet = await DirectSecp256k1HdWallet.fromMnemonic(mnemonic.trim(), { prefix: 'sent' })
     const [acct] = await wallet.getAccounts(); const privkey = await privKeyFromMnemonic({ mnemonic: wallet.mnemonic })
-    const client = await withTimeout(SigningSentinelClient.connectWithSigner(rpc, wallet, { gasPrice: makeGasPrice('0.2udvpn') as any }), RPC_TIMEOUT_MS, 'RPC timeout')
+    const client = await withTimeout(SigningSentinelClient.connectWithSigner(rpc, wallet, { gasPrice: GasPrice.fromString('0.2udvpn') }), RPC_TIMEOUT_MS, 'RPC timeout')
     const readonlyClient = await withTimeout(SentinelClient.connect(rpc), RPC_TIMEOUT_MS, 'RPC timeout')
     walletState = { address: acct.address, label, privkey, client, readonlyClient, rpc }
 
