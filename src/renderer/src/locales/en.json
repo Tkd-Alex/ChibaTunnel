@@ -142,7 +142,8 @@
     },
     "hint": "Drag · Scroll to zoom · +/- keys · Double-click auto-spin · 0 to reset",
     "tooltip": {
-      "click_details": "Click to view details →"
+      "click_details": "Click to view details →",
+      "click_choose": "Click to choose a node →"
     }
   },
   "rpc": {
@@ -409,6 +410,7 @@
     "verifying_environment": "Verifying environment...",
     "loading_wallet": "Loading wallet...",
     "fetching_nodes": "Fetching nodes...",
+    "fetching_node": "Fetching node details...",
     "fetching_plans": "Fetching plans...",
     "analyzing_plans": "Analyzing plans...",
     "fetching_subs": "Fetching subscriptions...",

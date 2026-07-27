@@ -101,4 +101,9 @@ else
   echo "[postinst] systemd not running (container?). Service will start on next boot."
 fi
 
+# Update desktop database for the custom protocols scheme handling
+if command -v update-desktop-database &>/dev/null; then
+  update-desktop-database /usr/share/applications || true
+fi
+
 echo "[postinst] Done."

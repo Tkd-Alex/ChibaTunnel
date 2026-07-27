@@ -1,6 +1,6 @@
 {
   "name": "chibatunnel",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "ChibaTunnel (Sentinel dVPN Desktop Client)",
   "productName": "chibatunnel",
   "main": "out/main/index.js",
@@ -8,6 +8,7 @@
   "homepage": "https://chibatunnel.xyz",
   "scripts": {
     "dev": "electron-vite dev",
+    "test": "tsc -p tsconfig.test.json && node .test-dist/tests/deep-link.test.js",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "start": "electron .",
@@ -25,7 +26,7 @@
     "@cosmjs/stargate": "^0.32.4",
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^3.0.0",
-    "@sentinel-official/sentinel-js-sdk": "^2.0.4",
+    "@sentinel-official/sentinel-js-sdk": "2.0.4",
     "d3": "^7.9.0",
     "d3-geo": "^3.1.1",
     "electron-store": "^8.2.0",

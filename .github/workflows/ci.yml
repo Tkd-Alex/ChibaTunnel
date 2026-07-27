@@ -21,6 +21,9 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit -p tsconfig.web.json && npx tsc --noEmit -p tsconfig.node.json
 
+      - name: Unit tests
+        run: npm test
+
       - name: Build application
         run: npm run build
 

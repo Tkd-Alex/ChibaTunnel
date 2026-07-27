@@ -160,6 +160,99 @@ npm run build:helper:mac    # helper binary for macOS
 
 ---
 
+## 🔗 Custom Deep Link Protocol (`chibatun://`)
+
+ChibaTunnel supports deep linking via the custom scheme `chibatun://`. This allows external websites, portals, or dashboards to initiate connection flows directly within the client, pre-filling parameters so the user only has to click **Connect**.
+
+### 📡 Protocol Format
+
+```text
+chibatun://connect?node=<sentnode_address>[&type=<type>][&amount=<amount>]
+```
+
+#### Query Parameters
+
+| Parameter | Accepted Values | Required | Default | Description |
+| :--- | :--- | :---: | :--- | :--- |
+| `node` | `sentnode1...` | **Yes** | — | Cosmos/Sentinel address of the target node. |
+| `type` | `gigabytes` \| `hours` | No | `gigabytes` | Subscription type unit. |
+| `amount` | Positive integer (e.g., `5`, `24`) | No | `1` | Subscription duration or bandwidth quantity. |
+
+> [!NOTE]
+> If the `node` parameter does not start with `sentnode`, the deep link is considered invalid and is silently ignored to prevent arbitrary protocol execution or crashes.
+
+---
+
+### ⚡ Fast-Boot Path vs. Standard Boot
+
+To deliver a seamless experience, ChibaTunnel implements a **Fast-Boot Path** for cold starts initiated by deep links.
+
+* **Standard Boot (No Deep Link)**: Performs environment checks, loads stored wallet, fetches all nodes (~200+ nodes), plans, provider batches, subscription details, and active sessions sequentially. This can take several seconds depending on blockchain RPC speed.
+* **Fast-Boot Path (Cold Start Deep Link)**:
+  1. Checks binaries and loads the wallet.
+  2. Bypasses the complete node list, plans, and session histories.
+  3. Queries **only** the target node's info (`fetchNodeInfo`) and existing subscription state.
+  4. Bypasses the standard main screen and immediately opens the **Node Connection Modal** with pre-filled details.
+  5. Triggers standard lists fetching (`fetchAllBackground()`) in the background so lists are ready when the modal is closed.
+
+---
+
+### 🖥️ Web Portal Integration
+
+Online dashboards, explorer websites (like `sentnodes.com`), or custom VPN client panels can launch ChibaTunnel directly to prompt a connection by embedding standard HTML links.
+
+#### HTML Anchor Tag (`href`) Example
+Websites can place simple connection buttons using deep links:
+
+```html
+<!-- Connect using default values (gigabytes = 1) -->
+<a href="chibatun://connect?node=sentnode1y9nyc42....cupefajg54" class="vpn-btn">
+  Connect to Node
+</a>
+
+<!-- Connect pre-filling 10 GB bandwidth -->
+<a href="chibatun://connect?node=sentnode1y9nyc42....cupefajg54&type=gigabytes&amount=10" class="vpn-btn">
+  Purchase 10 GB on Node
+</a>
+
+<!-- Connect pre-filling 24 hours duration -->
+<a href="chibatun://connect?node=sentnode1y9nyc42....cupefajg54&type=hours&amount=24" class="vpn-btn">
+  Purchase 24 Hours on Node
+</a>
+```
+
+#### Why Deep Linking is Used
+This mechanism allows external web-based portals to serve as the "frontend explorer" for Sentinel nodes. Instead of forcing users to search for a specific node within ChibaTunnel manually, web dashboards can directly trigger the application connection wizard for any specific node with a single click.
+
+---
+
+### 🧪 How to Test Deep Links in Development
+
+Testing custom URL schemes in a development environment requires launching a helper instance of Electron so the main running instance can intercept the deep link event.
+
+#### Step 1: Start the Development Server
+In your main terminal, start the app in development mode:
+```bash
+npm run dev
+```
+
+#### Step 2: Simulate Deep Link Event
+While the development window is running, open a **second terminal** and launch a command passing the deep link as an argument. Since a single-instance lock is active, the second process will forward the URL to the running dev app and quit:
+
+```bash
+# Windows
+npx electron . "chibatun://connect?node=sentnode1y9nyc42....cupefajg54&type=hours&amount=24"
+
+# macOS & Linux
+npx electron . "chibatun://connect?node=sentnode1y9nyc42....cupefajg54&type=gigabytes&amount=5"
+```
+Once run, your active development app window will immediately bring itself to the front and open the connection modal pre-filled for `sentnode1y9nyc42....cupefajg54`.
+
+#### Step 3: Native Browser Testing (Packaged App)
+Once the app is built and installed locally on the system (`npm run dist:win`, `npm run dist:mac`, or `npm run dist:linux`), the OS registers `chibatun://` globally. At that point, clicking any of the HTML links in a web browser will directly open the installed app and trigger the connection modal.
+
+---
+
 ## 📦 Distribution
 
 Binaries for Linux, Windows, and macOS are built and published automatically

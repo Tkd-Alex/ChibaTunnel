@@ -42,7 +42,43 @@ import * as dns from 'dns'
 import * as crypto from 'crypto'
 
 import { pingHelper, sendToHelper } from './helper-client'
+import { isValidNodeAddress, parseDeepLink } from './deep-link'
 import pkg from '../../package.json'
+
+let pendingDeepLink: string | null = null
+
+function parseAndSendDeepLink(url: string): void {
+  const args = parseDeepLink(url)
+  if (args) mainWindow?.webContents.send('deeplink:connect', args)
+}
+
+// macOS can emit open-url before app.whenReady() resolves.
+app.on('open-url', (event, url) => {
+  event.preventDefault()
+  if (mainWindow) {
+    mainWindow.focus()
+    parseAndSendDeepLink(url)
+  } else {
+    pendingDeepLink = url
+  }
+})
+
+const gotLock = app.requestSingleInstanceLock()
+if (!gotLock) {
+  app.quit()
+  process.exit(0)
+}
+
+app.on('second-instance', (_event, argv) => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
+  }
+  const url = argv.find(a => a.startsWith('chibatun://'))
+  if (!url) return
+  if (mainWindow) parseAndSendDeepLink(url)
+  else pendingDeepLink = url
+})
 
 // ── Project Configuration ─────────────────────────────────────────────────────
 const PROJECT_WALLET_ADDRESS = process.env.PROJECT_WALLET_ADDRESS || 'sent1ppkl...zq7k0v' // Default dev address
@@ -246,6 +282,12 @@ app.whenReady().then(async () => {
     else if (process.platform === 'linux') await installLinuxHelper()
     else if (process.platform === 'darwin') await installDarwinHelper()
   }
+
+  app.setAsDefaultProtocolClient('chibatun')
+
+  // Win/Linux cold start: deeplink is in process.argv
+  const coldUrl = process.argv.find(a => a.startsWith('chibatun://'))
+  if (coldUrl) pendingDeepLink = coldUrl
 
   createWindow()
 })
@@ -459,6 +501,17 @@ function registerIpcHandlers(): void {
     }
   })
 
+  ipcMain.handle('deeplink:getPending', () => {
+    if (!pendingDeepLink) return null
+    const parsed = parseDeepLink(pendingDeepLink)
+    if (!parsed) pendingDeepLink = null
+    return parsed
+  })
+
+  ipcMain.handle('deeplink:clearPending', () => {
+    pendingDeepLink = null
+  })
+
   ipcMain.handle('wallet:list', async () => {
     const wallets = getWalletList()
     const active  = (store.get(STORE_KEY_ACTIVE_W) as number | undefined) ?? 0
@@ -626,6 +679,27 @@ function registerIpcHandlers(): void {
       const info = await withTimeout(nodeInfo(remoteAddr), 8000, 'Node info timeout')
       return { success: true, info }
     } catch (err: unknown) { return { success: false, error: extractError(err) } }
+  })
+
+  ipcMain.handle('node:fetchByAddress', async (_e, address: string) => {
+    if (!isValidNodeAddress(address)) {
+      return { success: false, error: 'Invalid node address' }
+    }
+    try {
+      const res = await withTimeout(
+        fetch(`https://api.sentnodes.com/v2/node/${encodeURIComponent(address)}`),
+        8000,
+        'Node API timeout'
+      )
+      if (!res.ok) return { success: false, error: `Node API HTTP ${res.status}` }
+      const json = await res.json() as { success?: boolean; data?: unknown }
+      if (json.success && json.data) {
+        return { success: true, node: json.data }
+      }
+      return { success: false, error: 'Node not found or API error' }
+    } catch (err: unknown) {
+      return { success: false, error: String(err) }
+    }
   })
 
   ipcMain.handle('sessions:fetch', async () => {

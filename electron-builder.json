@@ -2,6 +2,12 @@
   "appId": "co.chibatunnel-client",
   "productName": "ChibaTunnel",
   "copyright": "Copyright © 2026 ChibaTunnel | Tkd-Alex",
+  "protocols": [
+    {
+      "name": "ChibaTunnel",
+      "schemes": ["chibatun"]
+    }
+  ],
   "directories": {
     "buildResources": "build",
     "output": "dist"

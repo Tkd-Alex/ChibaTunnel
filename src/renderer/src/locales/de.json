@@ -142,7 +142,8 @@
     },
     "hint": "Ziehen · Scrollen zum Zoomen · +/- Tasten · Doppelklick Auto-Rotation · 0 zum Zurücksetzen",
     "tooltip": {
-      "click_details": "Klicken für Details →"
+      "click_details": "Klicken für Details →",
+      "click_choose": "Klicken, um einen Knoten auszuwählen →"
     }
   },
   "rpc": {
@@ -409,6 +410,7 @@
     "verifying_environment": "Umgebung überprüfen...",
     "loading_wallet": "Brieftasche laden...",
     "fetching_nodes": "Knoten abrufen...",
+    "fetching_node": "Knotendetails abrufen...",
     "fetching_plans": "Pläne abrufen...",
     "analyzing_plans": "Pläne analysieren...",
     "fetching_subs": "Abonnements abrufen...",

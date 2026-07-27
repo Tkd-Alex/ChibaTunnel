@@ -142,7 +142,8 @@
     },
     "hint": "Arrastrar · Scroll para zoom · +/- teclas · Doble clic rotación auto · 0 para reset",
     "tooltip": {
-      "click_details": "Clic para ver detalles →"
+      "click_details": "Clic para ver detalles →",
+      "click_choose": "Clic para elegir un nodo →"
     }
   },
   "rpc": {
@@ -409,6 +410,7 @@
     "verifying_environment": "Verificando el entorno...",
     "loading_wallet": "Cargando billetera...",
     "fetching_nodes": "Obteniendo nodos...",
+    "fetching_node": "Obteniendo detalles del nodo...",
     "fetching_plans": "Obteniendo planes...",
     "analyzing_plans": "Analizando planes...",
     "fetching_subs": "Obteniendo suscripciones...",

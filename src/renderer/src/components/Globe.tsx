@@ -4,8 +4,50 @@ import * as d3geo from 'd3-geo'
 import { feature } from 'topojson-client'
 import { ApiNode } from '../types'
 import { countryToIsoCode, vpnTypeLabel } from '../utils'
+import { CITY_COORDS } from './city_coords'
 
-// Country name → [lon, lat]
+// In-memory cache: "city||country" → [lon, lat] | null
+const geocodeCache = new Map<string, [number, number] | null>()
+
+// Nominatim geocoding queue
+let nominatimQueue = Promise.resolve()
+
+async function geocodeCity(city: string, country: string, cacheKey: string, onUpdate: () => void): Promise<void> {
+  // Mark as "already in progress" to avoid duplicate requests
+  geocodeCache.set(cacheKey, null)
+
+  // Queue the request respecting Nominatim's rate limit
+  nominatimQueue = nominatimQueue.then(async () => {
+    try {
+      const params = new URLSearchParams({ city, country, format: 'json', limit: '1' })
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+        headers: {
+          'User-Agent': 'ChibaTunnel/1.0 (https://github.com/Tkd-Alex/ChibaTunnel)',
+          'Accept-Language': 'en',
+        },
+      })
+      const data = await res.json()
+      if (data?.length) {
+        const lon = parseFloat(data[0].lon)
+        const lat = parseFloat(data[0].lat)
+        geocodeCache.set(cacheKey, [
+          Math.round(lon * 1000) / 1000,
+          Math.round(lat * 1000) / 1000,
+        ])
+      }
+    } catch {
+      // Ignore network errors, country centroid fallback is sufficient
+    }
+    // Respect rate limit of 1 req/s
+    await new Promise(r => setTimeout(r, 1100))
+  })
+
+  // Wait for completion and trigger re-render
+  await nominatimQueue
+  onUpdate()
+}
+
+// Country centroid fallback
 const COUNTRY_COORDS: Record<string, [number, number]> = {
   'United States': [-98, 39], 'Canada': [-96, 56], 'Mexico': [-102, 24],
   'Brazil': [-51, -14], 'Argentina': [-65, -34], 'Chile': [-71, -36],
@@ -41,6 +83,38 @@ const COUNTRY_COORDS: Record<string, [number, number]> = {
   'Armenia': [45, 40], 'Azerbaijan': [48, 40],
 }
 
+function getCoords(node: ApiNode, onUpdate: () => void): [number, number] | null {
+  const cityKey = (node.city ?? '').toLowerCase().trim()
+  const cacheKey = `${cityKey}||${node.country ?? ''}`
+
+  // 1. Static dictionary
+  if (cityKey && CITY_COORDS[cityKey]) return CITY_COORDS[cityKey]
+
+  // 2. Dynamic cache
+  if (geocodeCache.has(cacheKey)) {
+    return geocodeCache.get(cacheKey) ?? COUNTRY_COORDS[node.country ?? ''] ?? null
+  }
+
+  // 3. Kick off async geocoding (does not block render)
+  geocodeCity(cityKey, node.country ?? '', cacheKey, onUpdate)
+
+  // 4. Fallback to country centroid in the meantime
+  return COUNTRY_COORDS[node.country ?? ''] ?? null
+}
+
+// Cluster key = city||country (city-level precision, country-scoped)
+function clusterKey(node: ApiNode): string {
+  return `${(node.city ?? '').toLowerCase().trim()}||${node.country ?? ''}`
+}
+
+interface Cluster {
+  lon: number
+  lat: number
+  city: string
+  country: string
+  nodes: ApiNode[]
+}
+
 interface Props {
   nodes:     ApiNode[]
   bookmarks: string[]
@@ -54,21 +128,20 @@ export default function Globe({ nodes, bookmarks, onSelect }: Props) {
   const topoRef       = useRef<unknown>(null)
   const animRef       = useRef<number>(0)
 
-  // Rotation state
-  const rotRef        = useRef<[number, number]>([10, -20])
-  // Zoom: scale multiplier on top of base radius
-  const zoomRef       = useRef<number>(1)
-  // Drag state
-  const dragRef       = useRef<{ x: number; y: number; lambda: number; phi: number } | null>(null)
-  const wasDragging   = useRef(false)
-  const autoRotRef    = useRef(true)
+  const rotRef      = useRef<[number, number]>([10, -20])
+  const zoomRef     = useRef<number>(1)
+  const dragRef     = useRef<{ x: number; y: number; lambda: number; phi: number } | null>(null)
+  const wasDragging = useRef(false)
+  const autoRotRef  = useRef(true)
 
-  const [hovered, setHovered]   = useState<ApiNode | null>(null)
+  const [hoveredCluster, setHoveredCluster] = useState<Cluster | null>(null)
   const [tooltip, setTooltip]   = useState<{ x: number; y: number } | null>(null)
-  const [size, setSize]         = useState({ w: 600, h: 600 })
+  // ── FIX 2: picker state includes scroll position, rendered as a real DOM div ──
+  const [picker, setPicker] = useState<{ cluster: Cluster; x: number; y: number } | null>(null)
+  const [size, setSize]     = useState({ w: 600, h: 600 })
   const [worldLoaded, setWorldLoaded] = useState(false)
+  const [geoVersion, setGeoVersion] = useState(0)
 
-  // Load world atlas once
   useEffect(() => {
     import('world-atlas/countries-110m.json').then(mod => {
       topoRef.current = mod.default
@@ -76,7 +149,6 @@ export default function Globe({ nodes, bookmarks, onSelect }: Props) {
     })
   }, [])
 
-  // Responsive canvas size
   useEffect(() => {
     if (!containerRef.current) return
     const ro = new ResizeObserver(entries => {
@@ -88,17 +160,26 @@ export default function Globe({ nodes, bookmarks, onSelect }: Props) {
     return () => ro.disconnect()
   }, [])
 
-  // Memoize pins
-  const pins = useMemo(() =>
-    nodes.map(n => {
-      const c = COUNTRY_COORDS[n.country ?? '']
-      if (!c) return null
-      return { node: n, lon: c[0], lat: c[1] }
-    }).filter(Boolean) as Array<{ node: ApiNode; lon: number; lat: number }>,
-    [nodes]
-  )
+  // ── Build clusters by city ──
+  const clusters = useMemo(() => {
+    const map = new Map<string, Cluster>()
+    const triggerReRender = () => setGeoVersion(v => v + 1)
+    for (const node of nodes) {
+      const coords = getCoords(node, triggerReRender)
+      if (!coords) continue
+      const key = clusterKey(node)
+      if (!map.has(key)) {
+        map.set(key, {
+          lon: coords[0], lat: coords[1],
+          city: node.city ?? '', country: node.country ?? '',
+          nodes: [],
+        })
+      }
+      map.get(key)!.nodes.push(node)
+    }
+    return Array.from(map.values())
+  }, [nodes, geoVersion])
 
-  // Build projection from current state
   const makeProj = useCallback((w: number, h: number) => {
     const baseR = Math.min(w, h) / 2 - 12
     return d3geo.geoOrthographic()
@@ -108,42 +189,40 @@ export default function Globe({ nodes, bookmarks, onSelect }: Props) {
       .clipAngle(90)
   }, [])
 
-  // Hit-test: canvas pixel → ApiNode | null
-  const getNodeAt = useCallback((cx: number, cy: number): ApiNode | null => {
+  const getClusterAt = useCallback((cx: number, cy: number): Cluster | null => {
     const canvas = canvasRef.current
     if (!canvas) return null
-    const rect  = canvas.getBoundingClientRect()
-    const mx    = (cx - rect.left)  * (canvas.width  / rect.width)
-    const my    = (cy - rect.top)   * (canvas.height / rect.height)
-    const proj  = makeProj(canvas.width, canvas.height)
-    let best: ApiNode | null = null
-    let bestDist = 16  // px threshold
+    const rect = canvas.getBoundingClientRect()
+    const mx   = (cx - rect.left) * (canvas.width  / rect.width)
+    const my   = (cy - rect.top)  * (canvas.height / rect.height)
+    const proj = makeProj(canvas.width, canvas.height)
+    let best: Cluster | null = null
+    let bestDist = 22
 
-    for (const pin of pins) {
-      const pt = proj([pin.lon, pin.lat])
+    for (const cl of clusters) {
+      const pt = proj([cl.lon, cl.lat])
       if (!pt) continue
       const dist = Math.hypot(pt[0] - mx, pt[1] - my)
-      if (dist < bestDist) { bestDist = dist; best = pin.node }
+      if (dist < bestDist) { bestDist = dist; best = cl }
     }
     return best
-  }, [pins, makeProj])
+  }, [clusters, makeProj])
 
-  // Draw
   const draw = useCallback(() => {
     const canvas = canvasRef.current
     const topo   = topoRef.current
     if (!canvas || !topo) return
 
-    const ctx   = canvas.getContext('2d')!
+    const ctx  = canvas.getContext('2d')!
     const { width: w, height: h } = canvas
-    const proj  = makeProj(w, h)
-    const path  = d3geo.geoPath(proj, ctx)
+    const proj = makeProj(w, h)
+    const path = d3geo.geoPath(proj, ctx)
     const baseR = Math.min(w, h) / 2 - 12
     const r     = baseR * zoomRef.current
 
     ctx.clearRect(0, 0, w, h)
 
-    // Outer atmosphere glow
+    // Atmosphere
     const atm = ctx.createRadialGradient(w/2, h/2, r * 0.88, w/2, h/2, r * 1.12)
     atm.addColorStop(0, 'rgba(0,229,255,0.07)')
     atm.addColorStop(1, 'rgba(0,229,255,0)')
@@ -177,29 +256,35 @@ export default function Globe({ nodes, bookmarks, onSelect }: Props) {
     path({ type: 'Sphere' } as d3geo.GeoPermissibleObjects)
     ctx.strokeStyle = 'rgba(0,229,255,0.35)'; ctx.lineWidth = 1.5; ctx.stroke()
 
-    // Pins
-    for (const pin of pins) {
-      const pt = proj([pin.lon, pin.lat])
+    // Clusters
+    for (const cl of clusters) {
+      const pt = proj([cl.lon, cl.lat])
       if (!pt) continue
       const [px, py] = pt
-      // Cull pins behind the globe
       const dx = px - w/2, dy = py - h/2
       if (dx*dx + dy*dy > r*r * 1.01) continue
 
-      const isBookmark = bookmarks.includes(pin.node.address)
-      const isHovered  = hovered?.address === pin.node.address
-      const isHealthy  = pin.node.isHealthy && pin.node.isActive
-      const isWg       = pin.node.type === 1
+      const isHovered   = hoveredCluster?.lon === cl.lon && hoveredCluster?.lat === cl.lat
+      const isMulti     = cl.nodes.length > 1
+      const hasBookmark = cl.nodes.some(n => bookmarks.includes(n.address))
+      const hasHealthy  = cl.nodes.some(n => n.isHealthy && n.isActive)
+      const hasWg       = cl.nodes.some(n => n.type === 1)
 
-      const color = isBookmark ? '#facc15'
-        : isHovered           ? '#ffffff'
-        : isHealthy           ? (isWg ? '#a855f7' : '#34d399')
-        : '#ef4444'
+      const color = hasBookmark  ? '#facc15'
+        : isHovered              ? '#ffffff'
+        : !hasHealthy            ? '#ef4444'
+        : hasWg                  ? '#a855f7'
+        : '#34d399'
 
-      const radius = isHovered ? 8 : isBookmark ? 7 : 4.5
+      let radius = 4.5
+      if (isMulti) {
+        radius = cl.nodes.length > 99 ? 13 : cl.nodes.length > 9 ? 11 : 9.5
+        if (isHovered) radius += 2.5
+      } else {
+        radius = isHovered ? 9 : hasBookmark ? 8 : 4.5
+      }
 
-      // Pulse ring for hovered / bookmarked
-      if (isHovered || isBookmark) {
+      if (isHovered || hasBookmark) {
         const t = Date.now() % 2000 / 2000
         const pulseR = radius + 4 + t * 8
         const alpha  = (1 - t) * 0.5
@@ -209,65 +294,65 @@ export default function Globe({ nodes, bookmarks, onSelect }: Props) {
         ctx.lineWidth = 1; ctx.stroke()
       }
 
-      // Glow halo
       const glow = ctx.createRadialGradient(px, py, 0, px, py, radius + 6)
       glow.addColorStop(0, color + '50')
       glow.addColorStop(1, color + '00')
       ctx.beginPath(); ctx.arc(px, py, radius + 6, 0, Math.PI*2)
       ctx.fillStyle = glow; ctx.fill()
 
-      // Pin dot
       ctx.beginPath(); ctx.arc(px, py, radius, 0, Math.PI*2)
       ctx.fillStyle = color; ctx.fill()
       ctx.strokeStyle = '#060810'; ctx.lineWidth = 1.2; ctx.stroke()
+
+      if (isMulti) {
+        ctx.fillStyle = (color === '#ffffff' || color === '#facc15' || color === '#34d399') ? '#060810' : '#ffffff'
+        ctx.font = `bold ${cl.nodes.length > 99 ? 7.5 : cl.nodes.length > 9 ? 8.5 : 9.5}px "Share Tech Mono", "JetBrains Mono", monospace`
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+        ctx.fillText(String(cl.nodes.length), px, py)
+        ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'
+      }
     }
 
-    // Zoom indicator
     if (zoomRef.current !== 1) {
       ctx.fillStyle = 'rgba(0,229,255,0.5)'
       ctx.font = '10px monospace'
       ctx.fillText(`${zoomRef.current.toFixed(1)}×`, 12, h - 12)
     }
-  }, [pins, hovered, bookmarks, makeProj])
+  }, [clusters, hoveredCluster, bookmarks, makeProj])
 
-  // Animation loop
   useEffect(() => {
     if (!worldLoaded) return
     let last = performance.now()
     const loop = (ts: number) => {
       const dt = ts - last; last = ts
-
-      const isRotating   = autoRotRef.current && !dragRef.current
-      const isDragging   = !!dragRef.current
-      const hasPulseAnim = hovered !== null || bookmarks.length > 0
-
-      if (isRotating) {
+      if (autoRotRef.current && !dragRef.current)
         rotRef.current = [rotRef.current[0] + dt * 0.006, rotRef.current[1]]
-      }
-
-      if (isRotating || isDragging || hasPulseAnim) {
+      if (autoRotRef.current || dragRef.current || hoveredCluster || bookmarks.length > 0)
         draw()
-      }
-
       animRef.current = requestAnimationFrame(loop)
     }
     animRef.current = requestAnimationFrame(loop)
     return () => cancelAnimationFrame(animRef.current)
-  }, [worldLoaded, draw, hovered, bookmarks.length])
+  }, [worldLoaded, draw, hoveredCluster, bookmarks.length])
 
-  // Redraw when base properties update
+  useEffect(() => { if (worldLoaded) draw() }, [worldLoaded, draw, size, clusters])
+
+  // Close picker when clicking outside
   useEffect(() => {
-    if (worldLoaded) draw()
-  }, [worldLoaded, draw, size, pins])
+    if (!picker) return
+    const handler = (e: MouseEvent) => {
+      const el = document.getElementById('globe-picker')
+      if (el && !el.contains(e.target as Node)) setPicker(null)
+    }
+    window.addEventListener('mousedown', handler)
+    return () => window.removeEventListener('mousedown', handler)
+  }, [picker])
 
-  // ── Event handlers ──────────────────────────────────────────────────────
   const onMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     wasDragging.current = false
-    dragRef.current = {
-      x: e.clientX, y: e.clientY,
-      lambda: rotRef.current[0], phi: rotRef.current[1]
-    }
+    dragRef.current = { x: e.clientX, y: e.clientY, lambda: rotRef.current[0], phi: rotRef.current[1] }
     autoRotRef.current = false
+    setPicker(null)
   }, [])
 
   const onMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -280,43 +365,64 @@ export default function Globe({ nodes, bookmarks, onSelect }: Props) {
         Math.max(-80, Math.min(80, dragRef.current.phi - dy * 0.35))
       ]
     }
-    const node = getNodeAt(e.clientX, e.clientY)
-    setHovered(node)
-    setTooltip(node ? { x: e.clientX, y: e.clientY } : null)
-  }, [getNodeAt])
+    if (picker) return  // don't change hover while picker is open
+    const cl = getClusterAt(e.clientX, e.clientY)
+    setHoveredCluster(cl)
+    setTooltip(cl ? { x: e.clientX, y: e.clientY } : null)
+  }, [getClusterAt, picker])
 
   const onMouseUp = useCallback(() => { dragRef.current = null }, [])
 
   const onClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (wasDragging.current) return
-    const node = getNodeAt(e.clientX, e.clientY)
-    if (node) onSelect(node)
-  }, [getNodeAt, onSelect])
+    const cl = getClusterAt(e.clientX, e.clientY)
+    if (!cl) { setPicker(null); return }
+    if (cl.nodes.length === 1) {
+      // connect immediately
+      onSelect(cl.nodes[0])
+    } else {
+      setPicker({ cluster: cl, x: e.clientX, y: e.clientY })
+      setTooltip(null)
+    }
+  }, [getClusterAt, onSelect])
 
-  const onDoubleClick = useCallback(() => {
-    autoRotRef.current = !autoRotRef.current
-  }, [])
+  const onDoubleClick = useCallback(() => { autoRotRef.current = !autoRotRef.current }, [])
 
-  // Scroll wheel zoom
   const onWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault()
-    const factor = e.deltaY < 0 ? 1.1 : 0.9
-    zoomRef.current = Math.max(0.5, Math.min(6, zoomRef.current * factor))
+    zoomRef.current = Math.max(0.5, Math.min(40, zoomRef.current * (e.deltaY < 0 ? 1.1 : 0.9)))
     draw()
   }, [draw])
 
-  // Keyboard zoom
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      let changed = false
-      if (e.key === '+' || e.key === '=') { zoomRef.current = Math.min(6, zoomRef.current * 1.15); changed = true }
-      if (e.key === '-')                   { zoomRef.current = Math.max(0.5, zoomRef.current * 0.87); changed = true }
-      if (e.key === '0')                   { zoomRef.current = 1; autoRotRef.current = true; changed = true }
-      if (changed) draw()
+      if (e.key === '+' || e.key === '=') { zoomRef.current = Math.min(40, zoomRef.current * 1.15); draw() }
+      if (e.key === '-')                   { zoomRef.current = Math.max(0.5, zoomRef.current * 0.87); draw() }
+      if (e.key === '0')                   { zoomRef.current = 1; autoRotRef.current = true; draw() }
+      if (e.key === 'Escape')              { setPicker(null) }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [draw])
+
+  const tooltipNode = useMemo(() => {
+    if (!hoveredCluster) return null
+    return hoveredCluster.nodes.find(n => bookmarks.includes(n.address))
+      ?? hoveredCluster.nodes.find(n => n.isHealthy && n.isActive)
+      ?? hoveredCluster.nodes[0]
+  }, [hoveredCluster, bookmarks])
+
+  // Compute safe picker position so it doesn't overflow viewport
+  const pickerStyle = useMemo((): React.CSSProperties => {
+    if (!picker) return {}
+    const W = window.innerWidth, H = window.innerHeight
+    const pickerW = 240, pickerH = Math.min(320, picker.cluster.nodes.length * 36 + 48)
+    let left = picker.x + 14
+    let top  = picker.y - 10
+    if (left + pickerW > W - 8) left = picker.x - pickerW - 8
+    if (top  + pickerH > H - 8) top  = H - pickerH - 8
+    return { left, top }
+  }, [picker])
 
   return (
     <div ref={containerRef} className="globe-container">
@@ -332,10 +438,9 @@ export default function Globe({ nodes, bookmarks, onSelect }: Props) {
         onClick={onClick}
         onDoubleClick={onDoubleClick}
         onWheel={onWheel}
-        style={{ cursor: hovered ? 'pointer' : dragRef.current ? 'grabbing' : 'grab' }}
+        style={{ cursor: hoveredCluster ? 'pointer' : dragRef.current ? 'grabbing' : 'grab' }}
       />
 
-      {/* Legend */}
       <div className="globe-legend">
         <div className="globe-legend-item"><span style={{ background: '#a855f7' }} />{t('filters.wireguard')}</div>
         <div className="globe-legend-item"><span style={{ background: '#34d399' }} />{t('filters.v2ray')}</div>
@@ -343,30 +448,140 @@ export default function Globe({ nodes, bookmarks, onSelect }: Props) {
         <div className="globe-legend-item"><span style={{ background: '#ef4444' }} />{t('table.inactive_status')}</div>
       </div>
 
-      {/* Controls hint */}
-      <div className="globe-hint">
-        {t('globe.hint')}
-      </div>
+      <div className="globe-hint">{t('globe.hint')}</div>
 
-      {/* Zoom controls */}
       <div className="globe-zoom-btns">
-        <button className="globe-zoom-btn" onClick={() => { zoomRef.current = Math.min(6, zoomRef.current * 1.25); draw() }}>+</button>
+        <button className="globe-zoom-btn" onClick={() => { zoomRef.current = Math.min(40, zoomRef.current * 1.25); draw() }}>+</button>
         <button className="globe-zoom-btn" onClick={() => { zoomRef.current = 1; autoRotRef.current = true; draw() }}>⊙</button>
         <button className="globe-zoom-btn" onClick={() => { zoomRef.current = Math.max(0.5, zoomRef.current * 0.8); draw() }}>−</button>
       </div>
 
-      {/* Tooltip */}
-      {hovered && tooltip && (
+      {/* Tooltip (hover) — hidden while picker is open */}
+      {tooltipNode && tooltip && !picker && (
         <div className="globe-tooltip" style={{ left: tooltip.x + 14, top: tooltip.y - 10 }}>
           <div className="gt-name">
-            <span className={`fi fi-${countryToIsoCode(hovered.country ?? '')}`} style={{ marginRight: 6, borderRadius: 1 }} />
-            {hovered.moniker}
+            <span className={`fi fi-${countryToIsoCode(tooltipNode.country ?? '')}`} style={{ marginRight: 6, borderRadius: 1 }} />
+            {hoveredCluster && hoveredCluster.nodes.length > 1
+              ? `${hoveredCluster.nodes.length} ${t('common.nodes')} · ${hoveredCluster.city || hoveredCluster.country}`
+              : tooltipNode.moniker}
           </div>
-          <div className="gt-row"><span>{t('table.type')}</span><span>{vpnTypeLabel(hovered.type)}</span></div>
-          <div className="gt-row"><span>{t('ip.location')}</span><span>{hovered.city}, {hovered.country}</span></div>
-          <div className="gt-row"><span>{t('table.peers')}</span><span style={{ color: 'var(--cyan)' }}>{hovered.peers}</span></div>
-          <div className="gt-row"><span>{t('table.sessions')}</span><span>{hovered.sessions}</span></div>
-          <div className="gt-connect">{t('globe.tooltip.click_details')}</div>
+          <div className="gt-row"><span>{t('table.type')}</span><span>{vpnTypeLabel(tooltipNode.type)}</span></div>
+          <div className="gt-row"><span>{t('ip.location')}</span><span>{tooltipNode.city}, {tooltipNode.country}</span></div>
+          <div className="gt-row"><span>{t('table.peers')}</span><span style={{ color: 'var(--cyan)' }}>{tooltipNode.peers}</span></div>
+          <div className="gt-row"><span>{t('table.sessions')}</span><span>{tooltipNode.sessions}</span></div>
+          <div className="gt-connect">
+            {hoveredCluster && hoveredCluster.nodes.length > 1
+              ? t('globe.tooltip.click_choose')
+              : t('globe.tooltip.click_details')}
+          </div>
+        </div>
+      )}
+
+      {/* Scrollable picker */}
+      {picker && (
+        <div
+          id="globe-picker"
+          style={{
+            position: 'fixed',
+            zIndex: 1100,
+            background: 'var(--bg-1)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius)',
+            boxShadow: '0 8px 32px rgba(0,0,0,.7)',
+            minWidth: 240,
+            maxWidth: 300,
+            display: 'flex',
+            flexDirection: 'column',
+            animation: 'fade-in .1s ease',
+            ...pickerStyle,
+          }}
+          onMouseDown={e => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '10px 12px 8px',
+            borderBottom: '1px solid var(--border)',
+            flexShrink: 0,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span
+                className={`fi fi-${countryToIsoCode(picker.cluster.country)}`}
+                style={{ borderRadius: 1 }}
+              />
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)' }}>
+                {picker.cluster.city || picker.cluster.country}
+              </span>
+              <span style={{
+                fontSize: 10, background: 'var(--bg-2)', color: 'var(--cyan)',
+                borderRadius: 4, padding: '1px 5px', fontVariantNumeric: 'tabular-nums',
+              }}>
+                {picker.cluster.nodes.length}
+              </span>
+            </div>
+            <button
+              onClick={() => setPicker(null)}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--text-3)', fontSize: 14, lineHeight: 1, padding: '0 2px',
+              }}
+            >✕</button>
+          </div>
+
+          {/* Scrollable list */}
+          <div style={{
+            overflowY: 'auto',
+            maxHeight: 280,
+            padding: '4px 0',
+          }}>
+            {picker.cluster.nodes.map(node => {
+              const isBookmark = bookmarks.includes(node.address)
+              const isHealthy  = node.isHealthy && node.isActive
+              const dot = isBookmark ? '#facc15'
+                : isHealthy ? (node.type === 1 ? '#a855f7' : '#34d399')
+                : '#ef4444'
+
+              return (
+                <div
+                  key={node.address}
+                  onClick={() => {
+                    setPicker(null)
+                    onSelect(node)
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '6px 12px', cursor: 'pointer',
+                    transition: 'background 0.12s',
+                    userSelect: 'none',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(0,229,255,0.07)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
+                  <span style={{
+                    width: 8, height: 8, borderRadius: '50%',
+                    background: dot, flexShrink: 0,
+                  }} />
+                  <span style={{
+                    flex: 1, fontSize: 11, color: 'var(--text-1)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {node.moniker}
+                  </span>
+                  <span style={{
+                    fontSize: 9, color: 'var(--cyan)', opacity: 0.7,
+                    flexShrink: 0, letterSpacing: '0.04em',
+                  }}>
+                    {vpnTypeLabel(node.type)}
+                  </span>
+                  {node.peers != null && (
+                    <span style={{ fontSize: 9, color: 'var(--text-3)', flexShrink: 0 }}>
+                      {node.peers}p
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>
