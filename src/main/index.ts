@@ -55,6 +55,7 @@ import {
   OpenVPNProtocolAdapter,
   preflightProtocol,
   ProtocolConnectionManager,
+  stripWireGuardDns,
   V2RayProtocolAdapter,
   WireGuardProtocolAdapter,
   XrayProtocolAdapter,
@@ -1128,7 +1129,7 @@ function registerIpcHandlers(): void {
     if (trafficInterval) { clearInterval(trafficInterval); trafficInterval = null }; return { success: true }
   })
 
-  ipcMain.on('vpn:dns-retry-approved', () => { /* Logic handled via promise in wgQuickUp */ })
+  ipcMain.on('vpn:dns-retry-approved', () => { /* Logic handled by the active quick-tunnel retry */ })
 
   ipcMain.handle('node:connect', async (_e, args: { nodeAddress: string; subscriptionType: 'gigabytes' | 'hours'; amount: number; donate?: boolean }) => {
     if (!walletState.client || !walletState.address || !walletState.privkey) return { success: false, error: 'Wallet not initialized' }
@@ -1752,14 +1753,12 @@ async function stopOpenVPN(): Promise<void> {
 
 async function awgQuickUp(configFile: string): Promise<{ success: boolean; error?: string }> {
   const runtimeId: BinaryId = process.platform === 'win32' ? 'amneziawg' : 'awg-quick'
-  const response = await sendToHelper({
+  const attemptUp = () => sendToHelper({
     command: 'awg-up',
     configFile,
     awgPath: resolveRuntimeBinaryPath(runtimeId)
   }, 30_000)
-  return response.status === 'ok'
-    ? { success: true }
-    : { success: false, error: response.error ?? 'AmneziaWG failed to start' }
+  return quickTunnelUpWithDnsRetry(configFile, attemptUp, 'AmneziaWG')
 }
 
 async function awgQuickDown(configFile: string): Promise<void> {
@@ -2305,8 +2304,58 @@ function findPrivEscBin(): string {
 
 function patchConfigFileForDns(configFile: string): void {
   try {
-    const raw = fs.readFileSync(configFile, 'utf8'); const patched = raw.replace(/^DNS\s*=.*$/gm, '# DNS= stripped'); if (patched !== raw) { fs.writeFileSync(configFile, patched, { mode: 0o600 }) }
+    const raw = fs.readFileSync(configFile, 'utf8')
+    const patched = stripWireGuardDns(raw)
+    if (patched !== raw) fs.writeFileSync(configFile, patched, { mode: 0o600 })
   } catch (_) {}
+}
+
+async function quickTunnelUpWithDnsRetry(
+  configFile: string,
+  attemptUp: () => ReturnType<typeof sendToHelper>,
+  runtimeLabel: string
+): Promise<{ success: boolean; error?: string }> {
+  let response = await attemptUp()
+  if (response.status === 'ok') {
+    startTrafficPolling()
+    return { success: true }
+  }
+
+  if (response.isDnsError !== true) {
+    return {
+      success: false,
+      error: response.error ?? `${runtimeLabel} failed to start`
+    }
+  }
+
+  mainWindow?.webContents.send('vpn:dns-retry-ask')
+  const approved = await new Promise<boolean>((resolve) => {
+    const guard = setTimeout(() => resolve(false), 60_000)
+    ipcMain.once('vpn:dns-retry-approved', () => {
+      clearTimeout(guard)
+      resolve(true)
+    })
+  })
+
+  if (!approved) {
+    return {
+      success: false,
+      error: response.error ?? `${runtimeLabel} DNS retry was cancelled`
+    }
+  }
+
+  patchConfigFileForDns(configFile)
+  response = await attemptUp()
+  if (response.status === 'ok') {
+    startTrafficPolling()
+    mainWindow?.webContents.send('vpn:warning', { message: 'Connected without DNS injection.' })
+    return { success: true }
+  }
+
+  return {
+    success: false,
+    error: response.error ?? `${runtimeLabel} failed after DNS retry`
+  }
 }
 
 /**
@@ -2331,50 +2380,7 @@ async function wgQuickUp(configFile: string): Promise<{ success: boolean; error?
 
   const attemptUp = () => sendToHelper({ command: 'wg-up', configFile, wgPath }, TIMEOUT)
 
-  // First attempt.
-  let res = await attemptUp()
-
-  if (res.status === 'ok') {
-    startTrafficPolling()
-    return { success: true }
-  }
-
-  // DNS retry path — Linux / macOS only.
-  if (res.isDnsError === true) {
-    // Tell the renderer to show the DNS retry dialog.
-    mainWindow?.webContents.send('vpn:dns-retry-ask')
-
-    // Wait for the user to approve or cancel.
-    const approved = await new Promise<boolean>((resolve) => {
-      // Resolve true when the user approves.
-      ipcMain.once('vpn:dns-retry-approved', () => resolve(true))
-      // Resolve false if the window is closed or a timeout elapses (60 s).
-      const guard = setTimeout(() => resolve(false), 60_000)
-      ipcMain.once('vpn:dns-retry-approved', () => clearTimeout(guard))
-    })
-
-    if (!approved) {
-      return { success: false, error: res.error ?? 'DNS error — user cancelled retry.' }
-    }
-
-    // Patch the config file in place — removes DNS = lines from [Interface].
-    // patchConfigFileForDns() is a plain fs.writeFileSync call, no privileges needed.
-    patchConfigFileForDns(configFile)
-
-    // Second attempt with the patched config (same path, new content).
-    res = await attemptUp()
-
-    if (res.status === 'ok') {
-      startTrafficPolling()
-      mainWindow?.webContents.send('vpn:warning', { message: 'Connected without DNS injection.' })
-      return { success: true }
-    }
-
-    return { success: false, error: res.error ?? 'wg-quick up failed after DNS patch.' }
-  }
-
-  // Any other error.
-  return { success: false, error: res.error ?? 'wg-up failed.' }
+  return quickTunnelUpWithDnsRetry(configFile, attemptUp, 'WireGuard')
 }
 
 /**

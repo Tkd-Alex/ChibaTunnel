@@ -16,6 +16,7 @@ import {
   applyWireGuardSplitRoutes,
   hardenV2RayConfig,
   hardenXrayConfig,
+  stripWireGuardDns,
   V2RayProtocolAdapter,
   XrayProtocolAdapter,
   type V2RayConfig
@@ -370,4 +371,24 @@ test('preserves every AmneziaWG obfuscation field in the prepared config', async
   assert.match(config, /^AllowedIPs = 10\.0\.0\.0\/8$/m)
   await adapter.cleanup(client)
   assert.equal(fs.existsSync(prepared.configPaths[0]), false)
+})
+
+test('strips DNS without changing AmneziaWG obfuscation fields', () => {
+  const config = [
+    '[Interface]',
+    'DNS = 1.1.1.1, 1.0.0.1',
+    'Jc = 7',
+    'S1 = 10',
+    'H1 = 1001',
+    '',
+    '[Peer]',
+    'AllowedIPs = 0.0.0.0/0'
+  ].join('\n')
+
+  const stripped = stripWireGuardDns(config)
+  assert.doesNotMatch(stripped, /^DNS\s*=/m)
+  assert.match(stripped, /^Jc = 7$/m)
+  assert.match(stripped, /^S1 = 10$/m)
+  assert.match(stripped, /^H1 = 1001$/m)
+  assert.match(stripped, /^AllowedIPs = 0\.0\.0\.0\/0$/m)
 })

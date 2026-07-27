@@ -53,6 +53,10 @@ export function applyWireGuardSplitRoutes(config: string, routes?: string): stri
   )
 }
 
+export function stripWireGuardDns(config: string): string {
+  return config.replace(/^DNS\s*=.*$/gm, '# DNS= stripped')
+}
+
 export class WireGuardProtocolAdapter
 implements ProtocolAdapter<Wireguard, WireGuardHandshakeData> {
   readonly descriptor = getProtocolDescriptor('wireguard')
