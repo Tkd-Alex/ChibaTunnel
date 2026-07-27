@@ -30,7 +30,7 @@ jobs:
       - name: Prepare packaging resources
         run: |
           npm run build:helper:linux
-          mkdir -p build/bins/linux
+          node scripts/materialize-binary-runtimes.mjs linux
 
       - name: Build test (Linux AppImage)
         run: npx electron-builder --linux AppImage --publish never
