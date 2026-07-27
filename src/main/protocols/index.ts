@@ -1,2 +1,4 @@
 export * from './types'
 export * from './lifecycle'
+export * from './sdk-client'
+export * from './hysteria2-config'
