@@ -10,5 +10,5 @@
     "types": ["node"],
     "skipLibCheck": true
   },
-  "include": ["src/main/deep-link.ts", "tests/**/*.ts"]
+  "include": ["src/main/deep-link.ts", "src/shared/**/*.ts", "tests/**/*.ts"]
 }
