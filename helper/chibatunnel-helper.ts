@@ -164,6 +164,7 @@ const AMNEZIAWG_TUNNEL_SPEC: QuickTunnelSpec = {
 // ---------------------------------------------------------------------------
 
 let activeTun2Socks: ChildProcess | null = null
+let activeHysteria2: ChildProcess | null = null
 let activeServerIp:  string | null = null
 let killSwitchActive = false
 
@@ -1201,6 +1202,101 @@ function handleWgDown(socket: net.Socket, payload: WgDownPayload): void {
   handleQuickTunnelDown(socket, payload, WIREGUARD_TUNNEL_SPEC)
 }
 
+async function handleHysteria2Start(
+  socket: net.Socket,
+  payload: Extract<HelperCommand, { command: 'hysteria2-start' }>
+): Promise<void> {
+  if (activeHysteria2 && activeHysteria2.exitCode === null) {
+    sendResponse(socket, { status: 'error', error: 'Hysteria2 is already running' })
+    return
+  }
+
+  const config = fs.readFileSync(payload.configFile, 'utf8')
+  const interfaceMatch = /^  name: "([A-Za-z0-9._-]{1,15})"$/m.exec(config)
+  if (!interfaceMatch) {
+    sendResponse(socket, {
+      status: 'error',
+      error: 'Hysteria2 TUN interface is missing from the configuration'
+    })
+    return
+  }
+  const interfaceName = interfaceMatch[1]
+  const child = spawn(
+    payload.hysteria2Path,
+    ['client', '-c', payload.configFile],
+    { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }
+  )
+  activeHysteria2 = child
+
+  // Drain output without logging it: Hysteria2 configuration contains
+  // authentication and obfuscation secrets which must never reach logs.
+  child.stdout?.resume()
+  child.stderr?.resume()
+  child.once('close', () => {
+    if (activeHysteria2 === child) activeHysteria2 = null
+  })
+
+  const startup = await new Promise<HelperResponse>(resolve => {
+    let settled = false
+    let poll: NodeJS.Timeout | null = null
+    const finish = (response: HelperResponse) => {
+      if (settled) return
+      settled = true
+      if (poll) clearInterval(poll)
+      resolve(response)
+    }
+    child.once('error', () => {
+      if (activeHysteria2 === child) activeHysteria2 = null
+      finish({ status: 'error', error: 'Hysteria2 failed to start' })
+    })
+    child.once('exit', code => {
+      if (activeHysteria2 === child) activeHysteria2 = null
+      finish({ status: 'error', error: `Hysteria2 exited during startup (${code ?? 'unknown'})` })
+    })
+    const deadline = Date.now() + 15_000
+    poll = setInterval(() => {
+      let interfaceReady = false
+      try {
+        if (PLATFORM === 'win32') {
+          execFileSync('netsh.exe', ['interface', 'show', 'interface', `name=${interfaceName}`], { stdio: 'ignore' })
+        } else if (PLATFORM === 'darwin') {
+          execFileSync('ifconfig', [interfaceName], { stdio: 'ignore' })
+        } else {
+          execFileSync('ip', ['link', 'show', interfaceName], { stdio: 'ignore' })
+        }
+        interfaceReady = true
+      } catch {
+        interfaceReady = false
+      }
+      if (interfaceReady && child.exitCode === null && child.pid) {
+        finish({ status: 'ok', pid: child.pid })
+      } else if (Date.now() >= deadline) {
+        finish({
+          status: 'error',
+          error: 'Hysteria2 started but its TUN interface did not appear'
+        })
+      }
+    }, 250)
+    poll.unref()
+  })
+
+  if (startup.status !== 'ok' && child.exitCode === null) child.kill('SIGTERM')
+  sendResponse(socket, startup)
+}
+
+function handleHysteria2Stop(socket: net.Socket): void {
+  const child = activeHysteria2
+  activeHysteria2 = null
+  if (child && child.exitCode === null) {
+    try {
+      child.kill('SIGTERM')
+    } catch {
+      // Idempotent teardown: an already-exited process is considered stopped.
+    }
+  }
+  sendResponse(socket, { status: 'ok' })
+}
+
 // ---------------------------------------------------------------------------
 // Command dispatcher
 // ---------------------------------------------------------------------------
@@ -1261,6 +1357,19 @@ function processCommand(socket: net.Socket, command: HelperCommand): void {
       )
       break
     }
+
+    case 'hysteria2-start': {
+      handleHysteria2Start(socket, command)
+        .catch(() => sendResponse(socket, {
+          status: 'error',
+          error: 'Unexpected Hysteria2 startup failure'
+        }))
+      break
+    }
+
+    case 'hysteria2-stop':
+      handleHysteria2Stop(socket)
+      break
   }
 }
 
@@ -1364,6 +1473,11 @@ function shutdown(server: net.Server, reason: string): void {
   if (activeTun2Socks) {
     try { activeTun2Socks.kill() } catch { /* best effort */ }
     activeTun2Socks = null
+  }
+
+  if (activeHysteria2) {
+    try { activeHysteria2.kill('SIGTERM') } catch { /* best effort */ }
+    activeHysteria2 = null
   }
 
   if (activeServerIp) {

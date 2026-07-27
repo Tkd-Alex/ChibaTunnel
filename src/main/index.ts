@@ -9,6 +9,7 @@ import {
   handshake,
   NodeEventCreateSession,
   AmneziaWG,
+  Hysteria2,
   V2Ray,
   Wireguard,
   Xray,
@@ -41,6 +42,7 @@ import * as path from 'path'
 import * as os from 'os'
 import * as dns from 'dns'
 import * as crypto from 'crypto'
+import { findFreePorts } from 'find-free-ports'
 
 import { pingHelper, sendToHelper } from './helper-client'
 import { isValidNodeAddress, parseDeepLink } from './deep-link'
@@ -48,6 +50,7 @@ import { resolveBinary } from './binaries'
 import {
   decodeHandshakeData,
   AmneziaWGProtocolAdapter,
+  Hysteria2ProtocolAdapter,
   preflightProtocol,
   ProtocolConnectionManager,
   V2RayProtocolAdapter,
@@ -219,6 +222,9 @@ let activeAwgInstance:  AmneziaWG | null = null
 let activeAwgConfigFile: string | null   = null
 let activeV2Ray:        V2Ray | null     = null
 let activeXray:         Xray | null      = null
+let activeHysteria2:    Hysteria2 | null = null
+let activeHysteria2Process: ChildProcess | null = null
+let activeHysteria2Pid: number | null = null
 let activeTun2Socks:    number | null = null
 let activeTunInterface: string | null    = null
 let activeV2RayServerIp: string | null    = null
@@ -1149,7 +1155,14 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('node:connectV2ray', async (_e, { transparent }: { transparent?: boolean } = {}) => {
     const active = protocolConnectionManager.active
-    if (!active || (active.protocol !== 'v2ray' && active.protocol !== 'xray')) {
+    if (
+      !active
+      || (
+        active.protocol !== 'v2ray'
+        && active.protocol !== 'xray'
+        && active.protocol !== 'hysteria2'
+      )
+    ) {
       return { success: false, error: 'No prepared proxy session' }
     }
     try {
@@ -1326,19 +1339,25 @@ function registerIpcHandlers(): void {
         .filter((ib: any) => ib.protocol !== 'dokodemo-door')
         .map((ib: any) => ({ protocol: ib.protocol, listen: ib.listen, port: ib.port }))
     }
+    const hysteria2FullTunnel = activeHysteria2 !== null
+      && protocolConnectionManager.active?.mode === 'full-tunnel'
+    const hysteria2Interface = hysteria2FullTunnel
+      ? protocolConnectionManager.active?.runtime?.interfaceName ?? null
+      : null
     return {
       protocol: protocolConnectionManager.active?.protocol ?? null,
-      proxyActive: activeProxyProcess !== null,
-      proxyPid: getProxyCorePid(),
+      proxyActive: activeProxyProcess !== null
+        || (activeHysteria2Pid !== null && !hysteria2FullTunnel),
+      proxyPid: getProxyCorePid() ?? activeHysteria2Pid,
       v2rayActive: activeProxyProcess !== null,
       v2rayPid: getProxyCorePid(),
       wgActive: !!(activeWgConfigFile || activeAwgConfigFile),
       wgInterface: activeWgConfigFile || activeAwgConfigFile
         ? path.basename((activeWgConfigFile ?? activeAwgConfigFile)!, '.conf')
         : null,
-      tunActive: activeTun2Socks !== null,
-      tunPid: activeTun2Socks,
-      tunInterface: activeTunInterface,
+      tunActive: activeTun2Socks !== null || hysteria2FullTunnel,
+      tunPid: activeTun2Socks ?? (hysteria2FullTunnel ? activeHysteria2Pid : null),
+      tunInterface: activeTunInterface ?? hysteria2Interface,
       sessionId: activeSessionId,
       nodeAddress: activeNodeAddress,
       inbounds
@@ -1576,6 +1595,103 @@ function getNextAwgInterface(): string {
   return 'chibaawg9'
 }
 
+function getNextHysteria2Interface(): string {
+  for (let index = 0; index < 10; index++) {
+    const interfaceName = `chibahy${index}`
+    const result = process.platform === 'win32'
+      ? spawnSync('netsh.exe', ['interface', 'show', 'interface', `name=${interfaceName}`], { stdio: 'ignore' })
+      : process.platform === 'darwin'
+        ? spawnSync('ifconfig', [interfaceName], { stdio: 'ignore' })
+        : spawnSync('ip', ['link', 'show', interfaceName], { stdio: 'ignore' })
+    if (result.status !== 0) return interfaceName
+  }
+  return 'chibahy9'
+}
+
+async function allocateHysteria2SocksPort(): Promise<number> {
+  const [port] = await findFreePorts(1, { startPort: 1082, endPort: 1182 })
+  if (!port) throw new Error('No local port is available for Hysteria2')
+  return port
+}
+
+async function startLocalHysteria2(configFile: string): Promise<{ pid: number }> {
+  if (activeHysteria2Process) throw new Error('Hysteria2 is already running')
+  const binaryPath = resolveRuntimeBinaryPath('hysteria2')
+  const child = spawn(binaryPath, ['client', '-c', configFile], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    detached: false,
+    windowsHide: true
+  })
+
+  // Drain output without logging authentication or obfuscation secrets.
+  child.stdout?.resume()
+  child.stderr?.resume()
+  child.on('exit', (code, signal) => {
+    const wasActive = activeHysteria2Process === child
+    if (wasActive) {
+      activeHysteria2Process = null
+      activeHysteria2Pid = null
+    }
+    console.warn('[Hysteria2] Local process exited.', { code, signal, pid: child.pid })
+    if (
+      wasActive
+      && wasConnected
+      && protocolConnectionManager.active?.protocol === 'hysteria2'
+    ) {
+      mainWindow?.webContents.send('vpn:disconnected', { reason: 'Hysteria2 exited' })
+      void protocolConnectionManager.disconnect()
+        .catch(err => console.warn('[Hysteria2] Unexpected-exit cleanup failed:', err))
+        .finally(scheduleReconnect)
+    }
+  })
+
+  await new Promise<void>((resolve, reject) => {
+    const earlyWindow = setTimeout(resolve, 1_000)
+    child.once('error', () => {
+      clearTimeout(earlyWindow)
+      reject(new Error('Hysteria2 failed to start'))
+    })
+    child.once('exit', code => {
+      clearTimeout(earlyWindow)
+      reject(new Error(`Hysteria2 exited during startup (${code ?? 'unknown'})`))
+    })
+  })
+  if (!child.pid) throw new Error('Hysteria2 started without a PID')
+  activeHysteria2Process = child
+  activeHysteria2Pid = child.pid
+  return { pid: child.pid }
+}
+
+async function stopLocalHysteria2(): Promise<void> {
+  const child = activeHysteria2Process
+  activeHysteria2Process = null
+  activeHysteria2Pid = null
+  if (child?.exitCode === null) child.kill('SIGTERM')
+}
+
+async function startFullHysteria2(
+  configFile: string
+): Promise<{ pid: number; interfaceName?: string }> {
+  const response = await sendToHelper({
+    command: 'hysteria2-start',
+    configFile,
+    hysteria2Path: resolveRuntimeBinaryPath('hysteria2')
+  }, 30_000)
+  if (response.status !== 'ok' || !response.pid) {
+    throw new Error(response.error ?? 'Hysteria2 full tunnel failed to start')
+  }
+  activeHysteria2Pid = response.pid
+  return { pid: response.pid }
+}
+
+async function stopFullHysteria2(): Promise<void> {
+  const response = await sendToHelper({ command: 'hysteria2-stop' }, 15_000)
+  activeHysteria2Pid = null
+  if (response.status !== 'ok') {
+    throw new Error(response.error ?? 'Hysteria2 full tunnel failed to stop')
+  }
+}
+
 async function awgQuickUp(configFile: string): Promise<{ success: boolean; error?: string }> {
   const runtimeId: BinaryId = process.platform === 'win32' ? 'amneziawg' : 'awg-quick'
   const response = await sendToHelper({
@@ -1605,7 +1721,7 @@ async function awgQuickDown(configFile: string): Promise<void> {
 }
 
 function createProtocolAdapter(
-  protocol: 'wireguard' | 'v2ray' | 'xray' | 'amneziawg',
+  protocol: 'wireguard' | 'v2ray' | 'xray' | 'amneziawg' | 'hysteria2',
   settings: AppSettings
 ): ProtocolAdapter<unknown, unknown> {
   const preflight = (context: ProtocolContext) =>
@@ -1639,6 +1755,18 @@ function createProtocolAdapter(
         splitRoutes: settings.splitTunnel ? settings.splitRoutes : undefined
       }
     )
+  }
+
+  if (protocol === 'hysteria2') {
+    return new Hysteria2ProtocolAdapter({
+      preflight,
+      allocateSocksPort: allocateHysteria2SocksPort,
+      nextInterfaceName: getNextHysteria2Interface,
+      startLocal: startLocalHysteria2,
+      stopLocal: stopLocalHysteria2,
+      startFull: startFullHysteria2,
+      stopFull: stopFullHysteria2
+    })
   }
 
   const proxyDependencies = {
@@ -1817,6 +1945,7 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
       && protocol !== 'v2ray'
       && protocol !== 'xray'
       && protocol !== 'amneziawg'
+      && protocol !== 'hysteria2'
     ) {
       return { success: false, error: `Protocol adapter not implemented yet: ${protocol}` }
     }
@@ -1829,6 +1958,7 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
       activeAwgInstance = null
       activeV2Ray = null
       activeXray = null
+      activeHysteria2 = null
     }
 
     const adapter = createProtocolAdapter(protocol, settings)
@@ -1882,6 +2012,21 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
       })
     }
 
+    if (protocol === 'hysteria2') {
+      activeHysteria2 = protocolConnectionManager.active?.sdkClient as Hysteria2
+      const socksPort = prepared.proxy?.socksPort
+      return finalize({
+        success: true,
+        vpnType: protocol,
+        sessionId: activeSessionId,
+        shareLinks: [],
+        qrCodes: [],
+        inbounds: socksPort
+          ? [{ protocol: 'socks5', listen: '127.0.0.1', port: socksPort }]
+          : []
+      })
+    }
+
     const proxyClient = protocolConnectionManager.active?.sdkClient as V2Ray | Xray
     const shareLinks = protocol === 'v2ray'
       ? (proxyClient as V2Ray).buildShareLinks(`chibatunnel-${nodeAddress.slice(-8)}`)
@@ -1900,6 +2045,7 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
     activeAwgInstance = null
     activeV2Ray = null
     activeXray = null
+    activeHysteria2 = null
     return { success: false, error: extractError(err), details: err?.response?.data }
   }
 }
@@ -1929,7 +2075,24 @@ async function getTrafficStats(): Promise<{ rx: number; tx: number; source: stri
     } catch { }
   }
 
-  // 2. tun2socks Stats (TUN fallback)
+  // 2. Hysteria2 native TUN stats
+  if (
+    activeHysteria2
+    && protocolConnectionManager.active?.mode === 'full-tunnel'
+    && protocolConnectionManager.active.runtime?.interfaceName
+    && process.platform === 'linux'
+  ) {
+    const interfaceName = protocolConnectionManager.active.runtime.interfaceName
+    try {
+      const rx = parseInt(fs.readFileSync(`/sys/class/net/${interfaceName}/statistics/rx_bytes`, 'utf8').trim()) || 0
+      const tx = parseInt(fs.readFileSync(`/sys/class/net/${interfaceName}/statistics/tx_bytes`, 'utf8').trim()) || 0
+      return { rx, tx, source: 'hysteria2' }
+    } catch {
+      // The helper may still be creating the native TUN interface.
+    }
+  }
+
+  // 3. tun2socks Stats (TUN fallback)
   if (activeTunInterface) {
     if (process.platform === 'linux') {
       try {
@@ -1950,7 +2113,7 @@ async function getTrafficStats(): Promise<{ rx: number; tx: number; source: stri
     }
   }
 
-  // 3. V2Ray / Xray API Stats
+  // 4. V2Ray / Xray API Stats
   const activeProxyClient = activeV2Ray ?? activeXray
   if (activeProxyClient?.config?.inbounds) {
     try {
@@ -2421,12 +2584,14 @@ export function checkBinaries() {
   const v2Name  = isWin ? 'v2ray.exe'     : 'v2ray'
   const xrayName = isWin ? 'xray.exe' : 'xray'
   const awgName = isWin ? 'amneziawg.exe' : 'awg-quick'
+  const hysteria2Name = isWin ? 'hysteria2.exe' : 'hysteria2'
   const t2sName = isWin ? 'tun2socks.exe' : 'tun2socks'
 
   const wgPath  = find(wgName)
   const v2Path  = find(v2Name)
   const xrayPath = find(xrayName)
   const awgPath = find(awgName)
+  const hysteria2Path = find(hysteria2Name)
   const t2sPath = find(t2sName)
 
   // -------------------------------------------------------------------------
@@ -2543,13 +2708,16 @@ export function checkBinaries() {
     // false means geo-based routing rules won't work, but basic proxy will.
     geoDataOk,
 
-    // Xray and AmneziaWG
+    // Xray, AmneziaWG and Hysteria2
     xray:           !!xrayPath,
     xrayPath,
     xrayHash:       xrayPath ? getHash(xrayPath) : null,
     amneziawg:      !!awgPath,
     amneziawgPath:  awgPath,
     amneziawgHash:  awgPath ? getHash(awgPath) : null,
+    hysteria2:      !!hysteria2Path,
+    hysteria2Path,
+    hysteria2Hash:  hysteria2Path ? getHash(hysteria2Path) : null,
 
     // tun2socks
     tun2socks:      !!t2sPath && (isWin ? wintunFound : true),
@@ -2609,11 +2777,15 @@ async function killActiveConnections(sendEndSession = true) {
       }
     }
     if (activeV2Ray || activeXray) killProxyCore()
+    if (activeHysteria2Process) await stopLocalHysteria2()
+    else if (activeHysteria2Pid !== null) await stopFullHysteria2()
     if (activeWgConfigFile) await wgQuickDown(activeWgConfigFile)
     if (activeAwgConfigFile) await awgQuickDown(activeAwgConfigFile)
   }
   activeV2Ray = null
   activeXray = null
+  activeHysteria2 = null
+  activeHysteria2Pid = null
   activeWgConfigFile = null
   activeWgInstance = null
   activeAwgConfigFile = null

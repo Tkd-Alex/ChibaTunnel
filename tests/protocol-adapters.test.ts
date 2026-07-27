@@ -3,11 +3,13 @@ import test from 'node:test'
 import fs from 'node:fs'
 import {
   AmneziaWG,
+  Hysteria2,
   V2Ray,
   Xray
 } from '@sentinel-official/sentinel-js-sdk'
 import {
   AmneziaWGProtocolAdapter,
+  Hysteria2ProtocolAdapter,
   applyWireGuardSplitRoutes,
   hardenV2RayConfig,
   hardenXrayConfig,
@@ -38,6 +40,109 @@ test('applies only validated CIDR routes to WireGuard configurations', () => {
     () => applyWireGuardSplitRoutes(config, '203.0.113.0/99'),
     /Invalid split-tunnel route/
   )
+})
+
+const hysteriaHandshake = {
+  metadata: [{
+    port: 443,
+    tls_pin: 'ab'.repeat(32),
+    obfs_password: 'do-not-log-this-secret'
+  }]
+}
+
+test('builds Hysteria2 local proxy config without a privileged TUN section', async () => {
+  const calls: string[] = []
+  const adapter = new Hysteria2ProtocolAdapter({
+    async preflight() {
+      return { ok: true, errors: [], warnings: [] }
+    },
+    async allocateSocksPort() {
+      return 1082
+    },
+    nextInterfaceName() {
+      return 'chibahy0'
+    },
+    async startLocal() {
+      calls.push('start-local')
+      return { pid: 789 }
+    },
+    async stopLocal() {
+      calls.push('stop-local')
+    },
+    async startFull() {
+      throw new Error('unexpected full-tunnel start')
+    },
+    async stopFull() {
+      throw new Error('unexpected full-tunnel stop')
+    }
+  })
+  const client = new Hysteria2()
+  const context = {
+    nodeAddress: 'sentnode1test',
+    remoteAddress: 'https://203.0.113.40:12345',
+    nodeAddresses: ['203.0.113.40'],
+    sessionId: '45',
+    mode: 'local-proxy' as const
+  }
+  const prepared = await adapter.parseHandshake(client, hysteriaHandshake, context)
+  const config = fs.readFileSync(prepared.localConfigFile, 'utf8')
+
+  assert.doesNotMatch(config, /^tun:$/m)
+  assert.match(config, /^socks5:$/m)
+  assert.match(config, /^  listen: "127\.0\.0\.1:1082"$/m)
+  const runtime = await adapter.connect(client, prepared, context)
+  assert.deepEqual(runtime.proxy, { socksPort: 1082, transparent: false })
+  await adapter.disconnect(runtime)
+  assert.deepEqual(calls, ['start-local', 'stop-local'])
+  await adapter.cleanup(client, runtime)
+  assert.equal(fs.existsSync(prepared.localConfigFile), false)
+})
+
+test('keeps Hysteria2 endpoint excluded from native full-tunnel routes', async () => {
+  const calls: string[] = []
+  const adapter = new Hysteria2ProtocolAdapter({
+    async preflight() {
+      return { ok: true, errors: [], warnings: [] }
+    },
+    async allocateSocksPort() {
+      return 1083
+    },
+    nextInterfaceName() {
+      return 'chibahy1'
+    },
+    async startLocal() {
+      throw new Error('unexpected local start')
+    },
+    async stopLocal() {
+      throw new Error('unexpected local stop')
+    },
+    async startFull() {
+      calls.push('start-full')
+      return { pid: 790, interfaceName: 'chibahy1' }
+    },
+    async stopFull() {
+      calls.push('stop-full')
+    }
+  })
+  const client = new Hysteria2()
+  const context = {
+    nodeAddress: 'sentnode1test',
+    remoteAddress: 'https://203.0.113.40:12345',
+    nodeAddresses: ['203.0.113.40'],
+    sessionId: '46',
+    mode: 'full-tunnel' as const
+  }
+  const prepared = await adapter.parseHandshake(client, hysteriaHandshake, context)
+  const config = fs.readFileSync(prepared.fullConfigFile, 'utf8')
+
+  assert.match(config, /^tun:$/m)
+  assert.match(config, /^  name: "chibahy1"$/m)
+  assert.match(config, /^      - "203\.0\.113\.40\/32"$/m)
+  const runtime = await adapter.connect(client, prepared, context)
+  assert.equal(runtime.interfaceName, 'chibahy1')
+  await adapter.disconnect(runtime)
+  assert.deepEqual(calls, ['start-full', 'stop-full'])
+  await adapter.cleanup(client, runtime)
 })
 
 test('disables V2Ray sniffing and enables observatory health checks safely', () => {

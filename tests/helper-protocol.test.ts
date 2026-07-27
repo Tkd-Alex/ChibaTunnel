@@ -35,6 +35,18 @@ test('accepts typed helper requests', () => {
     configFile: '/tmp/chibatunnel-awg-123/chibaawg0.conf',
     awgPath: '/usr/bin/awg-quick'
   })
+  assert.deepEqual(parseHelperCommand({
+    command: 'hysteria2-start',
+    configFile: '/tmp/chibatunnel-hysteria2-123/client.yaml',
+    hysteria2Path: '/usr/bin/hysteria2'
+  }), {
+    command: 'hysteria2-start',
+    configFile: '/tmp/chibatunnel-hysteria2-123/client.yaml',
+    hysteria2Path: '/usr/bin/hysteria2'
+  })
+  assert.deepEqual(parseHelperCommand({ command: 'hysteria2-stop' }), {
+    command: 'hysteria2-stop'
+  })
 })
 
 test('rejects unknown commands and unexpected fields', () => {
@@ -68,6 +80,11 @@ test('rejects command injection and path traversal inputs', () => {
     command: 'awg-up',
     configFile: '/tmp/chibatunnel-awg-123/chibaawg0.conf',
     awgPath: '/bin/sh'
+  }), /allowlisted/)
+  assert.throws(() => parseHelperCommand({
+    command: 'hysteria2-start',
+    configFile: '/tmp/chibatunnel-hysteria2-123/client.yaml',
+    hysteria2Path: '/bin/sh'
   }), /allowlisted/)
 })
 

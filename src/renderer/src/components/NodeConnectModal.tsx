@@ -59,9 +59,11 @@ function ConnectedDetails({ conn, onDisconnect }: { conn: ConnectionState; onDis
   const [sys, setSys] = useState<any>(null)
   const [showProxyHowto, setShowProxyHowto] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
-  const isFullTunnel = conn.vpnType === 'wireguard' || conn.vpnType === 'amneziawg'
+  const isFullTunnel = conn.vpnType === 'wireguard'
+    || conn.vpnType === 'amneziawg'
+    || (conn.vpnType === 'hysteria2' && conn.isTransparent)
   const protocolLabel = conn.vpnType ? getProtocolDescriptor(conn.vpnType).label : 'VPN'
-  const color  = isFullTunnel ? 'var(--purple)' : 'var(--green)'
+  const color = isFullTunnel ? 'var(--purple)' : 'var(--green)'
 
   const activeInbounds = sys?.inbounds || conn.inbounds
   const isLoadingProxy = !isFullTunnel && !sys?.tunActive && (!activeInbounds || activeInbounds.length === 0)
@@ -80,7 +82,10 @@ function ConnectedDetails({ conn, onDisconnect }: { conn: ConnectionState; onDis
           {isFullTunnel ? (
             <>
               <div className="cd-row">
-                <span>{t('node_modal.interface')}</span><span style={{ color: 'var(--text-1)' }}><code>{sys?.wgInterface || 'chibatunnel0'}</code></span>
+                <span>{t('node_modal.interface')}</span>
+                <span style={{ color: 'var(--text-1)' }}>
+                  <code>{sys?.tunInterface || sys?.wgInterface || (conn.vpnType === 'hysteria2' ? 'chibahy0' : 'chibatunnel0')}</code>
+                </span>
               </div>
               <div className="cd-row">
                 <span>{t('node_modal.driver')}</span><span style={{ color: 'var(--text-2)', fontSize: 10 }}>{protocolLabel}</span>
@@ -619,6 +624,8 @@ export default function NodeConnectModal({
   }, [onClose])
 
   const donationAmount = (parseFloat(formatUdvpnPrice(node.gigabytePrices)) * conn.amount * 0.1).toFixed(2)
+  const proxyFullTunnelAvailable = conn.vpnType === 'hysteria2'
+    || !!binaries?.tun2socksPath
 
   const handleWgConnect = useCallback(async () => {
     setTunnelBusy(true)
@@ -636,7 +643,7 @@ export default function NodeConnectModal({
     try {
       const res = await window.api.connectProxy({ transparent: !!isTransparent })
       if (!res.success) { setConn(s => ({ ...s, step: 'error', error: res.error ?? 'Failed' })); return }
-      const next = { ...conn, step: 'connected' as const }
+      const next = { ...conn, isTransparent: !!isTransparent, step: 'connected' as const }
       setConn(next); onConnected(next)
     } finally { setTunnelBusy(false) }
   }, [conn, onConnected])
@@ -956,7 +963,7 @@ export default function NodeConnectModal({
                         className={`mode-card recommended ${tunnelBusy ? 'disabled' : ''}`}
                         onClick={() => {
                           if (tunnelBusy) return;
-                          if (!binaries?.tun2socksPath) {
+                          if (!proxyFullTunnelAvailable) {
                             onOpenBinaryGuide?.();
                           } else {
                             handleV2RayConnect(true);
@@ -969,7 +976,7 @@ export default function NodeConnectModal({
                         <div className="mode-card-content">
                           <div className="mode-card-header">
                             <span className="mode-card-title">{t('node_modal.mode_full_title')}</span>
-                            {binaries?.tun2socksPath ? (
+                            {proxyFullTunnelAvailable ? (
                               <span className="tag tag-green">{t('node_modal.mode_full_badge')}</span>
                             ) : (
                               <span className="tag tag-yellow" style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><AlertTriangle size={8} /> {t('node_modal.mode_full_missing_badge')}</span>

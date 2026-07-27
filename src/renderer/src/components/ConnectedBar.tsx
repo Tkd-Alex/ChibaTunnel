@@ -18,7 +18,9 @@ export default function ConnectedBar({ connection, reconnectMsg, onDisconnect, o
   const { node, vpnType, sessionId, inbounds } = connection
   const [showConfirm, setShowConfirm] = useState(false)
   const protocolLabel = vpnType ? getProtocolDescriptor(vpnType).label : 'VPN'
-  const isProxy = vpnType === 'v2ray' || vpnType === 'xray' || vpnType === 'hysteria2'
+  const isProxy = vpnType === 'v2ray'
+    || vpnType === 'xray'
+    || (vpnType === 'hysteria2' && !connection.isTransparent)
 
   return (
     <div className="connected-panel">

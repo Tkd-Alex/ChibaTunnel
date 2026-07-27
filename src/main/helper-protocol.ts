@@ -16,6 +16,8 @@ export type HelperCommand =
   | { command: 'wg-down'; configFile: string; wgPath?: string }
   | { command: 'awg-up'; configFile: string; awgPath?: string }
   | { command: 'awg-down'; configFile: string; awgPath?: string }
+  | { command: 'hysteria2-start'; configFile: string; hysteria2Path: string }
+  | { command: 'hysteria2-stop' }
 
 export interface HelperResponse {
   status: 'ok' | 'error' | 'pong'
@@ -128,6 +130,23 @@ export function parseHelperCommand(value: unknown): HelperCommand {
         : runtimeExecutable(command.awgPath, ['amneziawg.exe', 'awg-quick'], 'awgPath')
       return { command: command.command, configFile, awgPath }
     }
+
+    case 'hysteria2-start': {
+      assertAllowedKeys(command, ['command', 'configFile', 'hysteria2Path'])
+      return {
+        command: 'hysteria2-start',
+        configFile: runtimeConfigPath(command.configFile),
+        hysteria2Path: runtimeExecutable(
+          command.hysteria2Path,
+          ['hysteria2', 'hysteria2.exe'],
+          'hysteria2Path'
+        )
+      }
+    }
+
+    case 'hysteria2-stop':
+      assertAllowedKeys(command, ['command'])
+      return { command: 'hysteria2-stop' }
 
     default:
       throw new TypeError(`Unknown helper command: ${command.command}`)
