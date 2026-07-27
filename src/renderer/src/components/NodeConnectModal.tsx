@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import TrafficStatsWidget from './TrafficStats'
 import ConfirmModal from './ConfirmModal'
+import { getProtocolDescriptor } from '../../../shared/protocols'
 
 // ── UsageProgress helper ──────────────────────────────────────────────────
 function UsageProgress({ session }: { session: any }) {
@@ -58,11 +59,12 @@ function ConnectedDetails({ conn, onDisconnect }: { conn: ConnectionState; onDis
   const [sys, setSys] = useState<any>(null)
   const [showProxyHowto, setShowProxyHowto] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
-  const isWg   = conn.vpnType === 'wireguard'
-  const color  = isWg ? 'var(--purple)' : 'var(--green)'
+  const isFullTunnel = conn.vpnType === 'wireguard' || conn.vpnType === 'amneziawg'
+  const protocolLabel = conn.vpnType ? getProtocolDescriptor(conn.vpnType).label : 'VPN'
+  const color  = isFullTunnel ? 'var(--purple)' : 'var(--green)'
 
   const activeInbounds = sys?.inbounds || conn.inbounds
-  const isLoadingProxy = !isWg && !sys?.tunActive && (!activeInbounds || activeInbounds.length === 0)
+  const isLoadingProxy = !isFullTunnel && !sys?.tunActive && (!activeInbounds || activeInbounds.length === 0)
 
   useEffect(() => {
     window.api.getVpnStatus().then(setSys)
@@ -75,20 +77,20 @@ function ConnectedDetails({ conn, onDisconnect }: { conn: ConnectionState; onDis
       <div className="cd-section">
         <div className="cd-section-label">{t('node_modal.system_processes')}</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {isWg ? (
+          {isFullTunnel ? (
             <>
               <div className="cd-row">
                 <span>{t('node_modal.interface')}</span><span style={{ color: 'var(--text-1)' }}><code>{sys?.wgInterface || 'chibatunnel0'}</code></span>
               </div>
               <div className="cd-row">
-                <span>{t('node_modal.driver')}</span><span style={{ color: 'var(--text-2)', fontSize: 10 }}>WireGuard (Kernel)</span>
+                <span>{t('node_modal.driver')}</span><span style={{ color: 'var(--text-2)', fontSize: 10 }}>{protocolLabel}</span>
               </div>
             </>
           ) : (
             <>
               <div className="cd-row">
-                <span>{t('node_modal.v2ray_run')}</span>
-                {sys?.v2rayPid ? <span className="tag tag-green" style={{ fontSize: 9 }}>PID: {sys.v2rayPid}</span> : <span className="tag tag-red">{t('node_modal.inactive')}</span>}
+                <span>{protocolLabel}</span>
+                {sys?.proxyPid ? <span className="tag tag-green" style={{ fontSize: 9 }}>PID: {sys.proxyPid}</span> : <span className="tag tag-red">{t('node_modal.inactive')}</span>}
               </div>
               {sys?.tunActive && (
                 <>
@@ -592,12 +594,12 @@ export default function NodeConnectModal({
       }
       onRefreshData?.()
       setHasConfig(false)
-      if (res.vpnType === 'wireguard') {
+      if (res.vpnType === 'wireguard' || res.vpnType === 'amneziawg') {
         setHasConfig(true)
-        setConn(s => ({ ...s, step: 'wg-options', sessionId: res.sessionId, vpnType: 'wireguard', configStr: res.configStr, wgQrCode: res.qrCode }))
+        setConn(s => ({ ...s, step: 'full-tunnel-options', sessionId: res.sessionId, vpnType: res.vpnType, configStr: res.configStr, wgQrCode: res.qrCode }))
       } else {
         setHasConfig(true)
-        setConn(s => ({ ...s, step: 'v2ray-options', sessionId: res.sessionId, vpnType: 'v2ray', shareLinks: res.shareLinks ?? [], v2rayQrCodes: res.qrCodes ?? [], inbounds: res.inbounds ?? [] }))
+        setConn(s => ({ ...s, step: 'proxy-options', sessionId: res.sessionId, vpnType: res.vpnType, shareLinks: res.shareLinks ?? [], v2rayQrCodes: res.qrCodes ?? [], inbounds: res.inbounds ?? [] }))
       }
     } catch (e: any) {
       setConn(s => ({ ...s, step: 'error', error: e.message ?? String(e) }))
@@ -621,8 +623,8 @@ export default function NodeConnectModal({
   const handleWgConnect = useCallback(async () => {
     setTunnelBusy(true)
     try {
-      const res = await window.api.connectWireGuard()
-      if (!res.success) { setConn(s => ({ ...s, step: 'error', error: res.error ?? 'wg-quick failed' })); return }
+      const res = await window.api.connectFullTunnel()
+      if (!res.success) { setConn(s => ({ ...s, step: 'error', error: res.error ?? 'Failed' })); return }
       const next = { ...conn, step: 'connected' as const }
       setConn(next); onConnected(next)
     } finally { setTunnelBusy(false) }
@@ -632,8 +634,8 @@ export default function NodeConnectModal({
     setTunnelBusy(true)
     setConn(s => ({ ...s, isTransparent: !!isTransparent }))
     try {
-      const res = await window.api.connectV2Ray({ transparent: !!isTransparent })
-      if (!res.success) { setConn(s => ({ ...s, step: 'error', error: res.error ?? 'v2ray failed' })); return }
+      const res = await window.api.connectProxy({ transparent: !!isTransparent })
+      if (!res.success) { setConn(s => ({ ...s, step: 'error', error: res.error ?? 'Failed' })); return }
       const next = { ...conn, step: 'connected' as const }
       setConn(next); onConnected(next)
     } finally { setTunnelBusy(false) }
@@ -641,7 +643,8 @@ export default function NodeConnectModal({
 
   const handleRetryTunnel = useCallback(async () => {
     setTunnelBusy(true)
-    setConn(s => ({ ...s, step: conn.vpnType === 'wireguard' ? 'wg-options' : 'v2ray-options', error: null }))
+    const isFullTunnel = conn.vpnType === 'wireguard' || conn.vpnType === 'amneziawg'
+    setConn(s => ({ ...s, step: isFullTunnel ? 'full-tunnel-options' : 'proxy-options', error: null }))
     try {
       const res = await window.api.retryTunnel({ transparent: !!conn.isTransparent })
       if (!res.success) {
@@ -730,7 +733,7 @@ export default function NodeConnectModal({
                       conn={{
                         ...conn,
                         step: 'connected',
-                        vpnType: node.type === 1 ? 'wireguard' : 'v2ray'
+                        vpnType: conn.vpnType ?? (node.type === 1 ? 'wireguard' : 'v2ray')
                       }} 
                       onDisconnect={async () => { await window.api.disconnectNode(); onClose() }} 
                     />
@@ -863,7 +866,7 @@ export default function NodeConnectModal({
                   </>
                 )}
 
-                {conn.step === 'wg-options' && (
+                {conn.step === 'full-tunnel-options' && (
                   <>
                     <div className="session-banner" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, lineHeight: 1.4 }}><Check size={14} style={{ flexShrink: 0 }} /> {t('node_modal.handshake_success_banner', { sessionId: conn.sessionId })}</div>
                     
@@ -893,10 +896,11 @@ export default function NodeConnectModal({
                       </div>
                     </div>
 
-                    <div className="ncm-divider">{t('common.or') || 'OR'}</div>
+                    {conn.wgQrCode && <>
+                      <div className="ncm-divider">{t('common.or') || 'OR'}</div>
 
-                    {/* Section 2: QR code / another device */}
-                    <div style={{ marginTop: 12 }}>
+                      {/* Section 2: QR code / another device */}
+                      <div style={{ marginTop: 12 }}>
                       <button 
                         className="btn btn-secondary btn-sm btn-full" 
                         style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 8 }} 
@@ -935,11 +939,12 @@ export default function NodeConnectModal({
                           </div>
                         </div>
                       )}
-                    </div>
+                      </div>
+                    </>}
                   </>
                 )}
 
-                {conn.step === 'v2ray-options' && (
+                {conn.step === 'proxy-options' && (
                   <>
                     <div className="session-banner" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, lineHeight: 1.4 }}><Check size={14} style={{ flexShrink: 0 }} /> {t('node_modal.handshake_success_banner', { sessionId: conn.sessionId })}</div>
                     
@@ -1008,10 +1013,11 @@ export default function NodeConnectModal({
                       </div>
                     </div>
 
-                    <div className="ncm-divider">{t('common.or') || 'OR'}</div>
+                    {conn.v2rayQrCodes.length > 0 && <>
+                      <div className="ncm-divider">{t('common.or') || 'OR'}</div>
 
-                    {/* Section 3: QR code / another device */}
-                    <div style={{ marginTop: 12 }}>
+                      {/* Section 3: QR code / another device */}
+                      <div style={{ marginTop: 12 }}>
                       <button 
                         className="btn btn-secondary btn-sm btn-full" 
                         style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 8 }} 
@@ -1063,7 +1069,8 @@ export default function NodeConnectModal({
                           </div>
                         </div>
                       )}
-                    </div>
+                      </div>
+                    </>}
                   </>
                 )}
 
