@@ -1500,6 +1500,7 @@ function getCustomBinaryPaths(): Partial<Record<BinaryId, string>> {
     xray: pick('xray', 'xray.exe'),
     amneziawg: pick('amneziawg', 'amneziawg.exe'),
     'awg-quick': pick('awg-quick'),
+    'amneziawg-go': pick('amneziawg-go'),
     hysteria2: pick('hysteria2', 'hysteria2.exe', 'hysteria')
   }
 }
@@ -1525,6 +1526,7 @@ function isCommandAvailable(name: string): boolean {
 function isAmneziaWgSupported(): boolean {
   return process.platform !== 'linux'
     || isLinuxKernelModuleAvailable('amneziawg')
+    || fs.existsSync(path.join(getBundledBinDir(), 'amneziawg-go'))
     || isCommandAvailable('amneziawg-go')
 }
 
@@ -2685,8 +2687,9 @@ export function checkBinaries() {
   const v2Path  = find(v2Name)
   const xrayPath = find(xrayName)
   const awgPath = find(awgName)
+  const awgGoPath = isLinux ? find('amneziawg-go') : null
   const awgKernelModuleFound = !isLinux || isLinuxKernelModuleAvailable('amneziawg')
-  const awgUserspaceFound = isLinux && isCommandAvailable('amneziawg-go')
+  const awgUserspaceFound = !!awgGoPath
   const awgSystemSupportFound = !isLinux || awgKernelModuleFound || awgUserspaceFound
   const hysteria2Path = find(hysteria2Name)
   const openVPNPath = find(openVPNName)
@@ -2815,6 +2818,7 @@ export function checkBinaries() {
     amneziawgHash:  awgPath ? getHash(awgPath) : null,
     amneziawgKernelModule: awgKernelModuleFound,
     amneziawgUserspace: awgUserspaceFound,
+    amneziawgUserspacePath: awgGoPath,
     hysteria2:      !!hysteria2Path,
     hysteria2Path,
     hysteria2Hash:  hysteria2Path ? getHash(hysteria2Path) : null,

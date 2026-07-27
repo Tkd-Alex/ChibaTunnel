@@ -205,9 +205,33 @@
       "platforms": {
         "win32": { "strategy": "unsupported" },
         "linux": {
-          "strategy": "system",
+          "strategy": "bundled",
           "executable": "awg-quick",
-          "versionArgs": ["--version"]
+          "versionArgs": ["--version"],
+          "archive": {
+            "format": "zip",
+            "url": "https://github.com/amnezia-vpn/amneziawg-tools/releases/download/v1.0.20260618-2/ubuntu-22.04-amneziawg-tools.zip",
+            "sha256": "9f645117ba1aa536c8358e2c682a54cc3949e65b9efb86d8495d4343dcee99f9"
+          }
+        },
+        "darwin": { "strategy": "unsupported" }
+      }
+    },
+    "amneziawg-go": {
+      "version": "v0.2.19",
+      "license": "MIT",
+      "repository": "https://github.com/amnezia-vpn/amneziawg-go",
+      "platforms": {
+        "win32": { "strategy": "unsupported" },
+        "linux": {
+          "strategy": "bundled",
+          "executable": "amneziawg-go",
+          "versionArgs": ["--version"],
+          "archive": {
+            "format": "source-tar-gz",
+            "url": "https://codeload.github.com/amnezia-vpn/amneziawg-go/tar.gz/1cc94272ca8e9e223a5fe76382f5880f09d3c12d",
+            "sha256": "5797a9c6f889bdf91624d68ce13152568b23fc4b5c04b5d175d6580934dfd146"
+          }
         },
         "darwin": { "strategy": "unsupported" }
       }

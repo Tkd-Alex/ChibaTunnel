@@ -22,6 +22,7 @@ export const BINARY_IDS = [
   'xray',
   'amneziawg',
   'awg-quick',
+  'amneziawg-go',
   'hysteria2'
 ] as const
 

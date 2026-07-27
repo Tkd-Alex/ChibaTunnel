@@ -5,6 +5,7 @@ const manifest = JSON.parse(
 )
 const platforms = ['win32', 'linux', 'darwin']
 const sha256 = /^[0-9a-f]{64}$/
+const archiveFormats = ['zip', 'msi', 'raw', 'source-tar-gz']
 
 if (manifest.schemaVersion !== 1) throw new Error('Unsupported binary manifest schema')
 if (manifest.architecture !== 'x64') throw new Error('Only the current x64 release architecture is allowed')
@@ -23,6 +24,9 @@ for (const [id, runtime] of Object.entries(manifest.runtimes)) {
     if (!spec.executable) throw new Error(`${id}/${platform}: missing executable`)
     if (spec.strategy === 'bundled') {
       if (!spec.archive) throw new Error(`${id}/${platform}: bundled runtime has no archive`)
+      if (!archiveFormats.includes(spec.archive.format)) {
+        throw new Error(`${id}/${platform}: unsupported archive format`)
+      }
       if (!spec.archive.url.startsWith('https://')) throw new Error(`${id}/${platform}: archive URL is not HTTPS`)
       if (/\/latest(?:\/|$)/i.test(spec.archive.url)) throw new Error(`${id}/${platform}: archive URL uses latest`)
       if (!sha256.test(spec.archive.sha256)) throw new Error(`${id}/${platform}: invalid SHA-256`)

@@ -124,6 +124,7 @@ in its own process tree with `stdio: 'ignore'`.
 | Dependency | Platform | How it's handled |
 |-----------|----------|-----------------|
 | Node.js ≥ 18 | All | Build toolchain — install manually |
+| Go 1.24.4 | Linux development/CI | Builds the pinned `amneziawg-go` userspace backend |
 | `wg-quick` | Linux | **Auto-installed** as package dependency |
 | `wg-quick` | macOS | `brew install wireguard-tools` (guided in-app) |
 | WireGuard | Windows | **Bundled** — `wireguard.exe` included in installer |
@@ -132,7 +133,7 @@ in its own process tree with `stdio: 'ignore'`.
 | Hysteria2 | All | **Bundled** — included in installer |
 | `tun2socks` | All | **Bundled** — included in installer |
 | `wintun.dll` | Windows | **Bundled** — included alongside tun2socks |
-| AmneziaWG | Linux | Install `amneziawg-tools` plus a module/DKMS package, or `amneziawg-go` as userspace fallback |
+| AmneziaWG | Linux | **Bundled** — `awg`, `awg-quick` and the `amneziawg-go` userspace backend |
 
 > **Note for Linux AppImage users**: if `wg-quick` is not already installed,
 > the app will display the correct install command for your distribution.
@@ -271,10 +272,11 @@ via GitHub Actions on every version tag push.
 | **macOS** | `npm run dist:mac` | `.dmg` |
 
 The CI workflow downloads and verifies all runtimes marked as `bundled` in
-`build/binary-manifest.json` (including tun2socks, V2Ray, Xray and Hysteria2).
+`build/binary-manifest.json` (including tun2socks, V2Ray, Xray, AmneziaWG and
+Hysteria2).
 The same manifest-driven setup is available locally with
-`npm run binaries:prepare`; system runtimes such as WireGuard, AmneziaWG and
-OpenVPN remain operating-system dependencies where required.
+`npm run binaries:prepare`; system runtimes such as WireGuard and OpenVPN
+remain operating-system dependencies where required.
 
 ---
 

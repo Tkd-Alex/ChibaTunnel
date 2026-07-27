@@ -256,7 +256,18 @@ function runCmd(cmd: string): string {
 
 function runFile(executable: string, args: string[]): string {
   log('INFO', `Executing allowlisted binary: ${path.basename(executable)}`, { args })
-  return execFileSync(executable, args, { encoding: 'utf8', stdio: 'pipe' }).trim()
+  const executableDirectory = path.isAbsolute(executable) ? path.dirname(executable) : null
+  const environment = executableDirectory
+    ? {
+        ...process.env,
+        PATH: `${executableDirectory}${path.delimiter}${process.env.PATH ?? ''}`
+      }
+    : process.env
+  return execFileSync(executable, args, {
+    encoding: 'utf8',
+    stdio: 'pipe',
+    env: environment
+  }).trim()
 }
 
 /**

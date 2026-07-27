@@ -45,8 +45,12 @@ function sha256(data) {
   return createHash('sha256').update(data).digest('hex')
 }
 
-function run(command, args) {
-  const result = spawnSync(command, args, { stdio: 'inherit', windowsHide: true })
+function run(command, args, options = {}) {
+  const result = spawnSync(command, args, {
+    stdio: 'inherit',
+    windowsHide: true,
+    ...options
+  })
   if (result.status !== 0) {
     throw new Error(`${command} failed with status ${result.status ?? 'unknown'}`)
   }
@@ -119,6 +123,18 @@ async function materialize(id, runtime) {
 
     if (archive.format === 'raw') {
       copyFileSync(archiveFile, join(outputDirectory, spec.executable))
+    } else if (archive.format === 'source-tar-gz') {
+      const extracted = join(workspace, 'source')
+      mkdirSync(extracted)
+      run('tar', ['-xzf', archiveFile, '-C', extracted, '--strip-components=1'])
+      run('go', [
+        'build',
+        '-trimpath',
+        '-ldflags=-s -w',
+        '-o',
+        join(outputDirectory, spec.executable),
+        '.'
+      ], { cwd: extracted })
     } else {
       const extracted = join(workspace, 'extracted')
       if (archive.format === 'msi') {
@@ -133,10 +149,14 @@ async function materialize(id, runtime) {
         copyRequired(files, id, 'geoip.dat')
         copyRequired(files, id, 'geosite.dat')
       }
+      if (id === 'awg-quick') {
+        copyRequired(files, id, 'awg')
+      }
     }
 
     if (selected.manifest !== 'win32' && !spec.executable.endsWith('.dll')) {
       chmodSync(join(outputDirectory, spec.executable), 0o755)
+      if (id === 'awg-quick') chmodSync(join(outputDirectory, 'awg'), 0o755)
     }
     console.log(`Materialized ${id}@${runtime.version} -> ${relative(process.cwd(), outputDirectory)}`)
   } finally {
@@ -153,6 +173,9 @@ function verifyOutputs() {
       for (const asset of ['geoip.dat', 'geosite.dat']) {
         if (!existsSync(join(outputDirectory, asset))) missing.push(`${id}:${asset}`)
       }
+    }
+    if (id === 'awg-quick' && !existsSync(join(outputDirectory, 'awg'))) {
+      missing.push(`${id}:awg`)
     }
   }
   if (missing.length > 0) throw new Error(`Missing bundled runtime outputs: ${missing.join(', ')}`)

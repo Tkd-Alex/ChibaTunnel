@@ -16,7 +16,7 @@ export interface BinaryCheckResult {
 }
 
 export interface BinaryArchiveSpec {
-  format: 'zip' | 'msi' | 'raw'
+  format: 'zip' | 'msi' | 'raw' | 'source-tar-gz'
   url: string
   sha256: string
 }
