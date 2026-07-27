@@ -472,11 +472,6 @@ function registerIpcHandlers(): void {
     store.set(STORE_KEY_BINARIES, custom)
     return { success: true, path: filePaths[0] }
   })
-  ipcMain.handle('binary:install', async (_e, cmd: string) => {
-    const res = await execPrivileged([cmd])
-    if (res.code === 0) return { success: true }
-    return { success: false, error: res.stderr }
-  })
   ipcMain.handle('helper:repair', async () => {
     try {
       if (process.platform === 'win32') {

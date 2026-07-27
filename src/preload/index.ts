@@ -16,7 +16,6 @@ const api = {
 
   checkBinaries: () => ipcRenderer.invoke('binary:check'),
   browseBinary: (name: string) => ipcRenderer.invoke('binary:browse', name),
-  installBinary: (cmd: string) => ipcRenderer.invoke('binary:install', cmd),
 
   // Multi-wallet
   listWallets:   () => ipcRenderer.invoke('wallet:list'),
