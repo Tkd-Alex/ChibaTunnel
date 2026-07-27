@@ -61,6 +61,7 @@ function ConnectedDetails({ conn, onDisconnect }: { conn: ConnectionState; onDis
   const [showConfirm, setShowConfirm] = useState(false)
   const isFullTunnel = conn.vpnType === 'wireguard'
     || conn.vpnType === 'amneziawg'
+    || conn.vpnType === 'openvpn'
     || (conn.vpnType === 'hysteria2' && conn.isTransparent)
   const protocolLabel = conn.vpnType ? getProtocolDescriptor(conn.vpnType).label : 'VPN'
   const color = isFullTunnel ? 'var(--purple)' : 'var(--green)'
@@ -599,7 +600,11 @@ export default function NodeConnectModal({
       }
       onRefreshData?.()
       setHasConfig(false)
-      if (res.vpnType === 'wireguard' || res.vpnType === 'amneziawg') {
+      if (
+        res.vpnType === 'wireguard'
+        || res.vpnType === 'amneziawg'
+        || res.vpnType === 'openvpn'
+      ) {
         setHasConfig(true)
         setConn(s => ({ ...s, step: 'full-tunnel-options', sessionId: res.sessionId, vpnType: res.vpnType, configStr: res.configStr, wgQrCode: res.qrCode }))
       } else {
@@ -650,7 +655,9 @@ export default function NodeConnectModal({
 
   const handleRetryTunnel = useCallback(async () => {
     setTunnelBusy(true)
-    const isFullTunnel = conn.vpnType === 'wireguard' || conn.vpnType === 'amneziawg'
+    const isFullTunnel = conn.vpnType === 'wireguard'
+      || conn.vpnType === 'amneziawg'
+      || conn.vpnType === 'openvpn'
     setConn(s => ({ ...s, step: isFullTunnel ? 'full-tunnel-options' : 'proxy-options', error: null }))
     try {
       const res = await window.api.retryTunnel({ transparent: !!conn.isTransparent })

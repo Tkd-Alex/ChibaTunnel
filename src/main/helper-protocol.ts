@@ -18,6 +18,8 @@ export type HelperCommand =
   | { command: 'awg-down'; configFile: string; awgPath?: string }
   | { command: 'hysteria2-start'; configFile: string; hysteria2Path: string }
   | { command: 'hysteria2-stop' }
+  | { command: 'openvpn-start'; configFile: string; openvpnPath: string }
+  | { command: 'openvpn-stop' }
 
 export interface HelperResponse {
   status: 'ok' | 'error' | 'pong'
@@ -147,6 +149,23 @@ export function parseHelperCommand(value: unknown): HelperCommand {
     case 'hysteria2-stop':
       assertAllowedKeys(command, ['command'])
       return { command: 'hysteria2-stop' }
+
+    case 'openvpn-start': {
+      assertAllowedKeys(command, ['command', 'configFile', 'openvpnPath'])
+      return {
+        command: 'openvpn-start',
+        configFile: runtimeConfigPath(command.configFile),
+        openvpnPath: runtimeExecutable(
+          command.openvpnPath,
+          ['openvpn', 'openvpn.exe'],
+          'openvpnPath'
+        )
+      }
+    }
+
+    case 'openvpn-stop':
+      assertAllowedKeys(command, ['command'])
+      return { command: 'openvpn-stop' }
 
     default:
       throw new TypeError(`Unknown helper command: ${command.command}`)

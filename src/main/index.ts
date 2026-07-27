@@ -10,6 +10,7 @@ import {
   NodeEventCreateSession,
   AmneziaWG,
   Hysteria2,
+  OpenVPN,
   V2Ray,
   Wireguard,
   Xray,
@@ -51,6 +52,7 @@ import {
   decodeHandshakeData,
   AmneziaWGProtocolAdapter,
   Hysteria2ProtocolAdapter,
+  OpenVPNProtocolAdapter,
   preflightProtocol,
   ProtocolConnectionManager,
   V2RayProtocolAdapter,
@@ -223,8 +225,10 @@ let activeAwgConfigFile: string | null   = null
 let activeV2Ray:        V2Ray | null     = null
 let activeXray:         Xray | null      = null
 let activeHysteria2:    Hysteria2 | null = null
+let activeOpenVPN:      OpenVPN | null = null
 let activeHysteria2Process: ChildProcess | null = null
 let activeHysteria2Pid: number | null = null
+let activeOpenVPNPid: number | null = null
 let activeTun2Socks:    number | null = null
 let activeTunInterface: string | null    = null
 let activeV2RayServerIp: string | null    = null
@@ -1141,7 +1145,14 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('node:connectWireguard', async () => {
     const active = protocolConnectionManager.active
-    if (!active || (active.protocol !== 'wireguard' && active.protocol !== 'amneziawg')) {
+    if (
+      !active
+      || (
+        active.protocol !== 'wireguard'
+        && active.protocol !== 'amneziawg'
+        && active.protocol !== 'openvpn'
+      )
+    ) {
       return { success: false, error: 'No prepared tunnel configuration' }
     }
     try {
@@ -1341,7 +1352,10 @@ function registerIpcHandlers(): void {
     }
     const hysteria2FullTunnel = activeHysteria2 !== null
       && protocolConnectionManager.active?.mode === 'full-tunnel'
-    const hysteria2Interface = hysteria2FullTunnel
+    const openVPNFullTunnel = activeOpenVPN !== null
+      && protocolConnectionManager.active?.runtime !== undefined
+    const nativeFullTunnel = hysteria2FullTunnel || openVPNFullTunnel
+    const nativeInterface = nativeFullTunnel
       ? protocolConnectionManager.active?.runtime?.interfaceName ?? null
       : null
     return {
@@ -1355,9 +1369,10 @@ function registerIpcHandlers(): void {
       wgInterface: activeWgConfigFile || activeAwgConfigFile
         ? path.basename((activeWgConfigFile ?? activeAwgConfigFile)!, '.conf')
         : null,
-      tunActive: activeTun2Socks !== null || hysteria2FullTunnel,
-      tunPid: activeTun2Socks ?? (hysteria2FullTunnel ? activeHysteria2Pid : null),
-      tunInterface: activeTunInterface ?? hysteria2Interface,
+      tunActive: activeTun2Socks !== null || nativeFullTunnel,
+      tunPid: activeTun2Socks
+        ?? (hysteria2FullTunnel ? activeHysteria2Pid : activeOpenVPNPid),
+      tunInterface: activeTunInterface ?? nativeInterface,
       sessionId: activeSessionId,
       nodeAddress: activeNodeAddress,
       inbounds
@@ -1692,6 +1707,29 @@ async function stopFullHysteria2(): Promise<void> {
   }
 }
 
+async function startOpenVPN(
+  configFile: string
+): Promise<{ pid: number; interfaceName?: string }> {
+  const response = await sendToHelper({
+    command: 'openvpn-start',
+    configFile,
+    openvpnPath: resolveRuntimeBinaryPath('openvpn')
+  }, 30_000)
+  if (response.status !== 'ok' || !response.pid) {
+    throw new Error(response.error ?? 'OpenVPN failed to start')
+  }
+  activeOpenVPNPid = response.pid
+  return { pid: response.pid, interfaceName: 'ovpn0' }
+}
+
+async function stopOpenVPN(): Promise<void> {
+  const response = await sendToHelper({ command: 'openvpn-stop' }, 15_000)
+  activeOpenVPNPid = null
+  if (response.status !== 'ok') {
+    throw new Error(response.error ?? 'OpenVPN failed to stop')
+  }
+}
+
 async function awgQuickUp(configFile: string): Promise<{ success: boolean; error?: string }> {
   const runtimeId: BinaryId = process.platform === 'win32' ? 'amneziawg' : 'awg-quick'
   const response = await sendToHelper({
@@ -1721,7 +1759,7 @@ async function awgQuickDown(configFile: string): Promise<void> {
 }
 
 function createProtocolAdapter(
-  protocol: 'wireguard' | 'v2ray' | 'xray' | 'amneziawg' | 'hysteria2',
+  protocol: ProtocolId,
   settings: AppSettings
 ): ProtocolAdapter<unknown, unknown> {
   const preflight = (context: ProtocolContext) =>
@@ -1766,6 +1804,14 @@ function createProtocolAdapter(
       stopLocal: stopLocalHysteria2,
       startFull: startFullHysteria2,
       stopFull: stopFullHysteria2
+    })
+  }
+
+  if (protocol === 'openvpn') {
+    return new OpenVPNProtocolAdapter({
+      preflight,
+      start: startOpenVPN,
+      stop: stopOpenVPN
     })
   }
 
@@ -1946,6 +1992,7 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
       && protocol !== 'xray'
       && protocol !== 'amneziawg'
       && protocol !== 'hysteria2'
+      && protocol !== 'openvpn'
     ) {
       return { success: false, error: `Protocol adapter not implemented yet: ${protocol}` }
     }
@@ -1959,6 +2006,7 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
       activeV2Ray = null
       activeXray = null
       activeHysteria2 = null
+      activeOpenVPN = null
     }
 
     const adapter = createProtocolAdapter(protocol, settings)
@@ -2027,6 +2075,17 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
       })
     }
 
+    if (protocol === 'openvpn') {
+      activeOpenVPN = protocolConnectionManager.active?.sdkClient as OpenVPN
+      return finalize({
+        success: true,
+        vpnType: protocol,
+        sessionId: activeSessionId,
+        configStr: null,
+        qrCode: null
+      })
+    }
+
     const proxyClient = protocolConnectionManager.active?.sdkClient as V2Ray | Xray
     const shareLinks = protocol === 'v2ray'
       ? (proxyClient as V2Ray).buildShareLinks(`chibatunnel-${nodeAddress.slice(-8)}`)
@@ -2046,6 +2105,7 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
     activeV2Ray = null
     activeXray = null
     activeHysteria2 = null
+    activeOpenVPN = null
     return { success: false, error: extractError(err), details: err?.response?.data }
   }
 }
@@ -2089,6 +2149,21 @@ async function getTrafficStats(): Promise<{ rx: number; tx: number; source: stri
       return { rx, tx, source: 'hysteria2' }
     } catch {
       // The helper may still be creating the native TUN interface.
+    }
+  }
+
+  if (
+    activeOpenVPN
+    && protocolConnectionManager.active?.runtime?.interfaceName
+    && process.platform === 'linux'
+  ) {
+    const interfaceName = protocolConnectionManager.active.runtime.interfaceName
+    try {
+      const rx = parseInt(fs.readFileSync(`/sys/class/net/${interfaceName}/statistics/rx_bytes`, 'utf8').trim()) || 0
+      const tx = parseInt(fs.readFileSync(`/sys/class/net/${interfaceName}/statistics/tx_bytes`, 'utf8').trim()) || 0
+      return { rx, tx, source: 'openvpn' }
+    } catch {
+      // OpenVPN may still be finalizing the TUN interface.
     }
   }
 
@@ -2585,6 +2660,7 @@ export function checkBinaries() {
   const xrayName = isWin ? 'xray.exe' : 'xray'
   const awgName = isWin ? 'amneziawg.exe' : 'awg-quick'
   const hysteria2Name = isWin ? 'hysteria2.exe' : 'hysteria2'
+  const openVPNName = isWin ? 'openvpn.exe' : 'openvpn'
   const t2sName = isWin ? 'tun2socks.exe' : 'tun2socks'
 
   const wgPath  = find(wgName)
@@ -2592,6 +2668,7 @@ export function checkBinaries() {
   const xrayPath = find(xrayName)
   const awgPath = find(awgName)
   const hysteria2Path = find(hysteria2Name)
+  const openVPNPath = find(openVPNName)
   const t2sPath = find(t2sName)
 
   // -------------------------------------------------------------------------
@@ -2718,6 +2795,9 @@ export function checkBinaries() {
     hysteria2:      !!hysteria2Path,
     hysteria2Path,
     hysteria2Hash:  hysteria2Path ? getHash(hysteria2Path) : null,
+    openvpn:        !!openVPNPath,
+    openvpnPath:    openVPNPath,
+    openvpnHash:    openVPNPath ? getHash(openVPNPath) : null,
 
     // tun2socks
     tun2socks:      !!t2sPath && (isWin ? wintunFound : true),
@@ -2779,6 +2859,7 @@ async function killActiveConnections(sendEndSession = true) {
     if (activeV2Ray || activeXray) killProxyCore()
     if (activeHysteria2Process) await stopLocalHysteria2()
     else if (activeHysteria2Pid !== null) await stopFullHysteria2()
+    if (activeOpenVPNPid !== null) await stopOpenVPN()
     if (activeWgConfigFile) await wgQuickDown(activeWgConfigFile)
     if (activeAwgConfigFile) await awgQuickDown(activeAwgConfigFile)
   }
@@ -2786,6 +2867,8 @@ async function killActiveConnections(sendEndSession = true) {
   activeXray = null
   activeHysteria2 = null
   activeHysteria2Pid = null
+  activeOpenVPN = null
+  activeOpenVPNPid = null
   activeWgConfigFile = null
   activeWgInstance = null
   activeAwgConfigFile = null

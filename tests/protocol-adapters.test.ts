@@ -1,15 +1,18 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import fs from 'node:fs'
+import path from 'node:path'
 import {
   AmneziaWG,
   Hysteria2,
+  OpenVPN,
   V2Ray,
   Xray
 } from '@sentinel-official/sentinel-js-sdk'
 import {
   AmneziaWGProtocolAdapter,
   Hysteria2ProtocolAdapter,
+  OpenVPNProtocolAdapter,
   applyWireGuardSplitRoutes,
   hardenV2RayConfig,
   hardenXrayConfig,
@@ -143,6 +146,53 @@ test('keeps Hysteria2 endpoint excluded from native full-tunnel routes', async (
   await adapter.disconnect(runtime)
   assert.deepEqual(calls, ['start-full', 'stop-full'])
   await adapter.cleanup(client, runtime)
+})
+
+test('keeps OpenVPN PKI private and removes it after disconnect', async () => {
+  const calls: string[] = []
+  const adapter = new OpenVPNProtocolAdapter({
+    async preflight() {
+      return { ok: true, errors: [], warnings: [] }
+    },
+    async start() {
+      calls.push('start')
+      return { pid: 791, interfaceName: 'ovpn0' }
+    },
+    async stop() {
+      calls.push('stop')
+    }
+  })
+  const client = new OpenVPN()
+  const context = {
+    nodeAddress: 'sentnode1test',
+    remoteAddress: 'https://203.0.113.50:12345',
+    nodeAddresses: ['203.0.113.50'],
+    sessionId: '47',
+    mode: 'full-tunnel' as const
+  }
+  const bytes = (value: string) => Buffer.from(value).toString('base64')
+  const prepared = await adapter.parseHandshake(client, {
+    metadata: [{
+      port: 1194,
+      protocol: 'udp',
+      ca: bytes('test-ca'),
+      tls: bytes('test-tls')
+    }],
+    cert: bytes('test-cert'),
+    key: bytes('test-private-key')
+  }, context)
+  const configFile = prepared.configPaths[0]
+  const pkiDirectory = path.join(path.dirname(configFile), 'pki')
+
+  assert.equal(fs.statSync(configFile).mode & 0o777, 0o600)
+  assert.equal(fs.statSync(path.join(pkiDirectory, 'client.key')).mode & 0o777, 0o600)
+  assert.match(fs.readFileSync(configFile, 'utf8'), /^remote 203\.0\.113\.50 1194$/m)
+  const runtime = await adapter.connect(client, prepared, context)
+  assert.equal(runtime.interfaceName, 'ovpn0')
+  await adapter.disconnect(runtime)
+  await adapter.cleanup(client, runtime)
+  assert.deepEqual(calls, ['start', 'stop'])
+  assert.equal(fs.existsSync(pkiDirectory), false)
 })
 
 test('disables V2Ray sniffing and enables observatory health checks safely', () => {

@@ -47,6 +47,18 @@ test('accepts typed helper requests', () => {
   assert.deepEqual(parseHelperCommand({ command: 'hysteria2-stop' }), {
     command: 'hysteria2-stop'
   })
+  assert.deepEqual(parseHelperCommand({
+    command: 'openvpn-start',
+    configFile: '/tmp/chibatunnel-openvpn-123/client.ovpn',
+    openvpnPath: '/usr/sbin/openvpn'
+  }), {
+    command: 'openvpn-start',
+    configFile: '/tmp/chibatunnel-openvpn-123/client.ovpn',
+    openvpnPath: '/usr/sbin/openvpn'
+  })
+  assert.deepEqual(parseHelperCommand({ command: 'openvpn-stop' }), {
+    command: 'openvpn-stop'
+  })
 })
 
 test('rejects unknown commands and unexpected fields', () => {
@@ -85,6 +97,11 @@ test('rejects command injection and path traversal inputs', () => {
     command: 'hysteria2-start',
     configFile: '/tmp/chibatunnel-hysteria2-123/client.yaml',
     hysteria2Path: '/bin/sh'
+  }), /allowlisted/)
+  assert.throws(() => parseHelperCommand({
+    command: 'openvpn-start',
+    configFile: '/tmp/chibatunnel-openvpn-123/client.ovpn',
+    openvpnPath: '/bin/sh'
   }), /allowlisted/)
 })
 

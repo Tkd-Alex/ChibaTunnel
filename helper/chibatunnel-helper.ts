@@ -165,6 +165,7 @@ const AMNEZIAWG_TUNNEL_SPEC: QuickTunnelSpec = {
 
 let activeTun2Socks: ChildProcess | null = null
 let activeHysteria2: ChildProcess | null = null
+let activeOpenVPN: ChildProcess | null = null
 let activeServerIp:  string | null = null
 let killSwitchActive = false
 
@@ -1297,6 +1298,75 @@ function handleHysteria2Stop(socket: net.Socket): void {
   sendResponse(socket, { status: 'ok' })
 }
 
+async function handleOpenVPNStart(
+  socket: net.Socket,
+  payload: Extract<HelperCommand, { command: 'openvpn-start' }>
+): Promise<void> {
+  if (activeOpenVPN && activeOpenVPN.exitCode === null) {
+    sendResponse(socket, { status: 'error', error: 'OpenVPN is already running' })
+    return
+  }
+
+  const child = spawn(
+    payload.openvpnPath,
+    ['--config', payload.configFile],
+    { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }
+  )
+  activeOpenVPN = child
+  child.once('close', () => {
+    if (activeOpenVPN === child) activeOpenVPN = null
+  })
+
+  const startup = await new Promise<HelperResponse>(resolve => {
+    let settled = false
+    let tail = ''
+    const deadline = setTimeout(() => {
+      finish({ status: 'error', error: 'OpenVPN connection timed out' })
+    }, 20_000)
+    deadline.unref()
+    const finish = (response: HelperResponse) => {
+      if (settled) return
+      settled = true
+      clearTimeout(deadline)
+      resolve(response)
+    }
+    const inspectOutput = (chunk: Buffer) => {
+      // Keep only a short in-memory tail to detect readiness. Never log output:
+      // paths and certificate diagnostics can disclose sensitive runtime data.
+      tail = `${tail}${chunk.toString('utf8')}`.slice(-512)
+      if (tail.includes('Initialization Sequence Completed') && child.pid) {
+        finish({ status: 'ok', pid: child.pid })
+      }
+    }
+    child.stdout?.on('data', inspectOutput)
+    child.stderr?.on('data', inspectOutput)
+    child.once('error', () => {
+      if (activeOpenVPN === child) activeOpenVPN = null
+      finish({ status: 'error', error: 'OpenVPN failed to start' })
+    })
+    child.once('exit', code => {
+      if (activeOpenVPN === child) activeOpenVPN = null
+      finish({ status: 'error', error: `OpenVPN exited during startup (${code ?? 'unknown'})` })
+    })
+  })
+
+  if (startup.status !== 'ok' && child.exitCode === null) child.kill('SIGTERM')
+  sendResponse(socket, startup)
+}
+
+function handleOpenVPNStop(socket: net.Socket): void {
+  const child = activeOpenVPN
+  activeOpenVPN = null
+  if (child && child.exitCode === null) {
+    try {
+      child.kill('SIGTERM')
+    } catch {
+      // Idempotent teardown.
+    }
+  }
+  sendResponse(socket, { status: 'ok' })
+}
+
 // ---------------------------------------------------------------------------
 // Command dispatcher
 // ---------------------------------------------------------------------------
@@ -1369,6 +1439,18 @@ function processCommand(socket: net.Socket, command: HelperCommand): void {
 
     case 'hysteria2-stop':
       handleHysteria2Stop(socket)
+      break
+
+    case 'openvpn-start':
+      handleOpenVPNStart(socket, command)
+        .catch(() => sendResponse(socket, {
+          status: 'error',
+          error: 'Unexpected OpenVPN startup failure'
+        }))
+      break
+
+    case 'openvpn-stop':
+      handleOpenVPNStop(socket)
       break
   }
 }
@@ -1478,6 +1560,11 @@ function shutdown(server: net.Server, reason: string): void {
   if (activeHysteria2) {
     try { activeHysteria2.kill('SIGTERM') } catch { /* best effort */ }
     activeHysteria2 = null
+  }
+
+  if (activeOpenVPN) {
+    try { activeOpenVPN.kill('SIGTERM') } catch { /* best effort */ }
+    activeOpenVPN = null
   }
 
   if (activeServerIp) {
