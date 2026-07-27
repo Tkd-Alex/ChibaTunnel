@@ -21,6 +21,9 @@
  */
 
 import net from 'net'
+import type { HelperCommand, HelperResponse } from './helper-protocol'
+
+export type { HelperCommand, HelperResponse } from './helper-protocol'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -39,31 +42,6 @@ const HELPER_PORT = 47391
  * while still providing a bounded wait for the UI.
  */
 const DEFAULT_TIMEOUT_MS = 10_000
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-/**
- * A command object sent to the helper. The `command` field is the discriminator.
- * All other fields are command-specific and will be defined per-command as the
- * helper grows.
- */
-export interface HelperCommand {
-  command: string
-  [key: string]: unknown
-}
-
-/**
- * A response received from the helper. Always contains `status`.
- * On error, `error` is a human-readable message. Additional fields
- * may be present depending on the command (e.g. `pid` after start-transparent).
- */
-export interface HelperResponse {
-  status: 'ok' | 'error' | 'pong'
-  error?: string
-  [key: string]: unknown
-}
 
 // ---------------------------------------------------------------------------
 // Core function

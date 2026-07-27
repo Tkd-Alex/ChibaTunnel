@@ -12,8 +12,7 @@ import {
   ChevronUp, 
   ChevronDown, 
   FolderOpen, 
-  RefreshCw, 
-  Zap
+  RefreshCw
 } from 'lucide-react'
 
 interface InstallStep {
@@ -85,22 +84,55 @@ const GUIDES = (status: BinaryStatus, t: any): BinaryGuide[] => [
     ],
     macos:   [{ id: 'brew', label: 'Homebrew', code: 'brew install tun2socks' }],
     windows: 'https://github.com/xjasonlyu/tun2socks/releases',
+  },
+  {
+    id: 'xray', name: 'Xray', icon: <Play size={16} />,
+    found: !!status.xray, path: status.xrayPath ?? null, hash: status.xrayHash ?? null,
+    why: t('binary.why.v2ray'),
+    linux: [{ id: 'arch', label: 'Arch Linux (AUR)', code: 'yay -S --noconfirm xray-bin' }],
+    macos: [{ id: 'brew', label: 'Homebrew', code: 'brew install xray' }],
+    windows: 'https://github.com/XTLS/Xray-core/releases/latest',
+  },
+  {
+    id: 'amneziawg', name: 'AmneziaWG', icon: <Hexagon size={16} />,
+    found: !!status.amneziawg, path: status.amneziawgPath ?? null, hash: status.amneziawgHash ?? null,
+    why: t('binary.why.wireguard'),
+    linux: [
+      { id: 'debian', label: 'Ubuntu / Debian', code: 'apt install -y amneziawg' },
+      { id: 'arch', label: 'Arch Linux (AUR)', code: 'yay -S --noconfirm amneziawg-tools amneziawg-dkms' },
+      { id: 'arch', label: 'Arch Linux (userspace)', code: 'yay -S --noconfirm amneziawg-tools amneziawg-go' },
+      { id: 'fedora', label: 'Fedora / RHEL', code: 'dnf install -y amneziawg-tools amneziawg-dkms' },
+    ],
+    macos: [],
+    windows: 'https://github.com/amnezia-vpn/amneziawg-windows-client/releases/latest',
+  },
+  {
+    id: 'hysteria2', name: 'Hysteria2', icon: <Play size={16} />,
+    found: !!status.hysteria2, path: status.hysteria2Path ?? null, hash: status.hysteria2Hash ?? null,
+    why: t('binary.why.v2ray'),
+    linux: [], macos: [],
+    windows: 'https://github.com/apernet/hysteria/releases/latest',
+  },
+  {
+    id: 'openvpn', name: 'OpenVPN', icon: <Shield size={16} />,
+    found: !!status.openvpn, path: status.openvpnPath ?? null, hash: status.openvpnHash ?? null,
+    why: t('binary.why.wireguard'),
+    linux: [
+      { id: 'debian', label: 'Ubuntu / Debian', code: 'apt install -y openvpn' },
+      { id: 'fedora', label: 'Fedora / RHEL', code: 'dnf install -y openvpn' },
+      { id: 'arch', label: 'Arch Linux', code: 'pacman -S --noconfirm openvpn' },
+    ],
+    macos: [{ id: 'brew', label: 'Homebrew', code: 'brew install openvpn' }],
+    windows: 'https://openvpn.net/community-downloads/',
   }
 ]
 
-function ActionBtn({ code, onExec }: { code: string; onExec: (cmd: string) => void }) {
-  const { t } = useTranslation()
+function CopyButton({ code }: { code: string }) {
   const [copied, setCopied] = useState(false)
-  const [busy, setBusy] = useState(false)
   return (
-    <div style={{ display: 'flex', gap: 6 }}>
-      <button className="btn btn-secondary btn-sm" onClick={() => { navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 1500) }}>
-        {copied ? <Check size={12} /> : <Copy size={12} />}
-      </button>
-      <button className="btn btn-primary btn-sm" disabled={busy} onClick={async () => { setBusy(true); await onExec(code); setBusy(false) }}>
-        {busy ? <div className="spinner" style={{ width: 10, height: 10 }} /> : <><Zap size={12} style={{ marginRight: 4 }} /> {t('common.exec')}</>}
-      </button>
-    </div>
+    <button className="btn btn-secondary btn-sm" onClick={() => { navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 1500) }}>
+      {copied ? <Check size={12} /> : <Copy size={12} />}
+    </button>
   )
 }
 
@@ -131,25 +163,21 @@ export default function BinarySetup({ status, onDismiss, onRecheck, embedded = f
 
   async function handleBrowse(id: string) {
     const isWin = current.platform === 'win32'
-    const name = id === 'wireguard' 
-      ? (isWin ? 'wireguard.exe' : 'wg-quick')
-      : id === 'v2ray' 
-        ? (isWin ? 'v2ray.exe' : 'v2ray')
-        : (isWin ? 'tun2socks.exe' : 'tun2socks')
+    const executableNames: Record<string, string> = {
+      wireguard: isWin ? 'wireguard.exe' : 'wg-quick',
+      v2ray: isWin ? 'v2ray.exe' : 'v2ray',
+      tun2socks: isWin ? 'tun2socks.exe' : 'tun2socks',
+      xray: isWin ? 'xray.exe' : 'xray',
+      amneziawg: isWin ? 'amneziawg.exe' : 'awg-quick',
+      hysteria2: isWin ? 'hysteria2.exe' : 'hysteria2',
+      openvpn: isWin ? 'openvpn.exe' : 'openvpn'
+    }
+    const name = executableNames[id]
+    if (!name) return
     
     const res = await (window.api as any).browseBinary(name)
     if (res.success) {
       handleRecheck()
-    }
-  }
-
-  async function handleExec(cmd: string) {
-    const res = await (window.api as any).installBinary(cmd)
-    if (res.success) {
-      alert(t('binary.exec_success'))
-      handleRecheck()
-    } else {
-      alert(`${t('common.error')}: ${res.error}`)
     }
   }
 
@@ -255,7 +283,7 @@ export default function BinarySetup({ status, onDismiss, onRecheck, embedded = f
                               <div style={{ fontSize: 8, color: 'var(--text-3)', marginBottom: 4, textTransform: 'uppercase' }}>{step.label}</div>
                               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                 <code style={{ flex: 1, fontSize: 9, color: 'var(--cyan)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{step.code}</code>
-                                <ActionBtn code={step.code} onExec={handleExec} />
+                                <CopyButton code={step.code} />
                               </div>
                             </div>
                           ))}

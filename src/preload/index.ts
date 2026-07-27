@@ -16,7 +16,6 @@ const api = {
 
   checkBinaries: () => ipcRenderer.invoke('binary:check'),
   browseBinary: (name: string) => ipcRenderer.invoke('binary:browse', name),
-  installBinary: (cmd: string) => ipcRenderer.invoke('binary:install', cmd),
 
   // Multi-wallet
   listWallets:   () => ipcRenderer.invoke('wallet:list'),
@@ -71,6 +70,9 @@ const api = {
     ipcRenderer.invoke('node:connect', args),
   connectSession: (args: { nodeAddress: string; sessionId: number }) =>
     ipcRenderer.invoke('node:connectSession', args),
+  connectFullTunnel: () => ipcRenderer.invoke('node:connectWireguard'),
+  connectProxy:      (args: { transparent?: boolean } = {}) => ipcRenderer.invoke('node:connectV2ray', args),
+  // Backward-compatible aliases for renderer code and older integrations.
   connectWireGuard: () => ipcRenderer.invoke('node:connectWireguard'),
   connectV2Ray:     (args: { transparent?: boolean } = {}) => ipcRenderer.invoke('node:connectV2ray', args),
   retryTunnel:      (args: { transparent?: boolean } = {}) => ipcRenderer.invoke('node:retryTunnel', args),

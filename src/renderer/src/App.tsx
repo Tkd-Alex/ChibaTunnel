@@ -597,6 +597,10 @@ export default function App() {
                       <option value="">{t('filters.all')}</option>
                       <option value="1">{t('filters.wireguard')}</option>
                       <option value="2">{t('filters.v2ray')}</option>
+                      <option value="3">OpenVPN</option>
+                      <option value="4">Xray</option>
+                      <option value="5">AmneziaWG</option>
+                      <option value="6">Hysteria2</option>
                     </select>
                   </div>
                   <button className="btn btn-secondary btn-sm" style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', gap: 6 }}

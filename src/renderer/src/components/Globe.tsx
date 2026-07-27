@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import * as d3geo from 'd3-geo'
 import { feature } from 'topojson-client'
 import { ApiNode } from '../types'
-import { countryToIsoCode, vpnTypeLabel } from '../utils'
+import { countryToIsoCode, vpnTypeColor, vpnTypeLabel } from '../utils'
 import { CITY_COORDS } from './city_coords'
 
 // In-memory cache: "city||country" → [lon, lat] | null
@@ -268,13 +268,13 @@ export default function Globe({ nodes, bookmarks, onSelect }: Props) {
       const isMulti     = cl.nodes.length > 1
       const hasBookmark = cl.nodes.some(n => bookmarks.includes(n.address))
       const hasHealthy  = cl.nodes.some(n => n.isHealthy && n.isActive)
-      const hasWg       = cl.nodes.some(n => n.type === 1)
+      const healthyNode = cl.nodes.find(n => n.isHealthy && n.isActive)
 
       const color = hasBookmark  ? '#facc15'
         : isHovered              ? '#ffffff'
         : !hasHealthy            ? '#ef4444'
-        : hasWg                  ? '#a855f7'
-        : '#34d399'
+        : healthyNode            ? vpnTypeColor(healthyNode.type)
+        : '#94a3b8'
 
       let radius = 4.5
       if (isMulti) {
@@ -444,6 +444,10 @@ export default function Globe({ nodes, bookmarks, onSelect }: Props) {
       <div className="globe-legend">
         <div className="globe-legend-item"><span style={{ background: '#a855f7' }} />{t('filters.wireguard')}</div>
         <div className="globe-legend-item"><span style={{ background: '#34d399' }} />{t('filters.v2ray')}</div>
+        <div className="globe-legend-item"><span style={{ background: '#3b82f6' }} />OpenVPN</div>
+        <div className="globe-legend-item"><span style={{ background: '#22d3ee' }} />Xray</div>
+        <div className="globe-legend-item"><span style={{ background: '#e879f9' }} />AmneziaWG</div>
+        <div className="globe-legend-item"><span style={{ background: '#f97316' }} />Hysteria2</div>
         <div className="globe-legend-item"><span style={{ background: '#facc15' }} />{t('common.bookmarks')}</div>
         <div className="globe-legend-item"><span style={{ background: '#ef4444' }} />{t('table.inactive_status')}</div>
       </div>
@@ -538,7 +542,7 @@ export default function Globe({ nodes, bookmarks, onSelect }: Props) {
               const isBookmark = bookmarks.includes(node.address)
               const isHealthy  = node.isHealthy && node.isActive
               const dot = isBookmark ? '#facc15'
-                : isHealthy ? (node.type === 1 ? '#a855f7' : '#34d399')
+                : isHealthy ? vpnTypeColor(node.type)
                 : '#ef4444'
 
               return (

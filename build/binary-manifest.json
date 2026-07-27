@@ -1,0 +1,277 @@
+{
+  "schemaVersion": 1,
+  "architecture": "x64",
+  "runtimes": {
+    "wireguard": {
+      "version": "0.5.3",
+      "license": "GPL-2.0",
+      "repository": "https://git.zx2c4.com/wireguard-windows/",
+      "platforms": {
+        "win32": {
+          "strategy": "bundled",
+          "executable": "wireguard.exe",
+          "versionArgs": ["--version"],
+          "archive": {
+            "format": "msi",
+            "url": "https://download.wireguard.com/windows-client/wireguard-amd64-0.5.3.msi",
+            "sha256": "76fcec042c5989c5b816cd32eaed1e5b1c3b998a4b1c9eca55f299e3314ef7e4"
+          }
+        },
+        "linux": {
+          "strategy": "system",
+          "executable": "wg-quick",
+          "versionArgs": ["--version"]
+        },
+        "darwin": {
+          "strategy": "system",
+          "executable": "wg-quick",
+          "versionArgs": ["--version"]
+        }
+      }
+    },
+    "v2ray": {
+      "version": "v5.16.1",
+      "license": "MIT",
+      "repository": "https://github.com/v2fly/v2ray-core",
+      "platforms": {
+        "win32": {
+          "strategy": "bundled",
+          "executable": "v2ray.exe",
+          "versionArgs": ["version"],
+          "archive": {
+            "format": "zip",
+            "url": "https://github.com/v2fly/v2ray-core/releases/download/v5.16.1/v2ray-windows-64.zip",
+            "sha256": "c3f7f91a0fa55823ee10d32a7635df056445230956d13346cffb12c482e97082"
+          }
+        },
+        "linux": {
+          "strategy": "bundled",
+          "executable": "v2ray",
+          "versionArgs": ["version"],
+          "archive": {
+            "format": "zip",
+            "url": "https://github.com/v2fly/v2ray-core/releases/download/v5.16.1/v2ray-linux-64.zip",
+            "sha256": "82a7bf0b37ce2fda36d9e0040d71a494170026841735e20d708717b99ca0fe9b"
+          }
+        },
+        "darwin": {
+          "strategy": "bundled",
+          "executable": "v2ray",
+          "versionArgs": ["version"],
+          "archive": {
+            "format": "zip",
+            "url": "https://github.com/v2fly/v2ray-core/releases/download/v5.16.1/v2ray-macos-64.zip",
+            "sha256": "71dfa8cc5ed4d33747082791d8df9ff0454b9601b9fdfd52d9544b2f4214468f"
+          }
+        }
+      }
+    },
+    "tun2socks": {
+      "version": "v2.6.0",
+      "license": "MIT",
+      "repository": "https://github.com/xjasonlyu/tun2socks",
+      "platforms": {
+        "win32": {
+          "strategy": "bundled",
+          "executable": "tun2socks.exe",
+          "versionArgs": ["-version"],
+          "archive": {
+            "format": "zip",
+            "url": "https://github.com/xjasonlyu/tun2socks/releases/download/v2.6.0/tun2socks-windows-amd64.zip",
+            "sha256": "1429e2e3b1ea09052da2c65e5005538b5730d63da37e304f4ad6fd2698a66695"
+          }
+        },
+        "linux": {
+          "strategy": "bundled",
+          "executable": "tun2socks",
+          "versionArgs": ["-version"],
+          "archive": {
+            "format": "zip",
+            "url": "https://github.com/xjasonlyu/tun2socks/releases/download/v2.6.0/tun2socks-linux-amd64.zip",
+            "sha256": "2c4d9891ca898ecb2b582d158612d44c66793008328852b3465b77828c867e77"
+          }
+        },
+        "darwin": {
+          "strategy": "bundled",
+          "executable": "tun2socks",
+          "versionArgs": ["-version"],
+          "archive": {
+            "format": "zip",
+            "url": "https://github.com/xjasonlyu/tun2socks/releases/download/v2.6.0/tun2socks-darwin-amd64.zip",
+            "sha256": "4cf19ab928e36ced549c52be78d1d2dd0bb52f6cd77f6475e25bfa1c7c3327c1"
+          }
+        }
+      }
+    },
+    "wintun": {
+      "version": "0.14.1",
+      "license": "GPL-2.0",
+      "repository": "https://www.wintun.net/",
+      "platforms": {
+        "win32": {
+          "strategy": "bundled",
+          "executable": "wintun.dll",
+          "versionArgs": [],
+          "archive": {
+            "format": "zip",
+            "url": "https://www.wintun.net/builds/wintun-0.14.1.zip",
+            "sha256": "07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51"
+          }
+        },
+        "linux": { "strategy": "unsupported" },
+        "darwin": { "strategy": "unsupported" }
+      }
+    },
+    "openvpn": {
+      "version": "2.7.5",
+      "license": "GPL-2.0",
+      "repository": "https://github.com/OpenVPN/openvpn",
+      "platforms": {
+        "win32": {
+          "strategy": "system",
+          "executable": "openvpn.exe",
+          "versionArgs": ["--version"],
+          "commonPaths": ["C:\\Program Files\\OpenVPN\\bin\\openvpn.exe"]
+        },
+        "linux": {
+          "strategy": "system",
+          "executable": "openvpn",
+          "versionArgs": ["--version"]
+        },
+        "darwin": {
+          "strategy": "system",
+          "executable": "openvpn",
+          "versionArgs": ["--version"],
+          "commonPaths": ["/opt/homebrew/sbin/openvpn", "/usr/local/sbin/openvpn"]
+        }
+      }
+    },
+    "xray": {
+      "version": "v26.3.27",
+      "license": "MPL-2.0",
+      "repository": "https://github.com/XTLS/Xray-core",
+      "platforms": {
+        "win32": {
+          "strategy": "bundled",
+          "executable": "xray.exe",
+          "versionArgs": ["version"],
+          "archive": {
+            "format": "zip",
+            "url": "https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-windows-64.zip",
+            "sha256": "d004c39288ce9ada487c6f398c7c545f7d749e44bdfdd59dbc9f865afba4e1ad"
+          }
+        },
+        "linux": {
+          "strategy": "bundled",
+          "executable": "xray",
+          "versionArgs": ["version"],
+          "archive": {
+            "format": "zip",
+            "url": "https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-linux-64.zip",
+            "sha256": "23cd9af937744d97776ee35ecad4972cf4b2109d1e0fe6be9930467608f7c8ae"
+          }
+        },
+        "darwin": {
+          "strategy": "bundled",
+          "executable": "xray",
+          "versionArgs": ["version"],
+          "archive": {
+            "format": "zip",
+            "url": "https://github.com/XTLS/Xray-core/releases/download/v26.3.27/Xray-macos-64.zip",
+            "sha256": "f5b0471d3459eff1b82e48af0aeac186abcc3298210070afbbbd8437a4e8b203"
+          }
+        }
+      }
+    },
+    "amneziawg": {
+      "version": "2.0.2",
+      "license": "GPL-2.0",
+      "repository": "https://github.com/amnezia-vpn/amneziawg-windows-client",
+      "platforms": {
+        "win32": {
+          "strategy": "system",
+          "executable": "amneziawg.exe",
+          "versionArgs": ["/version"],
+          "commonPaths": ["C:\\Program Files\\AmneziaWG\\amneziawg.exe"]
+        },
+        "linux": { "strategy": "unsupported" },
+        "darwin": { "strategy": "unsupported" }
+      }
+    },
+    "awg-quick": {
+      "version": "v1.0.20260618-2",
+      "license": "GPL-2.0",
+      "repository": "https://github.com/amnezia-vpn/amneziawg-tools",
+      "platforms": {
+        "win32": { "strategy": "unsupported" },
+        "linux": {
+          "strategy": "bundled",
+          "executable": "awg-quick",
+          "versionArgs": ["--version"],
+          "archive": {
+            "format": "zip",
+            "url": "https://github.com/amnezia-vpn/amneziawg-tools/releases/download/v1.0.20260618-2/ubuntu-22.04-amneziawg-tools.zip",
+            "sha256": "9f645117ba1aa536c8358e2c682a54cc3949e65b9efb86d8495d4343dcee99f9"
+          }
+        },
+        "darwin": { "strategy": "unsupported" }
+      }
+    },
+    "amneziawg-go": {
+      "version": "v0.2.19",
+      "license": "MIT",
+      "repository": "https://github.com/amnezia-vpn/amneziawg-go",
+      "platforms": {
+        "win32": { "strategy": "unsupported" },
+        "linux": {
+          "strategy": "bundled",
+          "executable": "amneziawg-go",
+          "versionArgs": ["--version"],
+          "archive": {
+            "format": "source-tar-gz",
+            "url": "https://codeload.github.com/amnezia-vpn/amneziawg-go/tar.gz/1cc94272ca8e9e223a5fe76382f5880f09d3c12d",
+            "sha256": "5797a9c6f889bdf91624d68ce13152568b23fc4b5c04b5d175d6580934dfd146"
+          }
+        },
+        "darwin": { "strategy": "unsupported" }
+      }
+    },
+    "hysteria2": {
+      "version": "app/v2.10.0",
+      "license": "MIT",
+      "repository": "https://github.com/apernet/hysteria",
+      "platforms": {
+        "win32": {
+          "strategy": "bundled",
+          "executable": "hysteria2.exe",
+          "versionArgs": ["version"],
+          "archive": {
+            "format": "raw",
+            "url": "https://github.com/apernet/hysteria/releases/download/app%2Fv2.10.0/hysteria-windows-amd64.exe",
+            "sha256": "a0b4b1851919235b9424632b894b5232eec861c1c20e955e82e3dbc6698490d0"
+          }
+        },
+        "linux": {
+          "strategy": "bundled",
+          "executable": "hysteria2",
+          "versionArgs": ["version"],
+          "archive": {
+            "format": "raw",
+            "url": "https://github.com/apernet/hysteria/releases/download/app%2Fv2.10.0/hysteria-linux-amd64",
+            "sha256": "04f7804159ef1d798de12a817d73aab4b9040ebe45fc62e223000c5c59e987fe"
+          }
+        },
+        "darwin": {
+          "strategy": "bundled",
+          "executable": "hysteria2",
+          "versionArgs": ["version"],
+          "archive": {
+            "format": "raw",
+            "url": "https://github.com/apernet/hysteria/releases/download/app%2Fv2.10.0/hysteria-darwin-amd64",
+            "sha256": "bfa797ef4f1f67f2943646e0c3eda59b642f3d5500a04b63b8f8f57113aa881d"
+          }
+        }
+      }
+    }
+  }
+}

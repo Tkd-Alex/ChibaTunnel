@@ -14,18 +14,28 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.24.4'
+          cache: false
       
       - name: Install dependencies
         run: npm ci
 
       - name: Type check
-        run: npx tsc --noEmit -p tsconfig.web.json && npx tsc --noEmit -p tsconfig.node.json
+        run: npx tsc --noEmit -p tsconfig.web.json && npx tsc --noEmit -p tsconfig.node.json && npx tsc --noEmit -p helper/tsconfig.json
 
       - name: Unit tests
         run: npm test
 
       - name: Build application
         run: npm run build
+
+      - name: Prepare packaging resources
+        run: |
+          npm run build:helper:linux
+          node scripts/materialize-binary-runtimes.mjs linux
 
       - name: Build test (Linux AppImage)
         run: npx electron-builder --linux AppImage --publish never
