@@ -89,7 +89,7 @@ const GUIDES = (status: BinaryStatus, t: any): BinaryGuide[] => [
     id: 'xray', name: 'Xray', icon: <Play size={16} />,
     found: !!status.xray, path: status.xrayPath ?? null, hash: status.xrayHash ?? null,
     why: t('binary.why.v2ray'),
-    linux: [{ id: 'arch', label: 'Arch Linux', code: 'pacman -S --noconfirm xray' }],
+    linux: [{ id: 'arch', label: 'Arch Linux (AUR)', code: 'yay -S --noconfirm xray-bin' }],
     macos: [{ id: 'brew', label: 'Homebrew', code: 'brew install xray' }],
     windows: 'https://github.com/XTLS/Xray-core/releases/latest',
   },

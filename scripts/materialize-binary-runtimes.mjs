@@ -24,11 +24,17 @@ const aliases = {
   mac: { manifest: 'darwin', output: 'mac' },
   darwin: { manifest: 'darwin', output: 'mac' }
 }
-const selected = aliases[process.argv[2]]
+const hostPlatform = process.platform === 'win32'
+  ? 'win'
+  : process.platform === 'darwin'
+    ? 'mac'
+    : process.platform
+const requestedPlatform = process.argv.slice(2).find(argument => !argument.startsWith('--')) ?? hostPlatform
+const selected = aliases[requestedPlatform]
 const verifyOnly = process.argv.includes('--verify')
 
 if (!selected) {
-  throw new Error('Usage: node scripts/materialize-binary-runtimes.mjs <win|linux|mac> [--verify]')
+  throw new Error('Usage: node scripts/materialize-binary-runtimes.mjs [win|linux|mac] [--verify]')
 }
 
 const outputDirectory = resolve('build', 'bins', selected.output)

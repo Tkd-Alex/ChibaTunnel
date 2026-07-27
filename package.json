@@ -8,6 +8,8 @@
   "homepage": "https://chibatunnel.xyz",
   "scripts": {
     "dev": "electron-vite dev",
+    "binaries:prepare": "node scripts/materialize-binary-runtimes.mjs",
+    "binaries:verify": "node scripts/materialize-binary-runtimes.mjs --verify",
     "test": "node scripts/verify-binary-manifest.mjs && tsc -p tsconfig.test.json && node --test .test-dist/tests/*.test.js",
     "build": "electron-vite build",
     "preview": "electron-vite preview",

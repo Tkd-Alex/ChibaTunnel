@@ -140,6 +140,9 @@ in its own process tree with `stdio: 'ignore'`.
 # Install dependencies
 npm install
 
+# Download and verify the bundled VPN runtimes for this platform
+npm run binaries:prepare
+
 # Terminal 1 — start the privileged helper (elevated terminal required)
 npm run dev:helper
 
@@ -264,8 +267,11 @@ via GitHub Actions on every version tag push.
 | **Windows** | `npm run dist:win` | `.exe` (NSIS installer) |
 | **macOS** | `npm run dist:mac` | `.dmg` |
 
-The CI workflow downloads and bundles all third-party binaries (tun2socks, v2ray,
-wireguard, wintun) automatically. No manual binary management is required.
+The CI workflow downloads and verifies all runtimes marked as `bundled` in
+`build/binary-manifest.json` (including tun2socks, V2Ray, Xray and Hysteria2).
+The same manifest-driven setup is available locally with
+`npm run binaries:prepare`; system runtimes such as WireGuard, AmneziaWG and
+OpenVPN remain operating-system dependencies where required.
 
 ---
 
