@@ -8,7 +8,6 @@ import {
   nodeInfo,
   handshake,
   NodeEventCreateSession,
-  NodeVPNType,
   V2Ray,
   Wireguard,
   searchEvent,
@@ -44,11 +43,20 @@ import * as crypto from 'crypto'
 import { pingHelper, sendToHelper } from './helper-client'
 import { isValidNodeAddress, parseDeepLink } from './deep-link'
 import { resolveBinary } from './binaries'
-import { preflightProtocol } from './protocols'
+import {
+  decodeHandshakeData,
+  preflightProtocol,
+  ProtocolConnectionManager,
+  V2RayProtocolAdapter,
+  WireGuardProtocolAdapter,
+  type ProtocolAdapter,
+  type ProtocolContext
+} from './protocols'
 import {
   getProtocolDescriptor,
   normalizeServiceType,
   type BinaryId,
+  type ProtocolId,
   type SupportedPlatform
 } from '../shared/protocols'
 import pkg from '../../package.json'
@@ -211,6 +219,7 @@ let activeSessionId:    string | null    = null
 let activeNodeAddress:  string | null    = null
 let wasConnected:       boolean          = false
 let connectInProgress:  boolean          = false
+const protocolConnectionManager = new ProtocolConnectionManager()
 
 let trafficInterval: ReturnType<typeof setInterval> | null = null
 
@@ -1118,72 +1127,52 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('node:connectWireguard', async () => {
-    if (!activeWgConfigFile) return { success: false, error: 'No WireGuard config' }
-    const res = await wgQuickUp(activeWgConfigFile)
-    if (res.success) wasConnected = true
-    return res
+    const active = protocolConnectionManager.active
+    if (!active || active.protocol !== 'wireguard') {
+      return { success: false, error: 'No WireGuard config' }
+    }
+    try {
+      await protocolConnectionManager.connect(active.operationId)
+      wasConnected = true
+      return { success: true }
+    } catch (err: unknown) {
+      return { success: false, error: extractError(err) }
+    }
   })
 
   ipcMain.handle('node:connectV2ray', async (_e, { transparent }: { transparent?: boolean } = {}) => {
-    if (!activeV2Ray) return { success: false, error: 'No V2Ray session' }
-  
-    // Resolve the v2ray binary path before attempting to spawn.
-    // checkBinaries() looks in: custom store → PATH → resources/bin/ → exe dir.
-    // This is the key fix: we no longer rely on the SDK calling spawn('v2ray')
-    // which fails silently when 'v2ray' is not in PATH.
-    const binaries = checkBinaries()
-    if (!binaries.v2rayPath) {
-      return {
-        success: false,
-        error: 'v2ray binary not found. Check resources/bin/ or set a custom path in settings.',
-      }
+    const active = protocolConnectionManager.active
+    if (!active || active.protocol !== 'v2ray') {
+      return { success: false, error: 'No V2Ray session' }
     }
-  
     try {
-      // spawnV2Ray() writes the config to a temp file (using the SDK's writeConfig)
-      // and spawns v2ray with the explicit binary path. Throws if v2ray crashes
-      // within the first 500 ms (bad config, missing geo data, port conflict, etc.)
-      const { pid } = await spawnV2Ray(activeV2Ray, binaries.v2rayPath)
-  
-      if (transparent) {
-        const result = await setupTransparentV2Ray(activeV2Ray)
-        if (!result.success) {
-          // Kill v2ray if transparent setup fails so we don't leave a dangling process.
-          killV2Ray()
-          return result
-        }
-      }
-  
+      await protocolConnectionManager.setMode(
+        active.operationId,
+        transparent ? 'full-tunnel' : 'local-proxy'
+      )
+      await protocolConnectionManager.connect(active.operationId)
       wasConnected = true
       startTrafficPolling()
-      return { success: true, pid }
-  
+      return { success: true, pid: getV2RayPid() }
     } catch (err: unknown) {
-      // spawnV2Ray throws on immediate crash — the error message includes the
-      // exit code and a hint to check the config file. Surface this to the UI.
-      killV2Ray() // ensure cleanup even on partial startup
-      return { success: false, error: String(err) }
+      return { success: false, error: extractError(err) }
     }
   })
 
-  ipcMain.handle('node:retryTunnel', async (_e, { transparent }: { transparent?: boolean } = {}) => {
-    if (activeWgConfigFile) return wgQuickUp(activeWgConfigFile)
-    if (activeV2Ray) {
-      try { /* activeV2Ray.disconnect() */ killV2Ray() } catch (_) {}
-      try {
-        const binaries = checkBinaries()
-        const { pid, configFile } = await spawnV2Ray(activeV2Ray, binaries.v2rayPath) 
-        // const pid = activeV2Ray.connect()
-        if (transparent) {
-          const result = await setupTransparentV2Ray(activeV2Ray)
-          if (!result.success) return result
-        }
-        wasConnected = true
-        startTrafficPolling()
-        return { success: true, pid }
-      } catch (err: unknown) { return { success: false, error: String(err) } }
+  ipcMain.handle('node:retryTunnel', async () => {
+    const active = protocolConnectionManager.active
+    if (!active) return { success: false, error: 'No active tunnel instance to retry.' }
+    try {
+      await protocolConnectionManager.retry(active.operationId)
+      wasConnected = true
+      startTrafficPolling()
+      return {
+        success: true,
+        pid: active.protocol === 'v2ray' ? getV2RayPid() : undefined
+      }
+    } catch (err: unknown) {
+      return { success: false, error: extractError(err) }
     }
-    return { success: false, error: 'No active tunnel instance to retry.' }
   })
 
   ipcMain.handle('node:disconnect', async () => {
@@ -1474,20 +1463,7 @@ async function preflightNodeRuntime(remoteAddr: string) {
   }
 
   const mode = getProtocolDescriptor(protocol).defaultMode
-  const customPaths = getCustomBinaryPaths()
-  const result = await preflightProtocol({
-    protocol,
-    mode,
-    platform,
-    resolveBinary: id => resolveBinary({
-      id,
-      platform,
-      architecture: process.arch,
-      bundledDirectory: getBundledBinDir(),
-      customPaths
-    }),
-    checkHelper: () => pingHelper()
-  })
+  const result = await preflightProtocolRuntime(protocol, mode)
 
   if (!result.ok) {
     return {
@@ -1500,6 +1476,83 @@ async function preflightNodeRuntime(remoteAddr: string) {
   }
 
   return { success: true as const, protocol, mode, info, preflight: result }
+}
+
+async function preflightProtocolRuntime(
+  protocol: ProtocolId,
+  mode: ProtocolContext['mode']
+) {
+  const platform = currentSupportedPlatform()
+  if (!platform) {
+    return {
+      ok: false,
+      errors: [`UNSUPPORTED_PLATFORM:${process.platform}`],
+      warnings: []
+    }
+  }
+  const customPaths = getCustomBinaryPaths()
+  return preflightProtocol({
+    protocol,
+    mode,
+    platform,
+    resolveBinary: id => resolveBinary({
+      id,
+      platform,
+      architecture: process.arch,
+      bundledDirectory: getBundledBinDir(),
+      customPaths
+    }),
+    checkHelper: () => pingHelper()
+  })
+}
+
+async function stopTransparentRuntime(): Promise<void> {
+  if (activeTun2Socks === null) return
+  const response = await sendToHelper({ command: 'stop-transparent' })
+  if (response.status !== 'ok') {
+    throw new Error(response.error ?? 'Failed to stop transparent proxy')
+  }
+  activeTun2Socks = null
+  activeTunInterface = null
+  activeV2RayServerIp = null
+}
+
+function createExistingProtocolAdapter(
+  protocol: 'wireguard' | 'v2ray',
+  settings: AppSettings
+): ProtocolAdapter<unknown, unknown> {
+  const preflight = (context: ProtocolContext) =>
+    preflightProtocolRuntime(protocol, context.mode)
+
+  if (protocol === 'wireguard') {
+    return new WireGuardProtocolAdapter(
+      {
+        preflight,
+        nextInterfaceName: getNextWgInterface,
+        up: wgQuickUp,
+        down: wgQuickDown
+      },
+      {
+        dns: settings.dohIp ? [settings.dohIp] : undefined,
+        splitRoutes: settings.splitTunnel ? settings.splitRoutes : undefined
+      }
+    )
+  }
+
+  return new V2RayProtocolAdapter({
+    preflight,
+    start: async client => {
+      const binaries = checkBinaries()
+      if (!binaries.v2rayPath) throw new Error('V2Ray binary not found')
+      return spawnV2Ray(client, binaries.v2rayPath)
+    },
+    stop: killV2Ray,
+    startTransparent: async client => {
+      const result = await setupTransparentV2Ray(client)
+      return { ...result, tunInterface: activeTunInterface ?? undefined }
+    },
+    stopTransparent: stopTransparentRuntime
+  })
 }
 
 async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabytes' | 'hours'; amount: number; donate?: boolean }) {
@@ -1649,56 +1702,73 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
       return res
     }
 
-    if (nInfo.service_type === NodeVPNType.WIREGUARD) {
+    const rawServiceType = String(nInfo.service_type ?? '')
+    const protocol = normalizeServiceType(rawServiceType)
+    if (!protocol) {
+      return { success: false, error: `Unsupported node protocol: ${rawServiceType || 'unknown'}` }
+    }
+    if (protocol !== 'wireguard' && protocol !== 'v2ray') {
+      return { success: false, error: `Protocol adapter not implemented yet: ${protocol}` }
+    }
+
+    if (protocolConnectionManager.active) {
+      await protocolConnectionManager.disconnect()
+      activeWgConfigFile = null
+      activeWgInstance = null
+      activeV2Ray = null
+    }
+
+    const adapter = createExistingProtocolAdapter(protocol, settings)
+    const pending = await protocolConnectionManager.begin({
+      protocol,
+      mode: getProtocolDescriptor(protocol).defaultMode,
+      nodeAddress,
+      remoteAddress: remoteAddr,
+      nodeAddresses: [],
+      sessionId: sessionId.toString()
+    }, adapter)
+    const result = await handshake(
+      sessionId,
+      pending.peerRequest,
+      walletState.privkey!,
+      remoteAddr
+    ).catch(e => {
+      const err: any = new Error(`[handshake] ${extractError(e)}`)
+      err.response = e.response
+      throw err
+    })
+    const prepared = await protocolConnectionManager.prepare(
+      pending.operationId,
+      decodeHandshakeData(result.data),
+      result.addrs
+    )
+
+    if (protocol === 'wireguard') {
       mainWindow?.webContents.send('vpn:status', { step: 'generating_config' })
-      if (activeWgConfigFile) { try { await wgQuickDown(activeWgConfigFile) } catch (_) {}; activeWgConfigFile = null }
-      const wg = new Wireguard(); const result = await handshake(sessionId, { public_key: wg.publicKey }, walletState.privkey!, remoteAddr).catch(e => {
-        const err: any = new Error(`[handshake] ${extractError(e)}`); err.response = e.response; throw err
-      })
-      const hd = JSON.parse(Buffer.from(result.data, 'base64').toString('utf8'))
-      const dns = settings.dohIp ? [settings.dohIp] : undefined
-      await wg.parseConfig(hd, result.addrs, dns)
-      let configStr = wg.buildConfigString()
-      if (!configStr) return { success: false, error: 'WireGuard: config null' }
-      if (settings.splitTunnel && settings.splitRoutes) configStr = configStr.replace(/AllowedIPs\s*=\s*.+/g, `AllowedIPs = ${settings.splitRoutes}`)
+      const wg = protocolConnectionManager.active?.sdkClient as Wireguard
+      const configStr = prepared.publicConfig
+      const configFile = prepared.configPaths[0]
+      if (!configStr || !configFile) {
+        throw new Error('WireGuard configuration was not prepared')
+      }
       const qrCode = await QRCode.toDataURL(configStr, { width: 300, margin: 2, color: { dark: '#000000', light: '#ffffff' } })
-      const ifName = getNextWgInterface(); const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `chibatunnel-${ifName}-`))
-      activeWgConfigFile = path.join(tmpDir, `${ifName}.conf`); fs.writeFileSync(activeWgConfigFile, configStr, { mode: 0o600 }); activeWgInstance = wg
+      activeWgConfigFile = configFile
+      activeWgInstance = wg
       return finalize({ success: true, vpnType: 'wireguard', sessionId: activeSessionId, configStr, qrCode })
     }
 
-    if (nInfo.service_type === NodeVPNType.V2RAY) {
-      if (activeV2Ray) { try { /* activeV2Ray.disconnect() */ killV2Ray() } catch (_) {}; activeV2Ray = null }
-      checkBinaries()
-      const v2ray = new V2Ray(); const result = await handshake(sessionId, { uuid: v2ray.getKey() }, walletState.privkey!, remoteAddr).catch(e => {
-        const err: any = new Error(`[handshake] ${extractError(e)}`); err.response = e.response; throw err
-      })
-      const hd = JSON.parse(Buffer.from(result.data, 'base64').toString('utf8')); await v2ray.parseConfig(hd, result.addrs)
-      const configAny = v2ray.config as any
-      if (configAny) {
-        // Fix V2Ray v5 sniffing panic on QUIC traffic by disabling sniffing
-        const proxyInbound = configAny.inbounds?.find((ib: any) => ib.tag === 'proxy')
-        if (proxyInbound?.sniffing) {
-          proxyInbound.sniffing.enabled = false
-        }
-
-        if (configAny.routing?.balancers?.[0]) {
-          configAny.observatory = {
-            subjectSelector: [...configAny.routing.balancers[0].selector],
-            probeInterval: '30s',
-            probeUrl: 'https://www.google.com/generate_204'
-          }
-        }
-      }
-      const shareLinks = v2ray.buildShareLinks(`chibatunnel-${nodeAddress.slice(-8)}`)
-      const qrCodes = await Promise.all(shareLinks.map(link => QRCode.toDataURL(link, { width: 280, margin: 1, color: { dark: '#34d399', light: '#060810' } })))
-      const inbounds = (v2ray.config?.inbounds ?? []).filter((ib: any) => ib.protocol !== 'dokodemo-door').map((ib: any) => ({ protocol: ib.protocol, listen: ib.listen, port: ib.port }))
-      activeV2Ray = v2ray; return finalize({ success: true, vpnType: 'v2ray', sessionId: activeSessionId, shareLinks, qrCodes, inbounds })
-    }
-    return { success: false, error: `Unknown VPN type: ${nInfo.service_type}` }
+    const v2ray = protocolConnectionManager.active?.sdkClient as V2Ray
+    const shareLinks = v2ray.buildShareLinks(`chibatunnel-${nodeAddress.slice(-8)}`)
+    const qrCodes = await Promise.all(shareLinks.map(link => QRCode.toDataURL(link, { width: 280, margin: 1, color: { dark: '#34d399', light: '#060810' } })))
+    const inbounds = (v2ray.config?.inbounds ?? []).filter((ib: any) => ib.protocol !== 'dokodemo-door').map((ib: any) => ({ protocol: ib.protocol, listen: ib.listen, port: ib.port }))
+    activeV2Ray = v2ray
+    return finalize({ success: true, vpnType: 'v2ray', sessionId: activeSessionId, shareLinks, qrCodes, inbounds })
   } catch (err: any) {
     console.error('[doHandshake] Error:', err)
-    if (activeWgConfigFile) { try { fs.rmSync(path.dirname(activeWgConfigFile), { recursive: true, force: true }) } catch (_) {}; activeWgConfigFile = null; activeWgInstance = null }
+    try { await protocolConnectionManager.disconnect() } catch (_) {}
+    activeWgConfigFile = null
+    activeWgInstance = null
+    activeV2Ray = null
     return { success: false, error: extractError(err), details: err?.response?.data }
   }
 }
@@ -2377,13 +2447,26 @@ async function killActiveConnections(sendEndSession = true) {
   if (trafficInterval) { clearInterval(trafficInterval); trafficInterval = null }
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
 
-  // Clean up local tunnel processes and interfaces immediately
-  if (activeTun2Socks !== null) {
-    const helperResponse = await sendToHelper({ command: 'stop-transparent' })
-    if(helperResponse.status === "ok"){ activeTun2Socks = null; activeTunInterface = null; activeV2RayServerIp = null}
+  // Clean up local tunnel processes and interfaces immediately.
+  if (protocolConnectionManager.active) {
+    try {
+      await protocolConnectionManager.disconnect()
+    } catch (err) {
+      console.warn('[killActiveConnections] Protocol cleanup failed:', err)
+    }
+  } else {
+    // Compatibility fallback for a process created before manager ownership.
+    if (activeTun2Socks !== null) {
+      try { await stopTransparentRuntime() } catch (err) {
+        console.warn('[killActiveConnections] Transparent cleanup failed:', err)
+      }
+    }
+    if (activeV2Ray) killV2Ray()
+    if (activeWgConfigFile) await wgQuickDown(activeWgConfigFile)
   }
-  if (activeV2Ray) { try { /* activeV2Ray.disconnect() */ killV2Ray() } catch { }; activeV2Ray = null }
-  if (activeWgConfigFile) { await wgQuickDown(activeWgConfigFile); activeWgConfigFile = null; activeWgInstance = null }
+  activeV2Ray = null
+  activeWgConfigFile = null
+  activeWgInstance = null
 
   // Only clear blockchain session state if explicitly requested (intentional disconnect or session end)
   if (sendEndSession) {
@@ -2417,6 +2500,17 @@ let activeV2RayProcess: ChildProcess | null = null
  * Kept so it can be cleaned up when the process exits or is killed.
  */
 let activeV2RayConfigFile: string | null = null
+
+async function handleUnexpectedV2RayExit(): Promise<void> {
+  mainWindow?.webContents.send('vpn:disconnected', { reason: 'V2Ray exited' })
+  try {
+    await protocolConnectionManager.disconnect()
+  } catch (err) {
+    console.warn('[V2Ray] Failed to clean manager state after unexpected exit:', err)
+  }
+  activeV2Ray = null
+  scheduleReconnect()
+}
 
 // ---------------------------------------------------------------------------
 // Spawn
@@ -2487,11 +2581,7 @@ export async function spawnV2Ray(
 
     // Replicate the previous disconnect detection logic:
     // If v2ray exits unexpectedly while we consider it connected, trigger reconnect.
-    if (wasActive && activeV2Ray && wasConnected) {
-      mainWindow?.webContents.send('vpn:disconnected', { reason: 'V2Ray exited' })
-      activeV2Ray = null
-      scheduleReconnect()
-    }
+    if (wasActive && activeV2Ray && wasConnected) void handleUnexpectedV2RayExit()
   })
 
   child.on('error', (err) => {

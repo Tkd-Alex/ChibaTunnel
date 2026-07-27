@@ -56,6 +56,7 @@ export function applyWireGuardSplitRoutes(config: string, routes?: string): stri
 export class WireGuardProtocolAdapter
 implements ProtocolAdapter<Wireguard, WireGuardHandshakeData> {
   readonly descriptor = getProtocolDescriptor('wireguard')
+  private configPaths: string[] = []
 
   constructor(
     private readonly dependencies: WireGuardAdapterDependencies,
@@ -91,6 +92,7 @@ implements ProtocolAdapter<Wireguard, WireGuardHandshakeData> {
     const configFile = path.join(configDirectory, `${interfaceName}.conf`)
     fs.writeFileSync(configFile, publicConfig, { mode: 0o600 })
     fs.chmodSync(configFile, 0o600)
+    this.configPaths = [configFile]
 
     return {
       configPaths: [configFile],
@@ -122,12 +124,13 @@ implements ProtocolAdapter<Wireguard, WireGuardHandshakeData> {
 
   async cleanup(client: Wireguard, connection?: RuntimeConnection): Promise<void> {
     client.cleanup()
-    for (const configFile of connection?.configPaths ?? []) {
+    for (const configFile of connection?.configPaths ?? this.configPaths) {
       try {
         fs.rmSync(path.dirname(configFile), { recursive: true, force: true })
       } catch {
         // The runtime teardown may already have removed the temporary directory.
       }
     }
+    this.configPaths = []
   }
 }

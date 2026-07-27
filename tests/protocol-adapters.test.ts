@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { V2Ray } from '@sentinel-official/sentinel-js-sdk'
 import {
   applyWireGuardSplitRoutes,
   hardenV2RayConfig,
+  V2RayProtocolAdapter,
   type V2RayConfig
 } from '../src/main/protocols'
 
@@ -49,4 +51,43 @@ test('disables V2Ray sniffing and enables observatory health checks safely', () 
     probeInterval: '30s',
     probeUrl: 'https://www.google.com/generate_204'
   })
+})
+
+test('rolls back V2Ray and transparent mode after partial startup failure', async () => {
+  const calls: string[] = []
+  const adapter = new V2RayProtocolAdapter({
+    async preflight() {
+      return { ok: true, errors: [], warnings: [] }
+    },
+    async start() {
+      calls.push('start')
+      return { pid: 123, configFile: '/tmp/chibatunnel-v2ray-test/config.json' }
+    },
+    stop() {
+      calls.push('stop')
+    },
+    async startTransparent() {
+      calls.push('start-transparent')
+      return { success: false, error: 'TUN setup failed' }
+    },
+    async stopTransparent() {
+      calls.push('stop-transparent')
+    }
+  })
+
+  await assert.rejects(
+    adapter.connect(
+      new V2Ray(1080),
+      { proxy: { socksPort: 1080, transparent: true } },
+      {
+        nodeAddress: 'sentnode1test',
+        remoteAddress: 'https://203.0.113.10:12345',
+        nodeAddresses: ['203.0.113.10'],
+        sessionId: '42',
+        mode: 'full-tunnel'
+      }
+    ),
+    /TUN setup failed/
+  )
+  assert.deepEqual(calls, ['start', 'start-transparent', 'stop-transparent', 'stop'])
 })

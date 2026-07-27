@@ -93,14 +93,12 @@ implements ProtocolAdapter<V2Ray, V2RayHandshakeData> {
     context: ProtocolContext
   ): Promise<RuntimeConnection> {
     const started = await this.dependencies.start(client)
-    let transparentStarted = false
     try {
       if (context.mode === 'full-tunnel') {
         const transparent = await this.dependencies.startTransparent(client)
         if (!transparent.success) {
           throw new Error(transparent.error ?? 'V2Ray transparent mode failed to start')
         }
-        transparentStarted = true
         return {
           configPaths: [started.configFile],
           processes: [],
@@ -121,15 +119,23 @@ implements ProtocolAdapter<V2Ray, V2RayHandshakeData> {
         }
       }
     } catch (error) {
-      if (transparentStarted) await this.dependencies.stopTransparent()
-      this.dependencies.stop()
+      try {
+        if (context.mode === 'full-tunnel') await this.dependencies.stopTransparent()
+      } catch {
+        // Preserve the original startup error while still stopping V2Ray.
+      } finally {
+        this.dependencies.stop()
+      }
       throw error
     }
   }
 
   async disconnect(connection: RuntimeConnection): Promise<void> {
-    if (connection.proxy?.transparent) await this.dependencies.stopTransparent()
-    this.dependencies.stop()
+    try {
+      if (connection.proxy?.transparent) await this.dependencies.stopTransparent()
+    } finally {
+      this.dependencies.stop()
+    }
   }
 
   async cleanup(client: V2Ray): Promise<void> {
