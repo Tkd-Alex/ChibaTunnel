@@ -4,6 +4,7 @@ import { ConnectionState } from '../types'
 import TrafficStatsWidget from './TrafficStats'
 import { Hexagon, X } from 'lucide-react'
 import ConfirmModal from './ConfirmModal'
+import { getProtocolDescriptor } from '../../../shared/protocols'
 
 interface Props {
   connection: ConnectionState
@@ -16,6 +17,10 @@ export default function ConnectedBar({ connection, reconnectMsg, onDisconnect, o
   const { t } = useTranslation()
   const { node, vpnType, sessionId, inbounds } = connection
   const [showConfirm, setShowConfirm] = useState(false)
+  const protocolLabel = vpnType ? getProtocolDescriptor(vpnType).label : 'VPN'
+  const isProxy = vpnType === 'v2ray'
+    || vpnType === 'xray'
+    || (vpnType === 'hysteria2' && !connection.isTransparent)
 
   return (
     <div className="connected-panel">
@@ -32,11 +37,11 @@ export default function ConnectedBar({ connection, reconnectMsg, onDisconnect, o
       )}
 
       <div style={{ fontSize: 11, color: 'var(--text-2)', flexShrink: 0 }}>
-        {node?.moniker ?? 'Unknown'} · {vpnType === 'wireguard' ? 'WireGuard' : 'V2Ray'}
+        {node?.moniker ?? 'Unknown'} · {protocolLabel}
         {sessionId && <span style={{ color: 'var(--text-3)', fontSize: 10, marginLeft: 8 }}>#{sessionId}</span>}
       </div>
 
-      {vpnType === 'v2ray' && inbounds && inbounds.length > 0 && (
+      {isProxy && inbounds && inbounds.length > 0 && (
         <div className="proxy-chips">
           {inbounds.map((ib, i) => (
             <span key={i} className="proxy-chip">{ib.protocol.toUpperCase()} :{ib.port}</span>

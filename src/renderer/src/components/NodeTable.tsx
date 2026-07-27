@@ -1,7 +1,7 @@
 import React, { useState, useMemo, memo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ApiNode } from '../types'
-import { countryToIsoCode, vpnTypeLabel, formatUdvpnPrice } from '../utils'
+import { countryToIsoCode, vpnTypeId, vpnTypeLabel, formatUdvpnPrice } from '../utils'
 import { Star, Play, Circle, Heart, X, Check, Home, Copy, AlertTriangle } from 'lucide-react'
 
 type SortKey = 'moniker' | 'country' | 'city' | 'type' | 'sessions' | 'peers' | 'gigaPrice' | 'hourPrice'
@@ -55,7 +55,7 @@ const NodeRow = memo(({
 
       <td style={{ color: 'var(--text-3)' }}>{node.city || '—'}</td>
 
-      <td><span className={`td-type ${node.type === 1 ? 'wireguard' : 'v2ray'}`}>{vpnTypeLabel(node.type)}</span></td>
+      <td><span className={`td-type ${vpnTypeId(node.type) ?? 'unknown'}`}>{vpnTypeLabel(node.type)}</span></td>
 
       <td>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>

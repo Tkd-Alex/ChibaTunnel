@@ -8,9 +8,12 @@ import {
   nodeInfo,
   handshake,
   NodeEventCreateSession,
-  NodeVPNType,
+  AmneziaWG,
+  Hysteria2,
+  OpenVPN,
   V2Ray,
   Wireguard,
+  Xray,
   searchEvent,
   nodeStartSession,
   sessionCancel,
@@ -29,7 +32,7 @@ import {
   PageRequest
 } from '@sentinel-official/sentinel-js-sdk'
 import { DirectSecp256k1HdWallet } from '@cosmjs/proto-signing'
-import { assertIsDeliverTxSuccess } from '@cosmjs/stargate'
+import { assertIsDeliverTxSuccess, GasPrice } from '@cosmjs/stargate'
 import { fromBech32 } from '@cosmjs/encoding'
 import { MsgSend } from 'cosmjs-types/cosmos/bank/v1beta1/tx'
 import Long from 'long'
@@ -40,9 +43,32 @@ import * as path from 'path'
 import * as os from 'os'
 import * as dns from 'dns'
 import * as crypto from 'crypto'
+import { findFreePorts } from 'find-free-ports'
 
 import { pingHelper, sendToHelper } from './helper-client'
 import { isValidNodeAddress, parseDeepLink } from './deep-link'
+import { resolveBinary } from './binaries'
+import {
+  decodeHandshakeData,
+  AmneziaWGProtocolAdapter,
+  Hysteria2ProtocolAdapter,
+  OpenVPNProtocolAdapter,
+  preflightProtocol,
+  ProtocolConnectionManager,
+  stripWireGuardDns,
+  V2RayProtocolAdapter,
+  WireGuardProtocolAdapter,
+  XrayProtocolAdapter,
+  type ProtocolAdapter,
+  type ProtocolContext
+} from './protocols'
+import {
+  getProtocolDescriptor,
+  normalizeServiceType,
+  type BinaryId,
+  type ProtocolId,
+  type SupportedPlatform
+} from '../shared/protocols'
 import pkg from '../../package.json'
 
 let pendingDeepLink: string | null = null
@@ -83,14 +109,6 @@ app.on('second-instance', (_event, argv) => {
 // ── Project Configuration ─────────────────────────────────────────────────────
 const PROJECT_WALLET_ADDRESS = process.env.PROJECT_WALLET_ADDRESS || 'sent1ppkl...zq7k0v' // Default dev address
 const PROJECT_DONATION_MEMO  = process.env.PROJECT_DONATION_MEMO  || `${pkg.name} (Donation)`
-
-// ── GasPrice shim ────────────────────────────────────────────────────────────
-function makeGasPrice(str: string): unknown {
-  const sdkDir = require.resolve('@sentinel-official/sentinel-js-sdk').replace(/[/\\]dist[/\\].*/, '')
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { GasPrice } = require(sdkDir + '/node_modules/@cosmjs/stargate')
-  return GasPrice.fromString(str)
-}
 
 const STORE_KEY_BINARIES = 'binaryPaths'
 
@@ -203,7 +221,15 @@ let walletState: {
 
 let activeWgInstance:   Wireguard | null = null
 let activeWgConfigFile: string | null    = null
+let activeAwgInstance:  AmneziaWG | null = null
+let activeAwgConfigFile: string | null   = null
 let activeV2Ray:        V2Ray | null     = null
+let activeXray:         Xray | null      = null
+let activeHysteria2:    Hysteria2 | null = null
+let activeOpenVPN:      OpenVPN | null = null
+let activeHysteria2Process: ChildProcess | null = null
+let activeHysteria2Pid: number | null = null
+let activeOpenVPNPid: number | null = null
 let activeTun2Socks:    number | null = null
 let activeTunInterface: string | null    = null
 let activeV2RayServerIp: string | null    = null
@@ -211,6 +237,7 @@ let activeSessionId:    string | null    = null
 let activeNodeAddress:  string | null    = null
 let wasConnected:       boolean          = false
 let connectInProgress:  boolean          = false
+const protocolConnectionManager = new ProtocolConnectionManager()
 
 let trafficInterval: ReturnType<typeof setInterval> | null = null
 
@@ -479,11 +506,6 @@ function registerIpcHandlers(): void {
     custom[name] = filePaths[0]
     store.set(STORE_KEY_BINARIES, custom)
     return { success: true, path: filePaths[0] }
-  })
-  ipcMain.handle('binary:install', async (_e, cmd: string) => {
-    const res = await execPrivileged([cmd])
-    if (res.code === 0) return { success: true }
-    return { success: false, error: res.stderr }
   })
   ipcMain.handle('helper:repair', async () => {
     try {
@@ -1037,6 +1059,19 @@ function registerIpcHandlers(): void {
     if (connectInProgress) return { success: false, error: 'A connection is already in progress' }
     connectInProgress = true
     try {
+      mainWindow?.webContents.send('vpn:status', { step: 'fetching_node' })
+      const chainNode = await withTimeout(
+        walletState.client.sentinelQuery?.node.node(nodeAddress),
+        RPC_TIMEOUT_MS,
+        'RPC timeout fetching node'
+      )
+      if (!chainNode) return { success: false, error: `Node not found: ${nodeAddress}` }
+      const remoteAddr = chainNode.remoteAddrs?.[0]
+      if (!remoteAddr) return { success: false, error: 'Node has no remote addresses' }
+      mainWindow?.webContents.send('vpn:status', { step: 'fetching_node_info' })
+      const preflight = await preflightNodeRuntime(remoteAddr)
+      if (!preflight.success) return preflight
+
       console.log(`[Subscription:Connect] Starting session with Sub #${subscriptionId} on node ${nodeAddress}`)
       mainWindow?.webContents.send('vpn:status', { step: 'signing_tx' })
       const msg = subscriptionStartSession({
@@ -1094,7 +1129,7 @@ function registerIpcHandlers(): void {
     if (trafficInterval) { clearInterval(trafficInterval); trafficInterval = null }; return { success: true }
   })
 
-  ipcMain.on('vpn:dns-retry-approved', () => { /* Logic handled via promise in wgQuickUp */ })
+  ipcMain.on('vpn:dns-retry-approved', () => { /* Logic handled by the active quick-tunnel retry */ })
 
   ipcMain.handle('node:connect', async (_e, args: { nodeAddress: string; subscriptionType: 'gigabytes' | 'hours'; amount: number; donate?: boolean }) => {
     if (!walletState.client || !walletState.address || !walletState.privkey) return { success: false, error: 'Wallet not initialized' }
@@ -1110,72 +1145,68 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('node:connectWireguard', async () => {
-    if (!activeWgConfigFile) return { success: false, error: 'No WireGuard config' }
-    const res = await wgQuickUp(activeWgConfigFile)
-    if (res.success) wasConnected = true
-    return res
+    const active = protocolConnectionManager.active
+    if (
+      !active
+      || (
+        active.protocol !== 'wireguard'
+        && active.protocol !== 'amneziawg'
+        && active.protocol !== 'openvpn'
+      )
+    ) {
+      return { success: false, error: 'No prepared tunnel configuration' }
+    }
+    try {
+      await protocolConnectionManager.connect(active.operationId)
+      wasConnected = true
+      return { success: true }
+    } catch (err: unknown) {
+      return { success: false, error: extractError(err) }
+    }
   })
 
   ipcMain.handle('node:connectV2ray', async (_e, { transparent }: { transparent?: boolean } = {}) => {
-    if (!activeV2Ray) return { success: false, error: 'No V2Ray session' }
-  
-    // Resolve the v2ray binary path before attempting to spawn.
-    // checkBinaries() looks in: custom store → PATH → resources/bin/ → exe dir.
-    // This is the key fix: we no longer rely on the SDK calling spawn('v2ray')
-    // which fails silently when 'v2ray' is not in PATH.
-    const binaries = checkBinaries()
-    if (!binaries.v2rayPath) {
-      return {
-        success: false,
-        error: 'v2ray binary not found. Check resources/bin/ or set a custom path in settings.',
-      }
+    const active = protocolConnectionManager.active
+    if (
+      !active
+      || (
+        active.protocol !== 'v2ray'
+        && active.protocol !== 'xray'
+        && active.protocol !== 'hysteria2'
+      )
+    ) {
+      return { success: false, error: 'No prepared proxy session' }
     }
-  
     try {
-      // spawnV2Ray() writes the config to a temp file (using the SDK's writeConfig)
-      // and spawns v2ray with the explicit binary path. Throws if v2ray crashes
-      // within the first 500 ms (bad config, missing geo data, port conflict, etc.)
-      const { pid } = await spawnV2Ray(activeV2Ray, binaries.v2rayPath)
-  
-      if (transparent) {
-        const result = await setupTransparentV2Ray(activeV2Ray)
-        if (!result.success) {
-          // Kill v2ray if transparent setup fails so we don't leave a dangling process.
-          killV2Ray()
-          return result
-        }
-      }
-  
+      await protocolConnectionManager.setMode(
+        active.operationId,
+        transparent ? 'full-tunnel' : 'local-proxy'
+      )
+      await protocolConnectionManager.connect(active.operationId)
       wasConnected = true
       startTrafficPolling()
-      return { success: true, pid }
-  
+      return { success: true, pid: getProxyCorePid() }
     } catch (err: unknown) {
-      // spawnV2Ray throws on immediate crash — the error message includes the
-      // exit code and a hint to check the config file. Surface this to the UI.
-      killV2Ray() // ensure cleanup even on partial startup
-      return { success: false, error: String(err) }
+      return { success: false, error: extractError(err) }
     }
   })
 
-  ipcMain.handle('node:retryTunnel', async (_e, { transparent }: { transparent?: boolean } = {}) => {
-    if (activeWgConfigFile) return wgQuickUp(activeWgConfigFile)
-    if (activeV2Ray) {
-      try { /* activeV2Ray.disconnect() */ killV2Ray() } catch (_) {}
-      try {
-        const binaries = checkBinaries()
-        const { pid, configFile } = await spawnV2Ray(activeV2Ray, binaries.v2rayPath) 
-        // const pid = activeV2Ray.connect()
-        if (transparent) {
-          const result = await setupTransparentV2Ray(activeV2Ray)
-          if (!result.success) return result
-        }
-        wasConnected = true
-        startTrafficPolling()
-        return { success: true, pid }
-      } catch (err: unknown) { return { success: false, error: String(err) } }
+  ipcMain.handle('node:retryTunnel', async () => {
+    const active = protocolConnectionManager.active
+    if (!active) return { success: false, error: 'No active tunnel instance to retry.' }
+    try {
+      await protocolConnectionManager.retry(active.operationId)
+      wasConnected = true
+      startTrafficPolling()
+      return {
+        success: true,
+        pid: active.protocol === 'v2ray' || active.protocol === 'xray'
+          ? getProxyCorePid()
+          : undefined
+      }
+    } catch (err: unknown) {
+      return { success: false, error: extractError(err) }
     }
-    return { success: false, error: 'No active tunnel instance to retry.' }
   })
 
   ipcMain.handle('node:disconnect', async () => {
@@ -1314,19 +1345,35 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('vpn:status', () => {
     let inbounds: any = null
-    if (activeV2Ray?.config?.inbounds) {
-      inbounds = activeV2Ray.config.inbounds
+    const proxyClient = activeV2Ray ?? activeXray
+    if (proxyClient?.config?.inbounds) {
+      inbounds = proxyClient.config.inbounds
         .filter((ib: any) => ib.protocol !== 'dokodemo-door')
         .map((ib: any) => ({ protocol: ib.protocol, listen: ib.listen, port: ib.port }))
     }
+    const hysteria2FullTunnel = activeHysteria2 !== null
+      && protocolConnectionManager.active?.mode === 'full-tunnel'
+    const openVPNFullTunnel = activeOpenVPN !== null
+      && protocolConnectionManager.active?.runtime !== undefined
+    const nativeFullTunnel = hysteria2FullTunnel || openVPNFullTunnel
+    const nativeInterface = nativeFullTunnel
+      ? protocolConnectionManager.active?.runtime?.interfaceName ?? null
+      : null
     return {
-      v2rayActive: isV2RayRunning(),
-      v2rayPid: getV2RayPid(),
-      wgActive: !!activeWgConfigFile,
-      wgInterface: activeWgConfigFile ? path.basename(activeWgConfigFile, '.conf') : null,
-      tunActive: activeTun2Socks !== null,
-      tunPid: activeTun2Socks,
-      tunInterface: activeTunInterface,
+      protocol: protocolConnectionManager.active?.protocol ?? null,
+      proxyActive: activeProxyProcess !== null
+        || (activeHysteria2Pid !== null && !hysteria2FullTunnel),
+      proxyPid: getProxyCorePid() ?? activeHysteria2Pid,
+      v2rayActive: activeProxyProcess !== null,
+      v2rayPid: getProxyCorePid(),
+      wgActive: !!(activeWgConfigFile || activeAwgConfigFile),
+      wgInterface: activeWgConfigFile || activeAwgConfigFile
+        ? path.basename((activeWgConfigFile ?? activeAwgConfigFile)!, '.conf')
+        : null,
+      tunActive: activeTun2Socks !== null || nativeFullTunnel,
+      tunPid: activeTun2Socks
+        ?? (hysteria2FullTunnel ? activeHysteria2Pid : activeOpenVPNPid),
+      tunInterface: activeTunInterface ?? nativeInterface,
       sessionId: activeSessionId,
       nodeAddress: activeNodeAddress,
       inbounds
@@ -1351,13 +1398,30 @@ function getNextTunInterface(): string {
   return plat === 'darwin' ? 'utun9' : 'chiba-tun9'
 }
 
-async function setupTransparentV2Ray(v2ray: V2Ray): Promise<{ success: boolean; error?: string }> {
-  const socksPort = v2ray.config.inbounds.find((ib: any) => ib.protocol === 'socks')?.port
-  if (!socksPort) return { success: false, error: 'V2Ray SOCKS5 port not found' }
+interface LocalProxySdkClient {
+  socksPort: number
+  config: {
+    inbounds: Array<Record<string, any>>
+    outbounds: Array<Record<string, any>>
+  }
+}
+
+async function setupTransparentProxy(
+  client: LocalProxySdkClient,
+  protocolLabel: string
+): Promise<{ success: boolean; error?: string }> {
+  const socksPort = client.socksPort
+    || client.config.inbounds.find(inbound => inbound.protocol === 'socks')?.port
+  if (!socksPort) return { success: false, error: `${protocolLabel} SOCKS5 port not found` }
 
   try {
-    const serverAddr = v2ray.config.outbounds.find((ob: any) => ob.protocol === 'vmess' || ob.protocol === 'vless')?.settings?.vnext?.[0]?.address
-    if (!serverAddr) return { success: false, error: 'V2Ray server address not found' }
+    const serverAddr = client.config.outbounds
+      .map(outbound =>
+        outbound.settings?.vnext?.[0]?.address
+        ?? outbound.settings?.servers?.[0]?.address
+      )
+      .find(Boolean)
+    if (!serverAddr) return { success: false, error: `${protocolLabel} server address not found` }
 
     let serverIp = serverAddr
     if (/[a-zA-Z]/.test(serverAddr)) {
@@ -1385,11 +1449,11 @@ async function setupTransparentV2Ray(v2ray: V2Ray): Promise<{ success: boolean; 
       else activeTunInterface = 'chibatun0'
       return { success: true }
     } else {
-      console.error('[setupTransparentV2Ray] Helper failed to start transparent proxy:', helperResponse)
+      console.error(`[setupTransparentProxy:${protocolLabel}] Helper failed:`, helperResponse)
       return { success: false, error: helperResponse.error || 'Unknown helper error' }
     }
   } catch (err: any) {
-    console.error('[setupTransparentV2Ray] Exception during transparent proxy setup:', err)
+    console.error(`[setupTransparentProxy:${protocolLabel}] Exception:`, err)
     return { success: false, error: `Transparent setup failed: ${err.message}` }
   }
 }
@@ -1425,6 +1489,370 @@ function extractError(err: unknown): string {
   return String(err).replace(/^Error:\s*/i, '')
 }
 
+function getCustomBinaryPaths(): Partial<Record<BinaryId, string>> {
+  const custom = (store.get(STORE_KEY_BINARIES) as Record<string, string>) ?? {}
+  const pick = (...names: string[]): string | undefined => names.map(name => custom[name]).find(Boolean)
+  return {
+    wireguard: pick('wireguard', 'wireguard.exe', 'wg-quick'),
+    v2ray: pick('v2ray', 'v2ray.exe'),
+    tun2socks: pick('tun2socks', 'tun2socks.exe'),
+    wintun: pick('wintun', 'wintun.dll'),
+    openvpn: pick('openvpn', 'openvpn.exe'),
+    xray: pick('xray', 'xray.exe'),
+    amneziawg: pick('amneziawg', 'amneziawg.exe'),
+    'awg-quick': pick('awg-quick'),
+    'amneziawg-go': pick('amneziawg-go'),
+    hysteria2: pick('hysteria2', 'hysteria2.exe', 'hysteria')
+  }
+}
+
+function currentSupportedPlatform(): SupportedPlatform | null {
+  if (process.platform === 'win32' || process.platform === 'linux' || process.platform === 'darwin') {
+    return process.platform
+  }
+  return null
+}
+
+function isLinuxKernelModuleAvailable(name: string): boolean {
+  if (process.platform !== 'linux') return true
+  if (fs.existsSync(path.join('/sys/module', name))) return true
+  return spawnSync('modinfo', [name], { stdio: 'ignore', timeout: 3_000 }).status === 0
+}
+
+function isCommandAvailable(name: string): boolean {
+  const locator = process.platform === 'win32' ? 'where.exe' : 'which'
+  return spawnSync(locator, [name], { stdio: 'ignore', timeout: 3_000 }).status === 0
+}
+
+function isAmneziaWgSupported(): boolean {
+  return process.platform !== 'linux'
+    || isLinuxKernelModuleAvailable('amneziawg')
+    || fs.existsSync(path.join(getBundledBinDir(), 'amneziawg-go'))
+    || isCommandAvailable('amneziawg-go')
+}
+
+async function preflightNodeRuntime(remoteAddr: string) {
+  const platform = currentSupportedPlatform()
+  if (!platform) {
+    return { success: false as const, error: `Unsupported platform: ${process.platform}` }
+  }
+
+  const info = await withTimeout(nodeInfo(remoteAddr), 8_000, 'Node info timeout')
+  const rawServiceType = String(info.service_type ?? '')
+  const protocol = normalizeServiceType(rawServiceType)
+  if (!protocol) {
+    return {
+      success: false as const,
+      error: `Unsupported node protocol: ${rawServiceType || 'unknown'}`,
+      rawServiceType
+    }
+  }
+
+  const mode = getProtocolDescriptor(protocol).defaultMode
+  const result = await preflightProtocolRuntime(protocol, mode)
+
+  if (!result.ok) {
+    return {
+      success: false as const,
+      error: `Runtime preflight failed: ${result.errors.join(', ')}`,
+      protocol,
+      mode,
+      preflight: result
+    }
+  }
+
+  return { success: true as const, protocol, mode, info, preflight: result }
+}
+
+async function preflightProtocolRuntime(
+  protocol: ProtocolId,
+  mode: ProtocolContext['mode']
+) {
+  const platform = currentSupportedPlatform()
+  if (!platform) {
+    return {
+      ok: false,
+      errors: [`UNSUPPORTED_PLATFORM:${process.platform}`],
+      warnings: []
+    }
+  }
+  const customPaths = getCustomBinaryPaths()
+  return preflightProtocol({
+    protocol,
+    mode,
+    platform,
+    resolveBinary: id => resolveBinary({
+      id,
+      platform,
+      architecture: process.arch,
+      bundledDirectory: getBundledBinDir(),
+      customPaths
+    }),
+    checkHelper: () => pingHelper(),
+    checkAmneziaWgSupport: () => isAmneziaWgSupported()
+  })
+}
+
+async function stopTransparentRuntime(): Promise<void> {
+  if (activeTun2Socks === null) return
+  const response = await sendToHelper({ command: 'stop-transparent' })
+  if (response.status !== 'ok') {
+    throw new Error(response.error ?? 'Failed to stop transparent proxy')
+  }
+  activeTun2Socks = null
+  activeTunInterface = null
+  activeV2RayServerIp = null
+}
+
+function resolveRuntimeBinaryPath(id: BinaryId): string {
+  const platform = currentSupportedPlatform()
+  if (!platform) throw new Error(`Unsupported platform: ${process.platform}`)
+  const result = resolveBinary({
+    id,
+    platform,
+    architecture: process.arch,
+    bundledDirectory: getBundledBinDir(),
+    customPaths: getCustomBinaryPaths()
+  })
+  if (result.status !== 'ok' || !result.path) {
+    throw new Error(`${id} runtime is ${result.status}: ${result.errorCode ?? 'UNKNOWN'}`)
+  }
+  return result.path
+}
+
+function getNextAwgInterface(): string {
+  for (let index = 0; index < 10; index++) {
+    const interfaceName = `chibaawg${index}`
+    const result = process.platform === 'win32'
+      ? spawnSync('sc.exe', ['query', `AmneziaWGTunnel$${interfaceName}`], { stdio: 'ignore' })
+      : spawnSync('ip', ['link', 'show', interfaceName], { stdio: 'ignore' })
+    if (result.status !== 0) return interfaceName
+  }
+  return 'chibaawg9'
+}
+
+function getNextHysteria2Interface(): string {
+  for (let index = 0; index < 10; index++) {
+    const interfaceName = `chibahy${index}`
+    const result = process.platform === 'win32'
+      ? spawnSync('netsh.exe', ['interface', 'show', 'interface', `name=${interfaceName}`], { stdio: 'ignore' })
+      : process.platform === 'darwin'
+        ? spawnSync('ifconfig', [interfaceName], { stdio: 'ignore' })
+        : spawnSync('ip', ['link', 'show', interfaceName], { stdio: 'ignore' })
+    if (result.status !== 0) return interfaceName
+  }
+  return 'chibahy9'
+}
+
+async function allocateHysteria2SocksPort(): Promise<number> {
+  const [port] = await findFreePorts(1, { startPort: 1082, endPort: 1182 })
+  if (!port) throw new Error('No local port is available for Hysteria2')
+  return port
+}
+
+async function startLocalHysteria2(configFile: string): Promise<{ pid: number }> {
+  if (activeHysteria2Process) throw new Error('Hysteria2 is already running')
+  const binaryPath = resolveRuntimeBinaryPath('hysteria2')
+  const child = spawn(binaryPath, ['client', '-c', configFile], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    detached: false,
+    windowsHide: true
+  })
+
+  // Drain output without logging authentication or obfuscation secrets.
+  child.stdout?.resume()
+  child.stderr?.resume()
+  child.on('exit', (code, signal) => {
+    const wasActive = activeHysteria2Process === child
+    if (wasActive) {
+      activeHysteria2Process = null
+      activeHysteria2Pid = null
+    }
+    console.warn('[Hysteria2] Local process exited.', { code, signal, pid: child.pid })
+    if (
+      wasActive
+      && wasConnected
+      && protocolConnectionManager.active?.protocol === 'hysteria2'
+    ) {
+      mainWindow?.webContents.send('vpn:disconnected', { reason: 'Hysteria2 exited' })
+      void protocolConnectionManager.disconnect()
+        .catch(err => console.warn('[Hysteria2] Unexpected-exit cleanup failed:', err))
+        .finally(scheduleReconnect)
+    }
+  })
+
+  await new Promise<void>((resolve, reject) => {
+    const earlyWindow = setTimeout(resolve, 1_000)
+    child.once('error', () => {
+      clearTimeout(earlyWindow)
+      reject(new Error('Hysteria2 failed to start'))
+    })
+    child.once('exit', code => {
+      clearTimeout(earlyWindow)
+      reject(new Error(`Hysteria2 exited during startup (${code ?? 'unknown'})`))
+    })
+  })
+  if (!child.pid) throw new Error('Hysteria2 started without a PID')
+  activeHysteria2Process = child
+  activeHysteria2Pid = child.pid
+  return { pid: child.pid }
+}
+
+async function stopLocalHysteria2(): Promise<void> {
+  const child = activeHysteria2Process
+  activeHysteria2Process = null
+  activeHysteria2Pid = null
+  if (child?.exitCode === null) child.kill('SIGTERM')
+}
+
+async function startFullHysteria2(
+  configFile: string
+): Promise<{ pid: number; interfaceName?: string }> {
+  const response = await sendToHelper({
+    command: 'hysteria2-start',
+    configFile,
+    hysteria2Path: resolveRuntimeBinaryPath('hysteria2')
+  }, 30_000)
+  if (response.status !== 'ok' || !response.pid) {
+    throw new Error(response.error ?? 'Hysteria2 full tunnel failed to start')
+  }
+  activeHysteria2Pid = response.pid
+  return { pid: response.pid }
+}
+
+async function stopFullHysteria2(): Promise<void> {
+  const response = await sendToHelper({ command: 'hysteria2-stop' }, 15_000)
+  activeHysteria2Pid = null
+  if (response.status !== 'ok') {
+    throw new Error(response.error ?? 'Hysteria2 full tunnel failed to stop')
+  }
+}
+
+async function startOpenVPN(
+  configFile: string
+): Promise<{ pid: number; interfaceName?: string }> {
+  const response = await sendToHelper({
+    command: 'openvpn-start',
+    configFile,
+    openvpnPath: resolveRuntimeBinaryPath('openvpn')
+  }, 30_000)
+  if (response.status !== 'ok' || !response.pid) {
+    throw new Error(response.error ?? 'OpenVPN failed to start')
+  }
+  activeOpenVPNPid = response.pid
+  return { pid: response.pid, interfaceName: 'ovpn0' }
+}
+
+async function stopOpenVPN(): Promise<void> {
+  const response = await sendToHelper({ command: 'openvpn-stop' }, 15_000)
+  activeOpenVPNPid = null
+  if (response.status !== 'ok') {
+    throw new Error(response.error ?? 'OpenVPN failed to stop')
+  }
+}
+
+async function awgQuickUp(configFile: string): Promise<{ success: boolean; error?: string }> {
+  const runtimeId: BinaryId = process.platform === 'win32' ? 'amneziawg' : 'awg-quick'
+  const attemptUp = () => sendToHelper({
+    command: 'awg-up',
+    configFile,
+    awgPath: resolveRuntimeBinaryPath(runtimeId)
+  }, 30_000)
+  return quickTunnelUpWithDnsRetry(configFile, attemptUp, 'AmneziaWG')
+}
+
+async function awgQuickDown(configFile: string): Promise<void> {
+  const runtimeId: BinaryId = process.platform === 'win32' ? 'amneziawg' : 'awg-quick'
+  try {
+    const response = await sendToHelper({
+      command: 'awg-down',
+      configFile,
+      awgPath: resolveRuntimeBinaryPath(runtimeId)
+    }, 15_000)
+    if (response.status !== 'ok') {
+      console.warn('[AmneziaWG] Helper teardown failed:', response.error)
+    }
+  } finally {
+    try { fs.rmSync(path.dirname(configFile), { recursive: true, force: true }) } catch {}
+  }
+}
+
+function createProtocolAdapter(
+  protocol: ProtocolId,
+  settings: AppSettings
+): ProtocolAdapter<unknown, unknown> {
+  const preflight = (context: ProtocolContext) =>
+    preflightProtocolRuntime(protocol, context.mode)
+
+  if (protocol === 'wireguard') {
+    return new WireGuardProtocolAdapter(
+      {
+        preflight,
+        nextInterfaceName: getNextWgInterface,
+        up: wgQuickUp,
+        down: wgQuickDown
+      },
+      {
+        dns: settings.dohIp ? [settings.dohIp] : undefined,
+        splitRoutes: settings.splitTunnel ? settings.splitRoutes : undefined
+      }
+    )
+  }
+
+  if (protocol === 'amneziawg') {
+    return new AmneziaWGProtocolAdapter(
+      {
+        preflight,
+        nextInterfaceName: getNextAwgInterface,
+        up: awgQuickUp,
+        down: awgQuickDown
+      },
+      {
+        dns: settings.dohIp ? [settings.dohIp] : undefined,
+        splitRoutes: settings.splitTunnel ? settings.splitRoutes : undefined
+      }
+    )
+  }
+
+  if (protocol === 'hysteria2') {
+    return new Hysteria2ProtocolAdapter({
+      preflight,
+      allocateSocksPort: allocateHysteria2SocksPort,
+      nextInterfaceName: getNextHysteria2Interface,
+      startLocal: startLocalHysteria2,
+      stopLocal: stopLocalHysteria2,
+      startFull: startFullHysteria2,
+      stopFull: stopFullHysteria2
+    })
+  }
+
+  if (protocol === 'openvpn') {
+    return new OpenVPNProtocolAdapter({
+      preflight,
+      start: startOpenVPN,
+      stop: stopOpenVPN
+    })
+  }
+
+  const proxyDependencies = {
+    preflight,
+    start: async (client: V2Ray | Xray) => {
+      const binaryPath = resolveRuntimeBinaryPath(protocol)
+      return spawnProxyCore(client, binaryPath, protocol)
+    },
+    stop: killProxyCore,
+    startTransparent: async (client: V2Ray | Xray) => {
+      const result = await setupTransparentProxy(client, protocol === 'v2ray' ? 'V2Ray' : 'Xray')
+      return { ...result, tunInterface: activeTunInterface ?? undefined }
+    },
+    stopTransparent: stopTransparentRuntime
+  }
+
+  return protocol === 'v2ray'
+    ? new V2RayProtocolAdapter(proxyDependencies)
+    : new XrayProtocolAdapter(proxyDependencies)
+}
+
 async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabytes' | 'hours'; amount: number; donate?: boolean }) {
   connectInProgress = true
   try {
@@ -1433,6 +1861,9 @@ async function doConnect(args: { nodeAddress: string; subscriptionType: 'gigabyt
     if (!chainNode) return { success: false, error: `Node not found: ${args.nodeAddress}` }
     const remoteAddr = chainNode.remoteAddrs?.[0]
     if (!remoteAddr) return { success: false, error: 'Node has no remote addresses' }
+    mainWindow?.webContents.send('vpn:status', { step: 'fetching_node_info' })
+    const preflight = await preflightNodeRuntime(remoteAddr)
+    if (!preflight.success) return preflight
     const chainPrices = (args.subscriptionType === 'gigabytes' ? chainNode.gigabytePrices : chainNode.hourlyPrices) ?? []
     const udvpnPrice = chainPrices.find((p: Price) => p.denom === 'udvpn')
     if (!udvpnPrice) return { success: false, error: `No up2p price on chain` }
@@ -1569,56 +2000,131 @@ async function doHandshake(nodeAddress: string, sessionId: Long, donate?: boolea
       return res
     }
 
-    if (nInfo.service_type === NodeVPNType.WIREGUARD) {
+    const rawServiceType = String(nInfo.service_type ?? '')
+    const protocol = normalizeServiceType(rawServiceType)
+    if (!protocol) {
+      return { success: false, error: `Unsupported node protocol: ${rawServiceType || 'unknown'}` }
+    }
+    if (
+      protocol !== 'wireguard'
+      && protocol !== 'v2ray'
+      && protocol !== 'xray'
+      && protocol !== 'amneziawg'
+      && protocol !== 'hysteria2'
+      && protocol !== 'openvpn'
+    ) {
+      return { success: false, error: `Protocol adapter not implemented yet: ${protocol}` }
+    }
+
+    if (protocolConnectionManager.active) {
+      await protocolConnectionManager.disconnect()
+      activeWgConfigFile = null
+      activeWgInstance = null
+      activeAwgConfigFile = null
+      activeAwgInstance = null
+      activeV2Ray = null
+      activeXray = null
+      activeHysteria2 = null
+      activeOpenVPN = null
+    }
+
+    const adapter = createProtocolAdapter(protocol, settings)
+    const pending = await protocolConnectionManager.begin({
+      protocol,
+      mode: getProtocolDescriptor(protocol).defaultMode,
+      nodeAddress,
+      remoteAddress: remoteAddr,
+      nodeAddresses: [],
+      sessionId: sessionId.toString()
+    }, adapter)
+    const result = await handshake(
+      sessionId,
+      pending.peerRequest,
+      walletState.privkey!,
+      remoteAddr
+    ).catch(e => {
+      const err: any = new Error(`[handshake] ${extractError(e)}`)
+      err.response = e.response
+      throw err
+    })
+    const prepared = await protocolConnectionManager.prepare(
+      pending.operationId,
+      decodeHandshakeData(result.data),
+      result.addrs
+    )
+
+    if (protocol === 'wireguard' || protocol === 'amneziawg') {
       mainWindow?.webContents.send('vpn:status', { step: 'generating_config' })
-      if (activeWgConfigFile) { try { await wgQuickDown(activeWgConfigFile) } catch (_) {}; activeWgConfigFile = null }
-      const wg = new Wireguard(); const result = await handshake(sessionId, { public_key: wg.publicKey }, walletState.privkey!, remoteAddr).catch(e => {
-        const err: any = new Error(`[handshake] ${extractError(e)}`); err.response = e.response; throw err
-      })
-      const hd = JSON.parse(Buffer.from(result.data, 'base64').toString('utf8'))
-      const dns = settings.dohIp ? [settings.dohIp] : undefined
-      await wg.parseConfig(hd, result.addrs, dns)
-      let configStr = wg.buildConfigString()
-      if (!configStr) return { success: false, error: 'WireGuard: config null' }
-      if (settings.splitTunnel && settings.splitRoutes) configStr = configStr.replace(/AllowedIPs\s*=\s*.+/g, `AllowedIPs = ${settings.splitRoutes}`)
-      const qrCode = await QRCode.toDataURL(configStr, { width: 300, margin: 2, color: { dark: '#000000', light: '#ffffff' } })
-      const ifName = getNextWgInterface(); const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `chibatunnel-${ifName}-`))
-      activeWgConfigFile = path.join(tmpDir, `${ifName}.conf`); fs.writeFileSync(activeWgConfigFile, configStr, { mode: 0o600 }); activeWgInstance = wg
-      return finalize({ success: true, vpnType: 'wireguard', sessionId: activeSessionId, configStr, qrCode })
-    }
-
-    if (nInfo.service_type === NodeVPNType.V2RAY) {
-      if (activeV2Ray) { try { /* activeV2Ray.disconnect() */ killV2Ray() } catch (_) {}; activeV2Ray = null }
-      checkBinaries()
-      const v2ray = new V2Ray(); const result = await handshake(sessionId, { uuid: v2ray.getKey() }, walletState.privkey!, remoteAddr).catch(e => {
-        const err: any = new Error(`[handshake] ${extractError(e)}`); err.response = e.response; throw err
-      })
-      const hd = JSON.parse(Buffer.from(result.data, 'base64').toString('utf8')); await v2ray.parseConfig(hd, result.addrs)
-      const configAny = v2ray.config as any
-      if (configAny) {
-        // Fix V2Ray v5 sniffing panic on QUIC traffic by disabling sniffing
-        const proxyInbound = configAny.inbounds?.find((ib: any) => ib.tag === 'proxy')
-        if (proxyInbound?.sniffing) {
-          proxyInbound.sniffing.enabled = false
-        }
-
-        if (configAny.routing?.balancers?.[0]) {
-          configAny.observatory = {
-            subjectSelector: [...configAny.routing.balancers[0].selector],
-            probeInterval: '30s',
-            probeUrl: 'https://www.google.com/generate_204'
-          }
-        }
+      const configStr = prepared.publicConfig
+      const configFile = prepared.configPaths[0]
+      if (!configStr || !configFile) {
+        throw new Error(`${getProtocolDescriptor(protocol).label} configuration was not prepared`)
       }
-      const shareLinks = v2ray.buildShareLinks(`chibatunnel-${nodeAddress.slice(-8)}`)
-      const qrCodes = await Promise.all(shareLinks.map(link => QRCode.toDataURL(link, { width: 280, margin: 1, color: { dark: '#34d399', light: '#060810' } })))
-      const inbounds = (v2ray.config?.inbounds ?? []).filter((ib: any) => ib.protocol !== 'dokodemo-door').map((ib: any) => ({ protocol: ib.protocol, listen: ib.listen, port: ib.port }))
-      activeV2Ray = v2ray; return finalize({ success: true, vpnType: 'v2ray', sessionId: activeSessionId, shareLinks, qrCodes, inbounds })
+      if (protocol === 'wireguard') {
+        const wg = protocolConnectionManager.active?.sdkClient as Wireguard
+        const qrCode = await QRCode.toDataURL(configStr, { width: 300, margin: 2, color: { dark: '#000000', light: '#ffffff' } })
+        activeWgConfigFile = configFile
+        activeWgInstance = wg
+        return finalize({ success: true, vpnType: protocol, sessionId: activeSessionId, configStr, qrCode })
+      }
+
+      activeAwgConfigFile = configFile
+      activeAwgInstance = protocolConnectionManager.active?.sdkClient as AmneziaWG
+      return finalize({
+        success: true,
+        vpnType: protocol,
+        sessionId: activeSessionId,
+        configStr,
+        qrCode: null
+      })
     }
-    return { success: false, error: `Unknown VPN type: ${nInfo.service_type}` }
+
+    if (protocol === 'hysteria2') {
+      activeHysteria2 = protocolConnectionManager.active?.sdkClient as Hysteria2
+      const socksPort = prepared.proxy?.socksPort
+      return finalize({
+        success: true,
+        vpnType: protocol,
+        sessionId: activeSessionId,
+        shareLinks: [],
+        qrCodes: [],
+        inbounds: socksPort
+          ? [{ protocol: 'socks5', listen: '127.0.0.1', port: socksPort }]
+          : []
+      })
+    }
+
+    if (protocol === 'openvpn') {
+      activeOpenVPN = protocolConnectionManager.active?.sdkClient as OpenVPN
+      return finalize({
+        success: true,
+        vpnType: protocol,
+        sessionId: activeSessionId,
+        configStr: null,
+        qrCode: null
+      })
+    }
+
+    const proxyClient = protocolConnectionManager.active?.sdkClient as V2Ray | Xray
+    const shareLinks = protocol === 'v2ray'
+      ? (proxyClient as V2Ray).buildShareLinks(`chibatunnel-${nodeAddress.slice(-8)}`)
+      : []
+    const qrCodes = await Promise.all(shareLinks.map(link => QRCode.toDataURL(link, { width: 280, margin: 1, color: { dark: '#34d399', light: '#060810' } })))
+    const inbounds = (proxyClient.config?.inbounds ?? []).filter((ib: any) => ib.protocol !== 'dokodemo-door').map((ib: any) => ({ protocol: ib.protocol, listen: ib.listen, port: ib.port }))
+    if (protocol === 'v2ray') activeV2Ray = proxyClient as V2Ray
+    else activeXray = proxyClient as Xray
+    return finalize({ success: true, vpnType: protocol, sessionId: activeSessionId, shareLinks, qrCodes, inbounds })
   } catch (err: any) {
     console.error('[doHandshake] Error:', err)
-    if (activeWgConfigFile) { try { fs.rmSync(path.dirname(activeWgConfigFile), { recursive: true, force: true }) } catch (_) {}; activeWgConfigFile = null; activeWgInstance = null }
+    try { await protocolConnectionManager.disconnect() } catch (_) {}
+    activeWgConfigFile = null
+    activeWgInstance = null
+    activeAwgConfigFile = null
+    activeAwgInstance = null
+    activeV2Ray = null
+    activeXray = null
+    activeHysteria2 = null
+    activeOpenVPN = null
     return { success: false, error: extractError(err), details: err?.response?.data }
   }
 }
@@ -1627,25 +2133,60 @@ async function getTrafficStats(): Promise<{ rx: number; tx: number; source: stri
   const { promisify } = require('util')
   const execFileAsync = promisify(execFile)
 
-  // 1. WireGuard Stats
-  if (activeWgConfigFile && activeWgInstance) {
-    const ifName = path.basename(activeWgConfigFile, '.conf')
+  // 1. WireGuard / AmneziaWG Stats
+  const activeQuickConfig = activeWgConfigFile ?? activeAwgConfigFile
+  if (activeQuickConfig && (activeWgInstance || activeAwgInstance)) {
+    const protocol = activeAwgInstance ? 'amneziawg' : 'wireguard'
+    const ifName = path.basename(activeQuickConfig, '.conf')
     if (process.platform === 'linux') {
       try {
         const rx = parseInt(fs.readFileSync(`/sys/class/net/${ifName}/statistics/rx_bytes`, 'utf8').trim()) || 0
         const tx = parseInt(fs.readFileSync(`/sys/class/net/${ifName}/statistics/tx_bytes`, 'utf8').trim()) || 0
-        return { rx, tx, source: 'wireguard' }
+        return { rx, tx, source: protocol }
       } catch { /* Fallback */ }
     }
     try {
-      const { stdout } = await execFileAsync('wg', ['show', 'all', 'transfer'])
+      const controlBinary = protocol === 'amneziawg' ? 'awg' : 'wg'
+      const { stdout } = await execFileAsync(controlBinary, ['show', 'all', 'transfer'])
       const lines = stdout.trim().split('\n')
       let rx = 0, tx = 0; for (const line of lines) { const parts = line.trim().split(/\s+/); if (parts.length >= 3) { rx += parseInt(parts[1]) || 0; tx += parseInt(parts[2]) || 0 } }
-      return { rx, tx, source: 'wireguard' }
+      return { rx, tx, source: protocol }
     } catch { }
   }
 
-  // 2. tun2socks Stats (TUN fallback)
+  // 2. Hysteria2 native TUN stats
+  if (
+    activeHysteria2
+    && protocolConnectionManager.active?.mode === 'full-tunnel'
+    && protocolConnectionManager.active.runtime?.interfaceName
+    && process.platform === 'linux'
+  ) {
+    const interfaceName = protocolConnectionManager.active.runtime.interfaceName
+    try {
+      const rx = parseInt(fs.readFileSync(`/sys/class/net/${interfaceName}/statistics/rx_bytes`, 'utf8').trim()) || 0
+      const tx = parseInt(fs.readFileSync(`/sys/class/net/${interfaceName}/statistics/tx_bytes`, 'utf8').trim()) || 0
+      return { rx, tx, source: 'hysteria2' }
+    } catch {
+      // The helper may still be creating the native TUN interface.
+    }
+  }
+
+  if (
+    activeOpenVPN
+    && protocolConnectionManager.active?.runtime?.interfaceName
+    && process.platform === 'linux'
+  ) {
+    const interfaceName = protocolConnectionManager.active.runtime.interfaceName
+    try {
+      const rx = parseInt(fs.readFileSync(`/sys/class/net/${interfaceName}/statistics/rx_bytes`, 'utf8').trim()) || 0
+      const tx = parseInt(fs.readFileSync(`/sys/class/net/${interfaceName}/statistics/tx_bytes`, 'utf8').trim()) || 0
+      return { rx, tx, source: 'openvpn' }
+    } catch {
+      // OpenVPN may still be finalizing the TUN interface.
+    }
+  }
+
+  // 3. tun2socks Stats (TUN fallback)
   if (activeTunInterface) {
     if (process.platform === 'linux') {
       try {
@@ -1666,15 +2207,16 @@ async function getTrafficStats(): Promise<{ rx: number; tx: number; source: stri
     }
   }
 
-  // 3. V2Ray API Stats
-  if (activeV2Ray?.config?.inbounds) {
+  // 4. V2Ray / Xray API Stats
+  const activeProxyClient = activeV2Ray ?? activeXray
+  if (activeProxyClient?.config?.inbounds) {
     try {
-      const apiInbound = activeV2Ray.config.inbounds.find((ib: any) => ib.tag === 'api')
+      const apiInbound = activeProxyClient.config.inbounds.find((ib: any) => ib.tag === 'api')
       if (apiInbound) {
         const res = await fetch(`http://127.0.0.1:${apiInbound.port}/stats/query`, { signal: AbortSignal.timeout(1000) }).catch(() => null)
         if (res?.ok) {
           const data = await res.json() as any; const vals = (data.stat ?? []).map((s: any) => parseInt(s.value) || 0)
-          return { rx: vals.filter((_: any, i: number) => i % 2 === 0).reduce((a: any, b: any) => a + b, 0), tx: vals.filter((_: any, i: number) => i % 2 === 1).reduce((a: any, b: any) => a + b, 0), source: 'v2ray' }
+          return { rx: vals.filter((_: any, i: number) => i % 2 === 0).reduce((a: any, b: any) => a + b, 0), tx: vals.filter((_: any, i: number) => i % 2 === 1).reduce((a: any, b: any) => a + b, 0), source: activeXray ? 'xray' : 'v2ray' }
         }
       }
     } catch { }
@@ -1762,8 +2304,58 @@ function findPrivEscBin(): string {
 
 function patchConfigFileForDns(configFile: string): void {
   try {
-    const raw = fs.readFileSync(configFile, 'utf8'); const patched = raw.replace(/^DNS\s*=.*$/gm, '# DNS= stripped'); if (patched !== raw) { fs.writeFileSync(configFile, patched, { mode: 0o600 }) }
+    const raw = fs.readFileSync(configFile, 'utf8')
+    const patched = stripWireGuardDns(raw)
+    if (patched !== raw) fs.writeFileSync(configFile, patched, { mode: 0o600 })
   } catch (_) {}
+}
+
+async function quickTunnelUpWithDnsRetry(
+  configFile: string,
+  attemptUp: () => ReturnType<typeof sendToHelper>,
+  runtimeLabel: string
+): Promise<{ success: boolean; error?: string }> {
+  let response = await attemptUp()
+  if (response.status === 'ok') {
+    startTrafficPolling()
+    return { success: true }
+  }
+
+  if (response.isDnsError !== true) {
+    return {
+      success: false,
+      error: response.error ?? `${runtimeLabel} failed to start`
+    }
+  }
+
+  mainWindow?.webContents.send('vpn:dns-retry-ask')
+  const approved = await new Promise<boolean>((resolve) => {
+    const guard = setTimeout(() => resolve(false), 60_000)
+    ipcMain.once('vpn:dns-retry-approved', () => {
+      clearTimeout(guard)
+      resolve(true)
+    })
+  })
+
+  if (!approved) {
+    return {
+      success: false,
+      error: response.error ?? `${runtimeLabel} DNS retry was cancelled`
+    }
+  }
+
+  patchConfigFileForDns(configFile)
+  response = await attemptUp()
+  if (response.status === 'ok') {
+    startTrafficPolling()
+    mainWindow?.webContents.send('vpn:warning', { message: 'Connected without DNS injection.' })
+    return { success: true }
+  }
+
+  return {
+    success: false,
+    error: response.error ?? `${runtimeLabel} failed after DNS retry`
+  }
 }
 
 /**
@@ -1788,50 +2380,7 @@ async function wgQuickUp(configFile: string): Promise<{ success: boolean; error?
 
   const attemptUp = () => sendToHelper({ command: 'wg-up', configFile, wgPath }, TIMEOUT)
 
-  // First attempt.
-  let res = await attemptUp()
-
-  if (res.status === 'ok') {
-    startTrafficPolling()
-    return { success: true }
-  }
-
-  // DNS retry path — Linux / macOS only.
-  if (res.isDnsError === true) {
-    // Tell the renderer to show the DNS retry dialog.
-    mainWindow?.webContents.send('vpn:dns-retry-ask')
-
-    // Wait for the user to approve or cancel.
-    const approved = await new Promise<boolean>((resolve) => {
-      // Resolve true when the user approves.
-      ipcMain.once('vpn:dns-retry-approved', () => resolve(true))
-      // Resolve false if the window is closed or a timeout elapses (60 s).
-      const guard = setTimeout(() => resolve(false), 60_000)
-      ipcMain.once('vpn:dns-retry-approved', () => clearTimeout(guard))
-    })
-
-    if (!approved) {
-      return { success: false, error: res.error ?? 'DNS error — user cancelled retry.' }
-    }
-
-    // Patch the config file in place — removes DNS = lines from [Interface].
-    // patchConfigFileForDns() is a plain fs.writeFileSync call, no privileges needed.
-    patchConfigFileForDns(configFile)
-
-    // Second attempt with the patched config (same path, new content).
-    res = await attemptUp()
-
-    if (res.status === 'ok') {
-      startTrafficPolling()
-      mainWindow?.webContents.send('vpn:warning', { message: 'Connected without DNS injection.' })
-      return { success: true }
-    }
-
-    return { success: false, error: res.error ?? 'wg-quick up failed after DNS patch.' }
-  }
-
-  // Any other error.
-  return { success: false, error: res.error ?? 'wg-up failed.' }
+  return quickTunnelUpWithDnsRetry(configFile, attemptUp, 'WireGuard')
 }
 
 /**
@@ -1909,7 +2458,7 @@ async function setupWallet(mnemonic: string, label: string, rpc: string) {
   try {
     const wallet = await DirectSecp256k1HdWallet.fromMnemonic(mnemonic.trim(), { prefix: 'sent' })
     const [acct] = await wallet.getAccounts(); const privkey = await privKeyFromMnemonic({ mnemonic: wallet.mnemonic })
-    const client = await withTimeout(SigningSentinelClient.connectWithSigner(rpc, wallet, { gasPrice: makeGasPrice('0.2udvpn') as any }), RPC_TIMEOUT_MS, 'RPC timeout')
+    const client = await withTimeout(SigningSentinelClient.connectWithSigner(rpc, wallet, { gasPrice: GasPrice.fromString('0.2udvpn') }), RPC_TIMEOUT_MS, 'RPC timeout')
     const readonlyClient = await withTimeout(SentinelClient.connect(rpc), RPC_TIMEOUT_MS, 'RPC timeout')
     walletState = { address: acct.address, label, privkey, client, readonlyClient, rpc }
 
@@ -2134,10 +2683,22 @@ export function checkBinaries() {
 
   const wgName  = isWin ? 'wireguard.exe' : 'wg-quick'
   const v2Name  = isWin ? 'v2ray.exe'     : 'v2ray'
+  const xrayName = isWin ? 'xray.exe' : 'xray'
+  const awgName = isWin ? 'amneziawg.exe' : 'awg-quick'
+  const hysteria2Name = isWin ? 'hysteria2.exe' : 'hysteria2'
+  const openVPNName = isWin ? 'openvpn.exe' : 'openvpn'
   const t2sName = isWin ? 'tun2socks.exe' : 'tun2socks'
 
   const wgPath  = find(wgName)
   const v2Path  = find(v2Name)
+  const xrayPath = find(xrayName)
+  const awgPath = find(awgName)
+  const awgGoPath = isLinux ? find('amneziawg-go') : null
+  const awgKernelModuleFound = !isLinux || isLinuxKernelModuleAvailable('amneziawg')
+  const awgUserspaceFound = !!awgGoPath
+  const awgSystemSupportFound = !isLinux || awgKernelModuleFound || awgUserspaceFound
+  const hysteria2Path = find(hysteria2Name)
+  const openVPNPath = find(openVPNName)
   const t2sPath = find(t2sName)
 
   // -------------------------------------------------------------------------
@@ -2254,6 +2815,23 @@ export function checkBinaries() {
     // false means geo-based routing rules won't work, but basic proxy will.
     geoDataOk,
 
+    // Xray, AmneziaWG and Hysteria2
+    xray:           !!xrayPath,
+    xrayPath,
+    xrayHash:       xrayPath ? getHash(xrayPath) : null,
+    amneziawg:      !!awgPath && awgSystemSupportFound,
+    amneziawgPath:  awgPath,
+    amneziawgHash:  awgPath ? getHash(awgPath) : null,
+    amneziawgKernelModule: awgKernelModuleFound,
+    amneziawgUserspace: awgUserspaceFound,
+    amneziawgUserspacePath: awgGoPath,
+    hysteria2:      !!hysteria2Path,
+    hysteria2Path,
+    hysteria2Hash:  hysteria2Path ? getHash(hysteria2Path) : null,
+    openvpn:        !!openVPNPath,
+    openvpnPath:    openVPNPath,
+    openvpnHash:    openVPNPath ? getHash(openVPNPath) : null,
+
     // tun2socks
     tun2socks:      !!t2sPath && (isWin ? wintunFound : true),
     tun2socksPath:  t2sPath,
@@ -2297,13 +2875,37 @@ async function killActiveConnections(sendEndSession = true) {
   if (trafficInterval) { clearInterval(trafficInterval); trafficInterval = null }
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
 
-  // Clean up local tunnel processes and interfaces immediately
-  if (activeTun2Socks !== null) {
-    const helperResponse = await sendToHelper({ command: 'stop-transparent' })
-    if(helperResponse.status === "ok"){ activeTun2Socks = null; activeTunInterface = null; activeV2RayServerIp = null}
+  // Clean up local tunnel processes and interfaces immediately.
+  if (protocolConnectionManager.active) {
+    try {
+      await protocolConnectionManager.disconnect()
+    } catch (err) {
+      console.warn('[killActiveConnections] Protocol cleanup failed:', err)
+    }
+  } else {
+    // Compatibility fallback for a process created before manager ownership.
+    if (activeTun2Socks !== null) {
+      try { await stopTransparentRuntime() } catch (err) {
+        console.warn('[killActiveConnections] Transparent cleanup failed:', err)
+      }
+    }
+    if (activeV2Ray || activeXray) killProxyCore()
+    if (activeHysteria2Process) await stopLocalHysteria2()
+    else if (activeHysteria2Pid !== null) await stopFullHysteria2()
+    if (activeOpenVPNPid !== null) await stopOpenVPN()
+    if (activeWgConfigFile) await wgQuickDown(activeWgConfigFile)
+    if (activeAwgConfigFile) await awgQuickDown(activeAwgConfigFile)
   }
-  if (activeV2Ray) { try { /* activeV2Ray.disconnect() */ killV2Ray() } catch { }; activeV2Ray = null }
-  if (activeWgConfigFile) { await wgQuickDown(activeWgConfigFile); activeWgConfigFile = null; activeWgInstance = null }
+  activeV2Ray = null
+  activeXray = null
+  activeHysteria2 = null
+  activeHysteria2Pid = null
+  activeOpenVPN = null
+  activeOpenVPNPid = null
+  activeWgConfigFile = null
+  activeWgInstance = null
+  activeAwgConfigFile = null
+  activeAwgInstance = null
 
   // Only clear blockchain session state if explicitly requested (intentional disconnect or session end)
   if (sendEndSession) {
@@ -2325,175 +2927,116 @@ async function killActiveConnections(sendEndSession = true) {
 
 
 
-/**
- * Handle to the running v2ray child process.
- * Null when v2ray is not running. Owned exclusively by this module —
- * do not spawn or kill v2ray from anywhere else in the codebase.
- */
-let activeV2RayProcess: ChildProcess | null = null
+type ProxyCoreProtocol = 'v2ray' | 'xray'
 
-/**
- * Path to the temporary config file written for the current session.
- * Kept so it can be cleaned up when the process exits or is killed.
- */
-let activeV2RayConfigFile: string | null = null
+let activeProxyProcess: ChildProcess | null = null
+let activeProxyConfigFile: string | null = null
+let activeProxyProtocol: ProxyCoreProtocol | null = null
 
-// ---------------------------------------------------------------------------
-// Spawn
-// ---------------------------------------------------------------------------
+async function handleUnexpectedProxyExit(protocol: ProxyCoreProtocol): Promise<void> {
+  const label = protocol === 'v2ray' ? 'V2Ray' : 'Xray'
+  mainWindow?.webContents.send('vpn:disconnected', { reason: `${label} exited` })
+  try {
+    await protocolConnectionManager.disconnect()
+  } catch (err) {
+    console.warn(`[${label}] Failed to clean manager state after unexpected exit:`, err)
+  }
+  activeV2Ray = null
+  activeXray = null
+  scheduleReconnect()
+}
 
-/**
- * Writes the V2Ray config to a temporary file and spawns the v2ray binary
- * with an explicit binary path instead of relying on PATH resolution.
- *
- * This replaces `activeV2Ray.connect()` in the ipcMain handler. The V2Ray
- * SDK instance is still required because we call its writeConfig() method
- * to produce the JSON config file — we just take over the spawning step.
- *
- * @param v2ray       The V2Ray SDK instance after parseConfig() has been called.
- * @param binaryPath  Absolute path to the v2ray executable, from checkBinaries().
- * @returns           Object with { pid, configFile } on success.
- * @throws            Error if the binary is not found, fails to start, or exits
- *                    within the first 500 ms (indicating an immediate crash).
- */
-export async function spawnV2Ray(
-  v2ray:      { writeConfig: (p: string) => void },
+async function spawnProxyCore(
+  client: { writeConfig: (output: string) => unknown },
   binaryPath: string,
+  protocol: ProxyCoreProtocol
 ): Promise<{ pid: number; configFile: string }> {
-  if (activeV2RayProcess !== null) {
-    throw new Error('V2Ray is already running. Call killV2Ray() first.')
+  const label = protocol === 'v2ray' ? 'V2Ray' : 'Xray'
+  if (activeProxyProcess !== null) {
+    throw new Error(`${activeProxyProtocol ?? 'Proxy core'} is already running`)
   }
-
-  // Write config to a temp directory — same pattern as the SDK.
-  const tempDir    = fs.mkdtempSync(path.join(os.tmpdir(), 'chibatunnel-v2ray-'))
-  const configFile = path.join(tempDir, `v2ray_${crypto.randomBytes(8).toString('hex')}.json`)
-  v2ray.writeConfig(configFile)
-  console.log('[V2Ray] Config written to:', configFile)
-
-  // Verify the binary exists before attempting to spawn — gives a clear error
-  // instead of a cryptic ENOENT from spawn().
   if (!fs.existsSync(binaryPath)) {
-    throw new Error(`v2ray binary not found at: ${binaryPath}`)
+    throw new Error(`${label} binary not found at: ${binaryPath}`)
   }
+
+  const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), `chibatunnel-${protocol}-`))
+  const configFile = path.join(
+    tempDirectory,
+    `${protocol}_${crypto.randomBytes(8).toString('hex')}.json`
+  )
+  client.writeConfig(configFile)
 
   const child = spawn(binaryPath, ['run', '--config', configFile], {
-    // stdio is piped so we can capture output for logging.
-    // Do NOT use 'inherit' — that would attach v2ray's stdout/stderr to
-    // Electron's process handles, causing the same "await forever" issue
-    // we solved for tun2socks.
     stdio: ['ignore', 'pipe', 'pipe'],
-    // Detached false: v2ray stays in our process group. If Electron exits,
-    // the OS cleans up v2ray too (on Windows, detached=false is the default
-    // and ensures the child is in the parent's job object).
-    detached: false,
+    detached: false
   })
-
-  // Capture stdout and stderr. v2ray writes its log to stderr by default.
   child.stdout?.on('data', (data: Buffer) => {
-    console.log('[V2Ray stdout]', data.toString().trim())
+    console.log(`[${label} stdout]`, data.toString().trim())
   })
-
   child.stderr?.on('data', (data: Buffer) => {
-    console.log('[V2Ray stderr]', data.toString().trim())
+    console.log(`[${label} stderr]`, data.toString().trim())
   })
-
   child.on('exit', (code, signal) => {
-    console.warn('[V2Ray] Process exited.', { code, signal, pid: child.pid })
-    const wasActive = (activeV2RayProcess === child)
-    activeV2RayProcess   = null
-    activeV2RayConfigFile = null
-    // Attempt cleanup of the temp config directory on exit.
-    try { fs.rmSync(tempDir, { recursive: true, force: true }) } catch {}
-
-    // Replicate the previous disconnect detection logic:
-    // If v2ray exits unexpectedly while we consider it connected, trigger reconnect.
-    if (wasActive && activeV2Ray && wasConnected) {
-      mainWindow?.webContents.send('vpn:disconnected', { reason: 'V2Ray exited' })
-      activeV2Ray = null
-      scheduleReconnect()
+    const wasActive = activeProxyProcess === child
+    console.warn(`[${label}] Process exited.`, { code, signal, pid: child.pid })
+    if (wasActive) {
+      activeProxyProcess = null
+      activeProxyConfigFile = null
+      activeProxyProtocol = null
+    }
+    try { fs.rmSync(tempDirectory, { recursive: true, force: true }) } catch {}
+    if (
+      wasActive
+      && wasConnected
+      && protocolConnectionManager.active?.protocol === protocol
+    ) {
+      void handleUnexpectedProxyExit(protocol)
+    }
+  })
+  child.on('error', (err) => {
+    console.error(`[${label}] Spawn error:`, err.message)
+    if (activeProxyProcess === child) {
+      activeProxyProcess = null
+      activeProxyConfigFile = null
+      activeProxyProtocol = null
     }
   })
 
-  child.on('error', (err) => {
-    console.error('[V2Ray] Spawn error:', err.message)
-    activeV2RayProcess   = null
-    activeV2RayConfigFile = null
-  })
-
-  // Give the process a short window to surface an immediate crash (bad config,
-  // wrong architecture, missing geo data, port already in use, etc.) before
-  // declaring success. 500 ms is enough for v2ray to start or fail on startup.
   await new Promise<void>((resolve, reject) => {
     const earlyWindow = setTimeout(resolve, 500)
-
-    child.once('error', (err) => {
+    child.once('error', err => {
       clearTimeout(earlyWindow)
-      reject(new Error(`v2ray failed to spawn: ${err.message}`))
+      reject(new Error(`${label} failed to spawn: ${err.message}`))
     })
-
-    child.once('exit', (code) => {
+    child.once('exit', code => {
       clearTimeout(earlyWindow)
       reject(new Error(
-        `v2ray exited immediately (code ${code ?? '?'}). ` +
-        `Check the config file at ${configFile} and the logs above.`
+        `${label} exited immediately (code ${code ?? '?'}). Check the runtime logs.`
       ))
     })
   })
+  if (!child.pid) throw new Error(`${label} spawned without a PID`)
 
-  if (!child.pid) {
-    throw new Error('v2ray spawned but returned no PID.')
-  }
-
-  activeV2RayProcess    = child
-  activeV2RayConfigFile = configFile
-  console.log('[V2Ray] Spawned successfully. PID:', child.pid, '| Binary:', binaryPath)
-
+  activeProxyProcess = child
+  activeProxyConfigFile = configFile
+  activeProxyProtocol = protocol
+  console.log(`[${label}] Spawned successfully.`, { pid: child.pid, binaryPath })
   return { pid: child.pid, configFile }
 }
 
-// ---------------------------------------------------------------------------
-// Kill
-// ---------------------------------------------------------------------------
-
-/**
- * Kills the running v2ray process and cleans up its temporary config directory.
- * Safe to call when v2ray is not running — returns immediately without error.
- *
- * Call this from killActiveConnections() instead of activeV2Ray.disconnect().
- */
-export function killV2Ray(): void {
-  if (activeV2RayProcess === null) {
-    console.log('[V2Ray] killV2Ray called but no process is running.')
-    return
-  }
-
-  const pid = activeV2RayProcess.pid
+function killProxyCore(): void {
+  if (!activeProxyProcess) return
+  const processToKill = activeProxyProcess
+  activeProxyProcess = null
+  activeProxyConfigFile = null
+  activeProxyProtocol = null
   try {
-    activeV2RayProcess.kill()
-    console.log('[V2Ray] Killed process PID:', pid)
+    processToKill.kill()
   } catch (err) {
-    console.warn('[V2Ray] Failed to kill process:', err)
+    console.warn('[ProxyCore] Failed to kill process:', err)
   }
-
-  activeV2RayProcess    = null
-  activeV2RayConfigFile = null
 }
 
-// ---------------------------------------------------------------------------
-// Status query
-// ---------------------------------------------------------------------------
-
-/**
- * Returns true if a v2ray process is currently running.
- * Use this in the UI or health checks instead of checking activeV2Ray directly.
- */
-export function isV2RayRunning(): boolean {
-  return activeV2RayProcess !== null
-}
-
-/**
- * Returns the PID of the running v2ray process, or null if not running.
- */
-export function getV2RayPid(): number | null {
-  return activeV2RayProcess?.pid ?? null
+function getProxyCorePid(): number | null {
+  return activeProxyProcess?.pid ?? null
 }

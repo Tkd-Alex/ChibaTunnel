@@ -1,3 +1,9 @@
+import {
+  getProtocolDescriptor,
+  normalizeIndexedNodeType,
+  type ProtocolId
+} from '../../shared/protocols'
+
 /**
  * Convert a country name to its ISO 3166-1 alpha-2 code.
  * Falls back to 'un' (United Nations) for unknown countries.
@@ -36,8 +42,26 @@ export function countryToIsoCode(country: string): string {
   return map[country] ?? 'un'
 }
 
-export function vpnTypeLabel(type: number): string {
-  return type === 1 ? 'WireGuard' : type === 2 ? 'V2Ray' : `Type ${type}`
+export function vpnTypeId(type: number | string): ProtocolId | null {
+  return normalizeIndexedNodeType(type)
+}
+
+export function vpnTypeLabel(type: number | string): string {
+  const protocol = vpnTypeId(type)
+  return protocol ? getProtocolDescriptor(protocol).label : `Type ${type}`
+}
+
+export function vpnTypeColor(type: number | string): string {
+  const colors: Record<ProtocolId, string> = {
+    wireguard: '#a855f7',
+    v2ray: '#34d399',
+    openvpn: '#3b82f6',
+    xray: '#22d3ee',
+    amneziawg: '#e879f9',
+    hysteria2: '#f97316'
+  }
+  const protocol = vpnTypeId(type)
+  return protocol ? colors[protocol] : '#94a3b8'
 }
 
 export function formatBalance(amount: string, denom: string): string {

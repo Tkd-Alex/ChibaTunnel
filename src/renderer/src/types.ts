@@ -1,3 +1,5 @@
+import type { ProtocolId } from '../../shared/protocols'
+
 export interface NodePrice { denom: string; value: string }
 
 export interface ApiNode {
@@ -72,6 +74,13 @@ export interface RpcEndpoint { label: string; url: string; region: string }
 export interface BinaryStatus {
   wireguard: boolean; wgPath: string | null; wgHash: string | null
   v2ray: boolean; v2rayPath: string | null; v2rayHash: string | null
+  xray?: boolean; xrayPath?: string | null; xrayHash?: string | null
+  amneziawg?: boolean; amneziawgPath?: string | null; amneziawgHash?: string | null
+  amneziawgKernelModule?: boolean
+  amneziawgUserspace?: boolean
+  amneziawgUserspacePath?: string | null
+  hysteria2?: boolean; hysteria2Path?: string | null; hysteria2Hash?: string | null
+  openvpn?: boolean; openvpnPath?: string | null; openvpnHash?: string | null
   tun2socks: boolean; tun2socksPath: string | null; tun2socksHash: string | null
   platform: string; distro: string
 }
@@ -86,7 +95,7 @@ export interface TrafficStats { rx: number; tx: number; source: string }
 
 export interface NodeFilters {
   search: string; country: string; city: string
-  type: '' | '1' | '2'
+  type: '' | '1' | '2' | '3' | '4' | '5' | '6'
   onlyActive: boolean; onlyHealthy: boolean; onlyWhitelisted: boolean
   hideResidential: boolean; hideDuplicate: boolean
   bookmarksOnly: boolean
@@ -96,14 +105,14 @@ export type SubscriptionType = 'gigabytes' | 'hours'
 
 export type ConnectStep =
   | 'choose-type' | 'subscribing' | 'handshaking'
-  | 'wg-options' | 'v2ray-options' | 'connecting' | 'connected' | 'error'
+  | 'full-tunnel-options' | 'proxy-options' | 'connecting' | 'connected' | 'error'
   | 'fetching_node' | 'preparing_tx' | 'signing_tx' | 'broadcasting_tx' | 'extracting_tx'
   | 'fetching_node_info' | 'generating_config' | 'wg_dns_retry'
 
 export interface ConnectionState {
   step: ConnectStep; node: ApiNode | null
   subscriptionType: SubscriptionType; amount: number; sessionId: string | null
-  vpnType: 'wireguard' | 'v2ray' | null
+  vpnType: ProtocolId | null
   configStr: string | null; wgQrCode: string | null
   shareLinks: string[]; v2rayQrCodes: string[]
   inbounds: Array<{ protocol: string; listen: string; port: number }> | null

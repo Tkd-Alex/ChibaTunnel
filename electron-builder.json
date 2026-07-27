@@ -48,16 +48,16 @@
   "deb": {
     "afterInstall": "build/linux/postinst.sh",
     "afterRemove":  "build/linux/postrm.sh",
-    "depends": ["wireguard-tools"]
+    "depends": ["wireguard-tools", "openvpn"]
   },
   "rpm": {
     "afterInstall": "build/linux/postinst.sh",
     "afterRemove":  "build/linux/postrm.sh",
-    "depends": ["wireguard-tools"]
+    "depends": ["wireguard-tools", "openvpn"]
   },
   "pacman": {
     "afterInstall": "build/linux/postinst.sh",
     "afterRemove":  "build/linux/postrm.sh",
-    "depends": ["wireguard-tools"]
+    "depends": ["wireguard-tools", "openvpn"]
   }
 }
