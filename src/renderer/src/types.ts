@@ -92,7 +92,7 @@ export interface TrafficStats { rx: number; tx: number; source: string }
 
 export interface NodeFilters {
   search: string; country: string; city: string
-  type: '' | '1' | '2'
+  type: '' | '1' | '2' | '3' | '4' | '5' | '6'
   onlyActive: boolean; onlyHealthy: boolean; onlyWhitelisted: boolean
   hideResidential: boolean; hideDuplicate: boolean
   bookmarksOnly: boolean

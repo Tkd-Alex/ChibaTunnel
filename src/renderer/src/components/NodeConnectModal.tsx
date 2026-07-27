@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ApiNode, ConnectionState, INITIAL_CONNECTION, SubscriptionType, BinaryStatus } from '../types'
-import { countryToIsoCode, formatUdvpnPrice, vpnTypeLabel } from '../utils'
+import { countryToIsoCode, formatUdvpnPrice, vpnTypeColor, vpnTypeId, vpnTypeLabel } from '../utils'
 import { 
   Shield, 
   Copy, 
@@ -272,7 +272,7 @@ function LivePanel({ node, initialSessionId }: { node: ApiNode, initialSessionId
       </div>
       <div className="ncm-stat-row">
         <span>{t('table.type')}</span>
-        <span className={`td-type ${node.type === 1 ? 'wireguard' : 'v2ray'}`} style={{ fontSize: 9 }}>
+        <span className={`td-type ${vpnTypeId(node.type) ?? 'unknown'}`} style={{ fontSize: 9 }}>
           {vpnTypeLabel(node.type)}
         </span>
       </div>
@@ -366,7 +366,7 @@ function LivePanel({ node, initialSessionId }: { node: ApiNode, initialSessionId
           <div className="ncm-stat-row">
             <span>{t('node_modal.service')}</span>
             <span style={{
-              color: live.service_type === 'wireguard' ? 'var(--purple)' : 'var(--green)',
+              color: vpnTypeColor(live.service_type),
               textTransform: 'uppercase', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em'
             }}>
               {live.service_type}
@@ -543,7 +543,7 @@ export default function NodeConnectModal({
   const autoStartFired = useRef(false)
   const [globalSettings, setGlobalSettings] = useState<any>(null)
 
-  const vpnName = node.type === 1 ? 'WireGuard' : 'V2Ray'
+  const vpnName = vpnTypeLabel(node.type)
 
   useEffect(() => {
     window.api.checkBinaries().then((b: any) => setBinaries(b))
@@ -747,7 +747,7 @@ export default function NodeConnectModal({
                       conn={{
                         ...conn,
                         step: 'connected',
-                        vpnType: conn.vpnType ?? (node.type === 1 ? 'wireguard' : 'v2ray')
+                        vpnType: conn.vpnType ?? vpnTypeId(node.type)
                       }} 
                       onDisconnect={async () => { await window.api.disconnectNode(); onClose() }} 
                     />

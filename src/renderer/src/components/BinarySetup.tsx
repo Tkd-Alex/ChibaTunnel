@@ -84,6 +84,44 @@ const GUIDES = (status: BinaryStatus, t: any): BinaryGuide[] => [
     ],
     macos:   [{ id: 'brew', label: 'Homebrew', code: 'brew install tun2socks' }],
     windows: 'https://github.com/xjasonlyu/tun2socks/releases',
+  },
+  {
+    id: 'xray', name: 'Xray', icon: <Play size={16} />,
+    found: !!status.xray, path: status.xrayPath ?? null, hash: status.xrayHash ?? null,
+    why: t('binary.why.v2ray'),
+    linux: [{ id: 'arch', label: 'Arch Linux', code: 'pacman -S --noconfirm xray' }],
+    macos: [{ id: 'brew', label: 'Homebrew', code: 'brew install xray' }],
+    windows: 'https://github.com/XTLS/Xray-core/releases/latest',
+  },
+  {
+    id: 'amneziawg', name: 'AmneziaWG', icon: <Hexagon size={16} />,
+    found: !!status.amneziawg, path: status.amneziawgPath ?? null, hash: status.amneziawgHash ?? null,
+    why: t('binary.why.wireguard'),
+    linux: [
+      { id: 'debian', label: 'Ubuntu / Debian', code: 'apt install -y amneziawg-tools' },
+      { id: 'arch', label: 'Arch Linux (AUR)', code: 'yay -S --noconfirm amneziawg-tools' },
+    ],
+    macos: [],
+    windows: 'https://github.com/amnezia-vpn/amneziawg-windows-client/releases/latest',
+  },
+  {
+    id: 'hysteria2', name: 'Hysteria2', icon: <Play size={16} />,
+    found: !!status.hysteria2, path: status.hysteria2Path ?? null, hash: status.hysteria2Hash ?? null,
+    why: t('binary.why.v2ray'),
+    linux: [], macos: [],
+    windows: 'https://github.com/apernet/hysteria/releases/latest',
+  },
+  {
+    id: 'openvpn', name: 'OpenVPN', icon: <Shield size={16} />,
+    found: !!status.openvpn, path: status.openvpnPath ?? null, hash: status.openvpnHash ?? null,
+    why: t('binary.why.wireguard'),
+    linux: [
+      { id: 'debian', label: 'Ubuntu / Debian', code: 'apt install -y openvpn' },
+      { id: 'fedora', label: 'Fedora / RHEL', code: 'dnf install -y openvpn' },
+      { id: 'arch', label: 'Arch Linux', code: 'pacman -S --noconfirm openvpn' },
+    ],
+    macos: [{ id: 'brew', label: 'Homebrew', code: 'brew install openvpn' }],
+    windows: 'https://openvpn.net/community-downloads/',
   }
 ]
 
@@ -123,11 +161,17 @@ export default function BinarySetup({ status, onDismiss, onRecheck, embedded = f
 
   async function handleBrowse(id: string) {
     const isWin = current.platform === 'win32'
-    const name = id === 'wireguard' 
-      ? (isWin ? 'wireguard.exe' : 'wg-quick')
-      : id === 'v2ray' 
-        ? (isWin ? 'v2ray.exe' : 'v2ray')
-        : (isWin ? 'tun2socks.exe' : 'tun2socks')
+    const executableNames: Record<string, string> = {
+      wireguard: isWin ? 'wireguard.exe' : 'wg-quick',
+      v2ray: isWin ? 'v2ray.exe' : 'v2ray',
+      tun2socks: isWin ? 'tun2socks.exe' : 'tun2socks',
+      xray: isWin ? 'xray.exe' : 'xray',
+      amneziawg: isWin ? 'amneziawg.exe' : 'awg-quick',
+      hysteria2: isWin ? 'hysteria2.exe' : 'hysteria2',
+      openvpn: isWin ? 'openvpn.exe' : 'openvpn'
+    }
+    const name = executableNames[id]
+    if (!name) return
     
     const res = await (window.api as any).browseBinary(name)
     if (res.success) {

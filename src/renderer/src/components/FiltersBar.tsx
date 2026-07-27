@@ -57,6 +57,10 @@ export default function FiltersBar({ filters, onChange, nodes, filteredCount }: 
         <option value="">{t('filters.all_types')}</option>
         <option value="1">{t('filters.wireguard')}</option>
         <option value="2">{t('filters.v2ray')}</option>
+        <option value="3">OpenVPN</option>
+        <option value="4">Xray</option>
+        <option value="5">AmneziaWG</option>
+        <option value="6">Hysteria2</option>
       </select>
 
       <button className={`filter-toggle ${filters.onlyActive      ? 'active' : ''}`} onClick={() => set({ onlyActive:      !filters.onlyActive      })}><Circle size={8} fill="currentColor" /> {t('filters.active')}</button>

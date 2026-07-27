@@ -48,7 +48,10 @@ test('never falls back for an unknown or malformed service type', () => {
 test('keeps the legacy index mapping deliberately limited to known values', () => {
   assert.equal(normalizeIndexedNodeType(1), 'wireguard')
   assert.equal(normalizeIndexedNodeType('2'), 'v2ray')
-  assert.equal(normalizeIndexedNodeType(3), null)
+  assert.equal(normalizeIndexedNodeType(3), 'openvpn')
+  assert.equal(normalizeIndexedNodeType(4), 'xray')
+  assert.equal(normalizeIndexedNodeType(5), 'amneziawg')
+  assert.equal(normalizeIndexedNodeType(6), 'hysteria2')
   assert.equal(normalizeIndexedNodeType('openvpn'), 'openvpn')
 })
 

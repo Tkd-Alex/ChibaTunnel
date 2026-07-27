@@ -29,5 +29,9 @@ export function normalizeServiceType(value: unknown): ProtocolId | null {
 export function normalizeIndexedNodeType(value: unknown): ProtocolId | null {
   if (value === 1 || value === '1') return 'wireguard'
   if (value === 2 || value === '2') return 'v2ray'
+  if (value === 3 || value === '3') return 'openvpn'
+  if (value === 4 || value === '4') return 'xray'
+  if (value === 5 || value === '5') return 'amneziawg'
+  if (value === 6 || value === '6') return 'hysteria2'
   return normalizeServiceType(value)
 }
