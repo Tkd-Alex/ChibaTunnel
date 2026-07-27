@@ -81,6 +81,7 @@ export interface ActiveConnection<Client = unknown> {
   mode: TunnelMode
   nodeAddress: string
   remoteAddress: string
+  nodeAddresses: string[]
   sessionId: string
   adapter: ProtocolAdapter<Client>
   sdkClient: Client
