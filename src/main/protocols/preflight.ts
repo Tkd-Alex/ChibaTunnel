@@ -16,6 +16,7 @@ export interface ProtocolPreflightOptions {
   platform: SupportedPlatform
   resolveBinary: (id: BinaryId) => BinaryCheckResult
   checkHelper: () => Promise<boolean>
+  checkAmneziaWgSupport?: () => boolean | Promise<boolean>
 }
 
 export async function preflightProtocol(options: ProtocolPreflightOptions): Promise<PreflightResult> {
@@ -36,6 +37,15 @@ export async function preflightProtocol(options: ProtocolPreflightOptions): Prom
   const descriptor = getProtocolDescriptor(protocol)
   if (descriptor.requiresElevation[mode] && !(await options.checkHelper())) {
     errors.push('HELPER_UNAVAILABLE')
+  }
+
+  if (
+    protocol === 'amneziawg'
+    && platform === 'linux'
+    && options.checkAmneziaWgSupport
+    && !(await options.checkAmneziaWgSupport())
+  ) {
+    errors.push('SYSTEM_SUPPORT_MISSING:amneziawg')
   }
 
   return {

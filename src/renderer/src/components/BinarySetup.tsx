@@ -98,8 +98,10 @@ const GUIDES = (status: BinaryStatus, t: any): BinaryGuide[] => [
     found: !!status.amneziawg, path: status.amneziawgPath ?? null, hash: status.amneziawgHash ?? null,
     why: t('binary.why.wireguard'),
     linux: [
-      { id: 'debian', label: 'Ubuntu / Debian', code: 'apt install -y amneziawg-tools' },
-      { id: 'arch', label: 'Arch Linux (AUR)', code: 'yay -S --noconfirm amneziawg-tools' },
+      { id: 'debian', label: 'Ubuntu / Debian', code: 'apt install -y amneziawg' },
+      { id: 'arch', label: 'Arch Linux (AUR)', code: 'yay -S --noconfirm amneziawg-tools amneziawg-dkms' },
+      { id: 'arch', label: 'Arch Linux (userspace)', code: 'yay -S --noconfirm amneziawg-tools amneziawg-go' },
+      { id: 'fedora', label: 'Fedora / RHEL', code: 'dnf install -y amneziawg-tools amneziawg-dkms' },
     ],
     macos: [],
     windows: 'https://github.com/amnezia-vpn/amneziawg-windows-client/releases/latest',

@@ -1511,6 +1511,23 @@ function currentSupportedPlatform(): SupportedPlatform | null {
   return null
 }
 
+function isLinuxKernelModuleAvailable(name: string): boolean {
+  if (process.platform !== 'linux') return true
+  if (fs.existsSync(path.join('/sys/module', name))) return true
+  return spawnSync('modinfo', [name], { stdio: 'ignore', timeout: 3_000 }).status === 0
+}
+
+function isCommandAvailable(name: string): boolean {
+  const locator = process.platform === 'win32' ? 'where.exe' : 'which'
+  return spawnSync(locator, [name], { stdio: 'ignore', timeout: 3_000 }).status === 0
+}
+
+function isAmneziaWgSupported(): boolean {
+  return process.platform !== 'linux'
+    || isLinuxKernelModuleAvailable('amneziawg')
+    || isCommandAvailable('amneziawg-go')
+}
+
 async function preflightNodeRuntime(remoteAddr: string) {
   const platform = currentSupportedPlatform()
   if (!platform) {
@@ -1568,7 +1585,8 @@ async function preflightProtocolRuntime(
       bundledDirectory: getBundledBinDir(),
       customPaths
     }),
-    checkHelper: () => pingHelper()
+    checkHelper: () => pingHelper(),
+    checkAmneziaWgSupport: () => isAmneziaWgSupported()
   })
 }
 
@@ -2667,6 +2685,9 @@ export function checkBinaries() {
   const v2Path  = find(v2Name)
   const xrayPath = find(xrayName)
   const awgPath = find(awgName)
+  const awgKernelModuleFound = !isLinux || isLinuxKernelModuleAvailable('amneziawg')
+  const awgUserspaceFound = isLinux && isCommandAvailable('amneziawg-go')
+  const awgSystemSupportFound = !isLinux || awgKernelModuleFound || awgUserspaceFound
   const hysteria2Path = find(hysteria2Name)
   const openVPNPath = find(openVPNName)
   const t2sPath = find(t2sName)
@@ -2789,9 +2810,11 @@ export function checkBinaries() {
     xray:           !!xrayPath,
     xrayPath,
     xrayHash:       xrayPath ? getHash(xrayPath) : null,
-    amneziawg:      !!awgPath,
+    amneziawg:      !!awgPath && awgSystemSupportFound,
     amneziawgPath:  awgPath,
     amneziawgHash:  awgPath ? getHash(awgPath) : null,
+    amneziawgKernelModule: awgKernelModuleFound,
+    amneziawgUserspace: awgUserspaceFound,
     hysteria2:      !!hysteria2Path,
     hysteria2Path,
     hysteria2Hash:  hysteria2Path ? getHash(hysteria2Path) : null,

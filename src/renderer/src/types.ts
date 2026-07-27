@@ -76,6 +76,8 @@ export interface BinaryStatus {
   v2ray: boolean; v2rayPath: string | null; v2rayHash: string | null
   xray?: boolean; xrayPath?: string | null; xrayHash?: string | null
   amneziawg?: boolean; amneziawgPath?: string | null; amneziawgHash?: string | null
+  amneziawgKernelModule?: boolean
+  amneziawgUserspace?: boolean
   hysteria2?: boolean; hysteria2Path?: string | null; hysteria2Hash?: string | null
   openvpn?: boolean; openvpnPath?: string | null; openvpnHash?: string | null
   tun2socks: boolean; tun2socksPath: string | null; tun2socksHash: string | null

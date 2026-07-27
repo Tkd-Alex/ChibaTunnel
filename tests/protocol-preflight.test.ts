@@ -67,3 +67,22 @@ test('rejects a mode the protocol does not implement', async () => {
   assert.equal(result.ok, false)
   assert.deepEqual(result.errors, ['UNSUPPORTED_MODE:openvpn:local-proxy'])
 })
+
+test('rejects AmneziaWG on Linux when kernel and userspace support are unavailable', async () => {
+  let supportChecks = 0
+  const result = await preflightProtocol({
+    protocol: 'amneziawg',
+    mode: 'full-tunnel',
+    platform: 'linux',
+    resolveBinary: available,
+    checkHelper: async () => true,
+    checkAmneziaWgSupport: async () => {
+      supportChecks += 1
+      return false
+    }
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(supportChecks, 1)
+  assert.deepEqual(result.errors, ['SYSTEM_SUPPORT_MISSING:amneziawg'])
+})

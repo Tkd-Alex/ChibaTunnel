@@ -128,8 +128,11 @@ in its own process tree with `stdio: 'ignore'`.
 | `wg-quick` | macOS | `brew install wireguard-tools` (guided in-app) |
 | WireGuard | Windows | **Bundled** — `wireguard.exe` included in installer |
 | `v2ray` | All | **Bundled** — included in installer |
+| Xray | All | **Bundled** — included in installer |
+| Hysteria2 | All | **Bundled** — included in installer |
 | `tun2socks` | All | **Bundled** — included in installer |
 | `wintun.dll` | Windows | **Bundled** — included alongside tun2socks |
+| AmneziaWG | Linux | Install `amneziawg-tools` plus a module/DKMS package, or `amneziawg-go` as userspace fallback |
 
 > **Note for Linux AppImage users**: if `wg-quick` is not already installed,
 > the app will display the correct install command for your distribution.
