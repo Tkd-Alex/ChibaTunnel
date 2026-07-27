@@ -21,6 +21,7 @@ function createAdapter(overrides: {
   contexts?: ProtocolContext[]
 } = {}): ProtocolAdapter<FakeClient, unknown> {
   const calls = overrides.calls ?? []
+  let remainingConnectFailures = overrides.failConnect ? 1 : 0
   return {
     descriptor: getProtocolDescriptor('v2ray'),
     createClient() {
@@ -54,7 +55,10 @@ function createAdapter(overrides: {
       _context: ProtocolContext
     ) {
       calls.push('connect')
-      if (overrides.failConnect) throw new Error('runtime failed')
+      if (remainingConnectFailures > 0) {
+        remainingConnectFailures -= 1
+        throw new Error('runtime failed')
+      }
       return {
         configPaths: prepared.configPaths,
         processes: [],
@@ -89,8 +93,9 @@ test('serializes prepare, runtime start and disconnect through one active connec
   assert.equal(manager.phase, 'handshaking')
   assert.equal(manager.active?.sessionId, '42')
 
-  await manager.prepare(pending.operationId, { metadata: [] })
+  await manager.prepare(pending.operationId, { metadata: [] }, ['198.51.100.8'])
   assert.equal(manager.phase, 'preparing-config')
+  assert.deepEqual(manager.active?.nodeAddresses, ['198.51.100.8'])
 
   await manager.connect(pending.operationId)
   assert.equal(manager.phase, 'connected')
@@ -120,16 +125,20 @@ test('rejects concurrent connections before creating another SDK client', async 
   await manager.disconnect()
 })
 
-test('rolls back prepared state when runtime startup fails', async () => {
+test('keeps prepared state retryable when runtime startup fails', async () => {
   const calls: string[] = []
   const manager = new ProtocolConnectionManager()
   const pending = await manager.begin(beginOptions, createAdapter({ calls, failConnect: true }))
   await manager.prepare(pending.operationId, {})
 
   await assert.rejects(manager.connect(pending.operationId), /runtime failed/)
-  assert.equal(manager.phase, 'idle')
-  assert.equal(manager.active, null)
-  assert.deepEqual(calls.slice(-2), ['connect', 'cleanup'])
+  assert.equal(manager.phase, 'failed')
+  assert.ok(manager.active?.prepared)
+
+  await manager.retry(pending.operationId)
+  assert.equal(manager.phase, 'connected')
+  assert.equal(calls.filter(call => call === 'preflight').length, 2)
+  await manager.disconnect()
 })
 
 test('cleans the SDK client and becomes retryable after invalid handshake data', async () => {
@@ -175,4 +184,16 @@ test('preserves node addresses for SDK parsing and rejects unsupported modes bef
     /Unsupported mode/
   )
   assert.equal(manager.phase, 'idle')
+})
+
+test('re-runs preflight when proxy mode changes before runtime startup', async () => {
+  const calls: string[] = []
+  const manager = new ProtocolConnectionManager()
+  const pending = await manager.begin(beginOptions, createAdapter({ calls }))
+  await manager.prepare(pending.operationId, {})
+  await manager.setMode(pending.operationId, 'full-tunnel')
+
+  assert.equal(manager.active?.mode, 'full-tunnel')
+  assert.equal(calls.filter(call => call === 'preflight').length, 2)
+  await manager.disconnect()
 })

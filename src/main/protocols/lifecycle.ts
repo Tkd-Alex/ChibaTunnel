@@ -10,7 +10,7 @@ const TRANSITIONS: Readonly<Record<ConnectionPhase, readonly ConnectionPhase[]>>
   connected: ['disconnecting', 'recovering', 'failed'],
   disconnecting: ['idle', 'failed'],
   failed: ['disconnecting', 'recovering', 'idle'],
-  recovering: ['preflight', 'disconnecting', 'failed', 'idle']
+  recovering: ['preflight', 'starting-runtime', 'disconnecting', 'failed', 'idle']
 }
 
 export class ConnectionLifecycle {

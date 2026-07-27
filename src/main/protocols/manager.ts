@@ -87,9 +87,14 @@ export class ProtocolConnectionManager {
     }
   }
 
-  async prepare(operationId: number, handshakeData: unknown): Promise<PreparedProtocolConfig> {
+  async prepare(
+    operationId: number,
+    handshakeData: unknown,
+    nodeAddresses?: string[]
+  ): Promise<PreparedProtocolConfig> {
     const active = this.requireActive(operationId)
     try {
+      if (nodeAddresses) active.nodeAddresses = [...nodeAddresses]
       this.lifecycle.transition('preparing-config', operationId)
       this.syncPhase()
       const prepared = await active.adapter.parseHandshake(
@@ -104,6 +109,60 @@ export class ProtocolConnectionManager {
       await this.rollback(operationId)
       throw error
     }
+  }
+
+  async retry(operationId: number): Promise<RuntimeConnection> {
+    const active = this.requireActive(operationId)
+    if (!active.prepared) throw new Error('Protocol configuration has not been prepared')
+    if (this.lifecycle.phase !== 'failed') {
+      throw new Error(`Cannot retry runtime while phase is "${this.lifecycle.phase}"`)
+    }
+
+    try {
+      this.lifecycle.transition('recovering', operationId)
+      this.syncPhase()
+      const preflight = await active.adapter.preflight(this.contextFromActive(active))
+      this.lifecycle.assertCurrent(operationId)
+      if (!preflight.ok) {
+        throw new Error(`Runtime preflight failed: ${preflight.errors.join(', ')}`)
+      }
+      this.lifecycle.transition('starting-runtime', operationId)
+      this.syncPhase()
+      const runtime = await active.adapter.connect(
+        active.sdkClient,
+        active.prepared,
+        this.contextFromActive(active)
+      )
+      this.lifecycle.assertCurrent(operationId)
+      active.runtime = runtime
+      this.lifecycle.transition('connected', operationId)
+      this.syncPhase()
+      return runtime
+    } catch (error) {
+      this.lifecycle.fail(operationId)
+      this.syncPhase()
+      throw error
+    }
+  }
+
+  async setMode(operationId: number, mode: TunnelMode): Promise<void> {
+    const active = this.requireActive(operationId)
+    if (this.lifecycle.phase !== 'preparing-config') {
+      throw new Error(`Cannot change tunnel mode while phase is "${this.lifecycle.phase}"`)
+    }
+    if (!active.adapter.descriptor.modes.includes(mode)) {
+      throw new Error(`Unsupported mode for ${active.protocol}: ${mode}`)
+    }
+    if (active.mode === mode) return
+
+    const context = this.contextFromActive(active)
+    context.mode = mode
+    const preflight = await active.adapter.preflight(context)
+    this.lifecycle.assertCurrent(operationId)
+    if (!preflight.ok) {
+      throw new Error(`Runtime preflight failed: ${preflight.errors.join(', ')}`)
+    }
+    active.mode = mode
   }
 
   async connect(operationId: number): Promise<RuntimeConnection> {
@@ -124,7 +183,8 @@ export class ProtocolConnectionManager {
       this.syncPhase()
       return runtime
     } catch (error) {
-      await this.rollback(operationId)
+      this.lifecycle.fail(operationId)
+      this.syncPhase()
       throw error
     }
   }
