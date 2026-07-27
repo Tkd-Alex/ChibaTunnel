@@ -138,6 +138,27 @@ interface WgDownPayload {
   wgPath?: string
 }
 
+interface QuickTunnelSpec {
+  commandPrefix: 'wg' | 'awg'
+  windowsExecutable: 'wireguard.exe' | 'amneziawg.exe'
+  unixExecutable: 'wg-quick' | 'awg-quick'
+  unixControlExecutable: 'wg' | 'awg'
+}
+
+const WIREGUARD_TUNNEL_SPEC: QuickTunnelSpec = {
+  commandPrefix: 'wg',
+  windowsExecutable: 'wireguard.exe',
+  unixExecutable: 'wg-quick',
+  unixControlExecutable: 'wg'
+}
+
+const AMNEZIAWG_TUNNEL_SPEC: QuickTunnelSpec = {
+  commandPrefix: 'awg',
+  windowsExecutable: 'amneziawg.exe',
+  unixExecutable: 'awg-quick',
+  unixControlExecutable: 'awg'
+}
+
 // ---------------------------------------------------------------------------
 // Active state
 // ---------------------------------------------------------------------------
@@ -1045,26 +1066,30 @@ function handleSetKillSwitch(socket: net.Socket, payload: SetKillSwitchPayload):
  * @param socket   Connected client socket for sending the response.
  * @param payload  Validated WgUpPayload.
  */
-function handleWgUp(socket: net.Socket, payload: WgUpPayload): void {
+function handleQuickTunnelUp(
+  socket: net.Socket,
+  payload: WgUpPayload,
+  spec: QuickTunnelSpec
+): void {
   const { configFile, wgPath } = payload
 
   try {
     if (PLATFORM === 'win32') {
-      const exe = wgPath || 'wireguard.exe'
+      const exe = wgPath || spec.windowsExecutable
       // /installtunnelservice takes the full config file path.
       // wireguard.exe derives the tunnel/service name from the filename.
       runFile(exe, ['/installtunnelservice', configFile])
       sendResponse(socket, { status: 'ok' })
 
     } else if (PLATFORM === 'linux' || PLATFORM === 'darwin') {
-      const exe = wgPath || 'wg-quick'
+      const exe = wgPath || spec.unixExecutable
       try {
         runFile(exe, ['up', configFile])
         sendResponse(socket, { status: 'ok' })
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err)
         const dnsError = isWgDnsError(message)
-        log(dnsError ? 'WARN' : 'ERROR', 'wg-quick up failed.', { message, dnsError })
+        log(dnsError ? 'WARN' : 'ERROR', `${spec.unixExecutable} up failed.`, { message, dnsError })
         sendResponse(socket, {
           status: 'error',
           error: message,
@@ -1074,14 +1099,21 @@ function handleWgUp(socket: net.Socket, payload: WgUpPayload): void {
       }
 
     } else {
-      sendResponse(socket, { status: 'error', error: `wg-up not implemented for platform: ${PLATFORM}` })
+      sendResponse(socket, {
+        status: 'error',
+        error: `${spec.commandPrefix}-up not implemented for platform: ${PLATFORM}`
+      })
     }
 
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
-    log('ERROR', 'handleWgUp failed.', { message })
+    log('ERROR', `${spec.commandPrefix}-up failed.`, { message })
     sendResponse(socket, { status: 'error', error: message })
   }
+}
+
+function handleWgUp(socket: net.Socket, payload: WgUpPayload): void {
+  handleQuickTunnelUp(socket, payload, WIREGUARD_TUNNEL_SPEC)
 }
 
 /**
@@ -1099,26 +1131,32 @@ function handleWgUp(socket: net.Socket, payload: WgUpPayload): void {
  * @param socket   Connected client socket for sending the response.
  * @param payload  Validated WgDownPayload.
  */
-function handleWgDown(socket: net.Socket, payload: WgDownPayload): void {
+function handleQuickTunnelDown(
+  socket: net.Socket,
+  payload: WgDownPayload,
+  spec: QuickTunnelSpec
+): void {
   const { configFile, wgPath } = payload
   // Derive the interface / tunnel name from the config filename.
   const ifName = path.basename(configFile, '.conf')
 
   try {
     if (PLATFORM === 'win32') {
-      const exe = wgPath || 'wireguard.exe'
+      const exe = wgPath || spec.windowsExecutable
       try {
         runFile(exe, ['/uninstalltunnelservice', ifName])
       } catch (err) {
         // If the tunnel service is already gone (e.g. previous crash), treat
         // it as success — wgDown is always idempotent from Electron's view.
-        log('WARN', 'wg uninstalltunnelservice failed (may already be gone).', err)
+        log('WARN', `${spec.commandPrefix} uninstalltunnelservice failed (may already be gone).`, err)
       }
       sendResponse(socket, { status: 'ok' })
 
     } else if (PLATFORM === 'linux' || PLATFORM === 'darwin') {
-      const exe = wgPath || 'wg-quick'
-      const wgBin = wgPath ? path.join(path.dirname(wgPath), 'wg') : 'wg'
+      const exe = wgPath || spec.unixExecutable
+      const controlBinary = wgPath
+        ? path.join(path.dirname(wgPath), spec.unixControlExecutable)
+        : spec.unixControlExecutable
 
       // Check whether the interface is still up before calling wg-quick down.
       // On Linux 'ip link' is native; on macOS 'wg show' handles logical naming.
@@ -1128,10 +1166,10 @@ function handleWgDown(socket: net.Socket, payload: WgDownPayload): void {
         } else {
           // Darwin check: use 'wg' command to verify if the logical interface exists.
           // This is more robust than checking for a specific socket file path.
-          execFileSync(wgBin, ['show', ifName], { stdio: 'pipe' })
+          execFileSync(controlBinary, ['show', ifName], { stdio: 'pipe' })
         }
       } catch {
-        log('INFO', `wg-down: interface ${ifName} already absent — nothing to do.`)
+        log('INFO', `${spec.commandPrefix}-down: interface ${ifName} already absent — nothing to do.`)
         sendResponse(socket, { status: 'ok' })
         return
       }
@@ -1139,21 +1177,28 @@ function handleWgDown(socket: net.Socket, payload: WgDownPayload): void {
       try {
         runFile(exe, ['down', configFile])
       } catch (err) {
-        log('WARN', 'wg-quick down failed.', err)
+        log('WARN', `${spec.unixExecutable} down failed.`, err)
         // Still return ok — the interface check above confirmed it is gone
         // or wg-quick cleaned it up partially. Do not leave Electron hanging.
       }
       sendResponse(socket, { status: 'ok' })
 
     } else {
-      sendResponse(socket, { status: 'error', error: `wg-down not implemented for platform: ${PLATFORM}` })
+      sendResponse(socket, {
+        status: 'error',
+        error: `${spec.commandPrefix}-down not implemented for platform: ${PLATFORM}`
+      })
     }
 
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
-    log('ERROR', 'handleWgDown failed.', { message })
+    log('ERROR', `${spec.commandPrefix}-down failed.`, { message })
     sendResponse(socket, { status: 'error', error: message })
   }
+}
+
+function handleWgDown(socket: net.Socket, payload: WgDownPayload): void {
+  handleQuickTunnelDown(socket, payload, WIREGUARD_TUNNEL_SPEC)
 }
 
 // ---------------------------------------------------------------------------
@@ -1196,6 +1241,24 @@ function processCommand(socket: net.Socket, command: HelperCommand): void {
 
     case 'wg-down': {
       handleWgDown(socket, command)
+      break
+    }
+
+    case 'awg-up': {
+      handleQuickTunnelUp(
+        socket,
+        { configFile: command.configFile, wgPath: command.awgPath },
+        AMNEZIAWG_TUNNEL_SPEC
+      )
+      break
+    }
+
+    case 'awg-down': {
+      handleQuickTunnelDown(
+        socket,
+        { configFile: command.configFile, wgPath: command.awgPath },
+        AMNEZIAWG_TUNNEL_SPEC
+      )
       break
     }
   }

@@ -14,6 +14,8 @@ export type HelperCommand =
   | { command: 'set-kill-switch'; enabled: boolean }
   | { command: 'wg-up'; configFile: string; wgPath?: string }
   | { command: 'wg-down'; configFile: string; wgPath?: string }
+  | { command: 'awg-up'; configFile: string; awgPath?: string }
+  | { command: 'awg-down'; configFile: string; awgPath?: string }
 
 export interface HelperResponse {
   status: 'ok' | 'error' | 'pong'
@@ -115,6 +117,16 @@ export function parseHelperCommand(value: unknown): HelperCommand {
         ? undefined
         : runtimeExecutable(command.wgPath, ['wireguard.exe', 'wg-quick'], 'wgPath')
       return { command: command.command, configFile, wgPath }
+    }
+
+    case 'awg-up':
+    case 'awg-down': {
+      assertAllowedKeys(command, ['command', 'configFile', 'awgPath'])
+      const configFile = runtimeConfigPath(command.configFile)
+      const awgPath = command.awgPath === undefined
+        ? undefined
+        : runtimeExecutable(command.awgPath, ['amneziawg.exe', 'awg-quick'], 'awgPath')
+      return { command: command.command, configFile, awgPath }
     }
 
     default:

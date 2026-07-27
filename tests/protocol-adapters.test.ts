@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { V2Ray, Xray } from '@sentinel-official/sentinel-js-sdk'
+import fs from 'node:fs'
 import {
+  AmneziaWG,
+  V2Ray,
+  Xray
+} from '@sentinel-official/sentinel-js-sdk'
+import {
+  AmneziaWGProtocolAdapter,
   applyWireGuardSplitRoutes,
   hardenV2RayConfig,
   hardenXrayConfig,
@@ -153,4 +159,60 @@ test('rolls back Xray and transparent mode after partial startup failure', async
     /Xray TUN setup failed/
   )
   assert.deepEqual(calls, ['start', 'start-transparent', 'stop-transparent', 'stop'])
+})
+
+test('preserves every AmneziaWG obfuscation field in the prepared config', async () => {
+  const adapter = new AmneziaWGProtocolAdapter({
+    async preflight() {
+      return { ok: true, errors: [], warnings: [] }
+    },
+    nextInterfaceName() {
+      return 'chibaawg0'
+    },
+    async up() {
+      return { success: true }
+    },
+    async down() {}
+  }, {
+    dns: ['1.1.1.1'],
+    splitRoutes: '10.0.0.0/8'
+  })
+  const client = new AmneziaWG()
+  const prepared = await adapter.parseHandshake(
+    client,
+    {
+      addrs: ['10.8.0.2/32'],
+      metadata: [{
+        port: 51820,
+        public_key: Buffer.alloc(32, 7).toString('base64'),
+        s1: 10,
+        s2: 20,
+        s3: 30,
+        s4: 15,
+        h1: 1001,
+        h2: 1002,
+        h3: 1003,
+        h4: 1004,
+        i1: '<b 0x01>'
+      }]
+    },
+    {
+      nodeAddress: 'sentnode1test',
+      remoteAddress: 'https://203.0.113.30:12345',
+      nodeAddresses: ['203.0.113.30'],
+      sessionId: '44',
+      mode: 'full-tunnel'
+    }
+  )
+  const config = fs.readFileSync(prepared.configPaths[0], 'utf8')
+
+  assert.match(config, /^S1 = 10$/m)
+  assert.match(config, /^S2 = 20$/m)
+  assert.match(config, /^S3 = 30$/m)
+  assert.match(config, /^S4 = 15$/m)
+  assert.match(config, /^H4 = 1004$/m)
+  assert.match(config, /^I1 = <b 0x01>$/m)
+  assert.match(config, /^AllowedIPs = 10\.0\.0\.0\/8$/m)
+  await adapter.cleanup(client)
+  assert.equal(fs.existsSync(prepared.configPaths[0]), false)
 })

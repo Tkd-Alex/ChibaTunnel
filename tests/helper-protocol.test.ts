@@ -26,6 +26,15 @@ test('accepts typed helper requests', () => {
     configFile: '/tmp/chibatunnel-wg-123/tunnel.conf',
     wgPath: '/usr/bin/wg-quick'
   })
+  assert.deepEqual(parseHelperCommand({
+    command: 'awg-down',
+    configFile: '/tmp/chibatunnel-awg-123/chibaawg0.conf',
+    awgPath: '/usr/bin/awg-quick'
+  }), {
+    command: 'awg-down',
+    configFile: '/tmp/chibatunnel-awg-123/chibaawg0.conf',
+    awgPath: '/usr/bin/awg-quick'
+  })
 })
 
 test('rejects unknown commands and unexpected fields', () => {
@@ -54,6 +63,11 @@ test('rejects command injection and path traversal inputs', () => {
     tun2socksPath: '/tmp/tun2socks;touch-pwned',
     socksPort: 1080,
     serverIp: '203.0.113.10'
+  }), /allowlisted/)
+  assert.throws(() => parseHelperCommand({
+    command: 'awg-up',
+    configFile: '/tmp/chibatunnel-awg-123/chibaawg0.conf',
+    awgPath: '/bin/sh'
   }), /allowlisted/)
 })
 
