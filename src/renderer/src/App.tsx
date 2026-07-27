@@ -256,6 +256,8 @@ export default function App() {
             setDeepLinkArgs(deepLink)
             setModalInfoOnly(false)
             setModalNode(targetNode)
+          } else {
+            setVpnWarning(`${t('node_modal.node_unreachable')}: ${deepLink.nodeAddress}`)
           }
           window.api.clearDeepLinkPending()
           // Run the rest of the fetches in the background (non-blocking)
@@ -359,8 +361,10 @@ export default function App() {
           setDeepLinkArgs(args)
           setModalInfoOnly(false)
           setModalNode(targetNode)
+        } else {
+          setVpnWarning(`${t('node_modal.node_unreachable')}: ${args.nodeAddress}`)
         }
-      })
+      }).catch(() => setVpnWarning(`${t('node_modal.node_unreachable')}: ${args.nodeAddress}`))
     })
     return unsubscribe
   }, [nodes])
@@ -500,7 +504,25 @@ export default function App() {
   if (screen === 'setup') return (
     <div className="app-shell" dir={isRtl ? 'rtl' : 'ltr'}>
       <TitleBar />
-      <WalletSetup onSuccess={(_, rpc) => { setCurrentRpc(rpc); setScreen('main') }} />
+      <WalletSetup onSuccess={async (_, rpc) => {
+        setCurrentRpc(rpc)
+        setScreen('main')
+        const pending = await window.api.getDeepLinkPending()
+        if (pending) {
+          const res = await window.api.fetchNodeByAddress(pending.nodeAddress)
+          if (res?.success && res.node) {
+            const targetNode = res.node as ApiNode
+            setNodes([targetNode])
+            setDeepLinkArgs(pending)
+            setModalInfoOnly(false)
+            setModalNode(targetNode)
+          } else {
+            setVpnWarning(`${t('node_modal.node_unreachable')}: ${pending.nodeAddress}`)
+          }
+          await window.api.clearDeepLinkPending()
+        }
+        fetchAllBackground()
+      }} />
     </div>
   )
 

@@ -42,32 +42,26 @@ import * as dns from 'dns'
 import * as crypto from 'crypto'
 
 import { pingHelper, sendToHelper } from './helper-client'
+import { isValidNodeAddress, parseDeepLink } from './deep-link'
 import pkg from '../../package.json'
 
 let pendingDeepLink: string | null = null
-
-function parseDeepLink(url: string): {
-  nodeAddress: string
-  subscriptionType: 'gigabytes' | 'hours'
-  amount: number
-} | null {
-  try {
-    const parsed = new URL(url)
-    if (parsed.hostname !== 'connect') return null
-    const nodeAddress = parsed.searchParams.get('node')
-    if (!nodeAddress || !nodeAddress.startsWith('sentnode')) return null
-    const type = parsed.searchParams.get('type')
-    const subscriptionType: 'gigabytes' | 'hours' = type === 'hours' ? 'hours' : 'gigabytes'
-    const amountRaw = parseInt(parsed.searchParams.get('amount') ?? '1', 10)
-    const amount = isNaN(amountRaw) || amountRaw < 1 ? 1 : amountRaw
-    return { nodeAddress, subscriptionType, amount }
-  } catch { return null }
-}
 
 function parseAndSendDeepLink(url: string): void {
   const args = parseDeepLink(url)
   if (args) mainWindow?.webContents.send('deeplink:connect', args)
 }
+
+// macOS can emit open-url before app.whenReady() resolves.
+app.on('open-url', (event, url) => {
+  event.preventDefault()
+  if (mainWindow) {
+    mainWindow.focus()
+    parseAndSendDeepLink(url)
+  } else {
+    pendingDeepLink = url
+  }
+})
 
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
@@ -291,13 +285,6 @@ app.whenReady().then(async () => {
 
   app.setAsDefaultProtocolClient('chibatun')
 
-  // macOS: deeplink arrives via open-url event
-  app.on('open-url', (event, url) => {
-    event.preventDefault()
-    if (mainWindow) { mainWindow.focus(); parseAndSendDeepLink(url) }
-    else pendingDeepLink = url
-  })
-
   // Win/Linux cold start: deeplink is in process.argv
   const coldUrl = process.argv.find(a => a.startsWith('chibatun://'))
   if (coldUrl) pendingDeepLink = coldUrl
@@ -516,7 +503,9 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('deeplink:getPending', () => {
     if (!pendingDeepLink) return null
-    return parseDeepLink(pendingDeepLink)
+    const parsed = parseDeepLink(pendingDeepLink)
+    if (!parsed) pendingDeepLink = null
+    return parsed
   })
 
   ipcMain.handle('deeplink:clearPending', () => {
@@ -693,8 +682,16 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('node:fetchByAddress', async (_e, address: string) => {
+    if (!isValidNodeAddress(address)) {
+      return { success: false, error: 'Invalid node address' }
+    }
     try {
-      const res = await fetch(`https://api.sentnodes.com/v2/node/${address}`)
+      const res = await withTimeout(
+        fetch(`https://api.sentnodes.com/v2/node/${encodeURIComponent(address)}`),
+        8000,
+        'Node API timeout'
+      )
+      if (!res.ok) return { success: false, error: `Node API HTTP ${res.status}` }
       const json = await res.json() as { success?: boolean; data?: unknown }
       if (json.success && json.data) {
         return { success: true, node: json.data }
