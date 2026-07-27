@@ -39,7 +39,12 @@
 import net  from 'net'
 import path from 'path'
 import fs   from 'fs'
-import { execSync, spawn, ChildProcess } from 'child_process'
+import { execFileSync, execSync, spawn, ChildProcess } from 'child_process'
+import {
+  parseHelperCommand,
+  type HelperCommand,
+  type HelperResponse
+} from '../src/main/helper-protocol'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -90,17 +95,6 @@ const KS_PF_ANCHOR = 'com.chibatunnel.ks'
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-interface HelperCommand {
-  command: string
-  [key: string]: unknown
-}
-
-interface HelperResponse {
-  status: 'ok' | 'error' | 'pong'
-  error?: string
-  [key: string]: unknown
-}
 
 interface StartTransparentPayload {
   /** Absolute path to tun2socks binary. */
@@ -235,6 +229,11 @@ function isWgDnsError(stderr: string): boolean {
 function runCmd(cmd: string): string {
   log('INFO', `Executing: ${cmd}`)
   return execSync(cmd, { encoding: 'utf8', stdio: 'pipe' }).trim()
+}
+
+function runFile(executable: string, args: string[]): string {
+  log('INFO', `Executing allowlisted binary: ${path.basename(executable)}`, { args })
+  return execFileSync(executable, args, { encoding: 'utf8', stdio: 'pipe' }).trim()
 }
 
 /**
@@ -1054,13 +1053,13 @@ function handleWgUp(socket: net.Socket, payload: WgUpPayload): void {
       const exe = wgPath || 'wireguard.exe'
       // /installtunnelservice takes the full config file path.
       // wireguard.exe derives the tunnel/service name from the filename.
-      runCmd(`"${exe}" /installtunnelservice "${configFile}"`)
+      runFile(exe, ['/installtunnelservice', configFile])
       sendResponse(socket, { status: 'ok' })
 
     } else if (PLATFORM === 'linux' || PLATFORM === 'darwin') {
       const exe = wgPath || 'wg-quick'
       try {
-        runCmd(`"${exe}" up "${configFile}"`)
+        runFile(exe, ['up', configFile])
         sendResponse(socket, { status: 'ok' })
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err)
@@ -1109,7 +1108,7 @@ function handleWgDown(socket: net.Socket, payload: WgDownPayload): void {
     if (PLATFORM === 'win32') {
       const exe = wgPath || 'wireguard.exe'
       try {
-        runCmd(`"${exe}" /uninstalltunnelservice "${ifName}"`)
+        runFile(exe, ['/uninstalltunnelservice', ifName])
       } catch (err) {
         // If the tunnel service is already gone (e.g. previous crash), treat
         // it as success — wgDown is always idempotent from Electron's view.
@@ -1125,11 +1124,11 @@ function handleWgDown(socket: net.Socket, payload: WgDownPayload): void {
       // On Linux 'ip link' is native; on macOS 'wg show' handles logical naming.
       try {
         if (PLATFORM === 'linux') {
-          execSync(`ip link show ${ifName}`, { stdio: 'pipe' })
+          execFileSync('ip', ['link', 'show', ifName], { stdio: 'pipe' })
         } else {
           // Darwin check: use 'wg' command to verify if the logical interface exists.
           // This is more robust than checking for a specific socket file path.
-          execSync(`"${wgBin}" show ${ifName}`, { stdio: 'pipe' })
+          execFileSync(wgBin, ['show', ifName], { stdio: 'pipe' })
         }
       } catch {
         log('INFO', `wg-down: interface ${ifName} already absent — nothing to do.`)
@@ -1138,7 +1137,7 @@ function handleWgDown(socket: net.Socket, payload: WgDownPayload): void {
       }
 
       try {
-        runCmd(`"${exe}" down "${configFile}"`)
+        runFile(exe, ['down', configFile])
       } catch (err) {
         log('WARN', 'wg-quick down failed.', err)
         // Still return ok — the interface check above confirmed it is gone
@@ -1155,75 +1154,6 @@ function handleWgDown(socket: net.Socket, payload: WgDownPayload): void {
     log('ERROR', 'handleWgDown failed.', { message })
     sendResponse(socket, { status: 'error', error: message })
   }
-}
-
-// ---------------------------------------------------------------------------
-// Payload validation
-// ---------------------------------------------------------------------------
-
-/**
- * Validates a StartTransparentPayload from a raw HelperCommand.
- *
- * @param command  Raw HelperCommand from Electron.
- * @returns        Validated StartTransparentPayload.
- * @throws         Descriptive Error on any validation failure.
- */
-function parseStartTransparentPayload(command: HelperCommand): StartTransparentPayload {
-  const { tun2socksPath, socksPort, serverIp, killSwitch } = command as Record<string, unknown>
-  if (typeof tun2socksPath !== 'string' || !tun2socksPath.trim())
-    throw new Error('"tun2socksPath" must be a non-empty string.')
-  if (typeof socksPort !== 'number' || !Number.isInteger(socksPort) || socksPort < 1 || socksPort > 65535)
-    throw new Error('"socksPort" must be an integer between 1 and 65535.')
-  if (typeof serverIp !== 'string' || !/^\d{1,3}(\.\d{1,3}){3}$/.test(serverIp))
-    throw new Error('"serverIp" must be a dotted-decimal IPv4 address.')
-  if (killSwitch !== undefined && typeof killSwitch !== 'boolean')
-    throw new Error('Optional "killSwitch" must be a boolean.')
-  return { tun2socksPath: tun2socksPath.trim(), socksPort, serverIp, killSwitch: killSwitch === true }
-}
-
-/**
- * Validates a SetKillSwitchPayload from a raw HelperCommand.
- *
- * @param command  Raw HelperCommand from Electron.
- * @returns        Validated SetKillSwitchPayload.
- * @throws         Descriptive Error on validation failure.
- */
-function parseSetKillSwitchPayload(command: HelperCommand): SetKillSwitchPayload {
-  const { enabled } = command as Record<string, unknown>
-  if (typeof enabled !== 'boolean') throw new Error('"enabled" must be a boolean.')
-  return { enabled }
-}
-
-/**
- * Validates a WgUpPayload from a raw HelperCommand.
- *
- * @param command  Raw HelperCommand from Electron.
- * @returns        Validated WgUpPayload.
- * @throws         Descriptive Error on validation failure.
- */
-function parseWgUpPayload(command: HelperCommand): WgUpPayload {
-  const { configFile, wgPath } = command as Record<string, unknown>
-  if (typeof configFile !== 'string' || !configFile.trim())
-    throw new Error('wg-up: "configFile" must be a non-empty string.')
-  if (wgPath !== undefined && typeof wgPath !== 'string')
-    throw new Error('wg-up: optional "wgPath" must be a string.')
-  return { configFile: configFile.trim(), wgPath: wgPath as string | undefined }
-}
-
-/**
- * Validates a WgDownPayload from a raw HelperCommand.
- *
- * @param command  Raw HelperCommand from Electron.
- * @returns        Validated WgDownPayload.
- * @throws         Descriptive Error on validation failure.
- */
-function parseWgDownPayload(command: HelperCommand): WgDownPayload {
-  const { configFile, wgPath } = command as Record<string, unknown>
-  if (typeof configFile !== 'string' || !configFile.trim())
-    throw new Error('wg-down: "configFile" must be a non-empty string.')
-  if (wgPath !== undefined && typeof wgPath !== 'string')
-    throw new Error('wg-down: optional "wgPath" must be a string.')
-  return { configFile: configFile.trim(), wgPath: wgPath as string | undefined }
 }
 
 // ---------------------------------------------------------------------------
@@ -1246,10 +1176,7 @@ function processCommand(socket: net.Socket, command: HelperCommand): void {
       break
 
     case 'start-transparent': {
-      let payload: StartTransparentPayload
-      try { payload = parseStartTransparentPayload(command) }
-      catch (err: unknown) { sendResponse(socket, { status: 'error', error: (err as Error).message }); return }
-      handleStartTransparent(socket, payload).catch((err) => log('ERROR', 'Unhandled error in handleStartTransparent.', err))
+      handleStartTransparent(socket, command).catch((err) => log('ERROR', 'Unhandled error in handleStartTransparent.', err))
       break
     }
 
@@ -1258,32 +1185,19 @@ function processCommand(socket: net.Socket, command: HelperCommand): void {
       break
 
     case 'set-kill-switch': {
-      let payload: SetKillSwitchPayload
-      try { payload = parseSetKillSwitchPayload(command) }
-      catch (err: unknown) { sendResponse(socket, { status: 'error', error: (err as Error).message }); return }
-      handleSetKillSwitch(socket, payload)
+      handleSetKillSwitch(socket, command)
       break
     }
 
     case 'wg-up': {
-      let payload: WgUpPayload
-      try { payload = parseWgUpPayload(command) }
-      catch (err: unknown) { sendResponse(socket, { status: 'error', error: (err as Error).message }); return }
-      handleWgUp(socket, payload)
+      handleWgUp(socket, command)
       break
     }
 
     case 'wg-down': {
-      let payload: WgDownPayload
-      try { payload = parseWgDownPayload(command) }
-      catch (err: unknown) { sendResponse(socket, { status: 'error', error: (err as Error).message }); return }
-      handleWgDown(socket, payload)
+      handleWgDown(socket, command)
       break
     }
-
-    default:
-      log('WARN', `Unknown command: ${command.command}`)
-      sendResponse(socket, { status: 'error', error: `Unknown command: "${command.command}"` })
   }
 }
 
@@ -1314,11 +1228,13 @@ function handleConnection(socket: net.Socket): void {
       if (!trimmed) continue
 
       let command: HelperCommand
-      try { command = JSON.parse(trimmed) as HelperCommand }
-      catch { sendResponse(socket, { status: 'error', error: 'Malformed JSON.' }); continue }
-
-      if (typeof command.command !== 'string') {
-        sendResponse(socket, { status: 'error', error: 'Missing "command" string field.' })
+      try {
+        command = parseHelperCommand(JSON.parse(trimmed) as unknown)
+      } catch (error) {
+        sendResponse(socket, {
+          status: 'error',
+          error: error instanceof Error ? error.message : 'Invalid helper request.'
+        })
         continue
       }
       processCommand(socket, command)

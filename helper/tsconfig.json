@@ -7,7 +7,7 @@
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "outDir": "../dist-helper",
-    "rootDir": "."
+    "rootDir": ".."
   },
-  "include": ["*.ts"]
+  "include": ["*.ts", "../src/main/helper-protocol.ts"]
 }
