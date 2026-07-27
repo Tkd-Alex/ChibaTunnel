@@ -19,13 +19,18 @@ jobs:
         run: npm ci
 
       - name: Type check
-        run: npx tsc --noEmit -p tsconfig.web.json && npx tsc --noEmit -p tsconfig.node.json
+        run: npx tsc --noEmit -p tsconfig.web.json && npx tsc --noEmit -p tsconfig.node.json && npx tsc --noEmit -p helper/tsconfig.json
 
       - name: Unit tests
         run: npm test
 
       - name: Build application
         run: npm run build
+
+      - name: Prepare packaging resources
+        run: |
+          npm run build:helper:linux
+          mkdir -p build/bins/linux
 
       - name: Build test (Linux AppImage)
         run: npx electron-builder --linux AppImage --publish never
