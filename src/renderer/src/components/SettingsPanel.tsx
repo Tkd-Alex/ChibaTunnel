@@ -210,7 +210,7 @@ export default function SettingsPanel({ currentRpc }: Props) {
       <div className="settings-section">
         <div className="settings-section-label">{t('settings.about_title')}</div>
         <div className="settings-about">
-          <div>SDK: <strong>@sentinel-official/sentinel-js-sdk v2.0.4</strong></div>
+          <div>SDK: <strong>@sentinel-official/sentinel-js-sdk v2.1.0</strong></div>
           <div>Node list: <strong>api.sentnodes.com</strong></div>
           {/* <div>Chain: <strong>Sentinel Hub (Cosmos SDK)</strong></div> */}
           <div>RPC: <strong>{currentRpc || 'rpc.sentinel.co:443'}</strong></div>
