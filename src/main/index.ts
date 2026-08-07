@@ -691,8 +691,17 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('nodes:fetch', async () => {
     try {
-      const res  = await fetch(NODES_API); const json = await res.json() as { data?: unknown[] }
-      return { success: true, nodes: json.data ?? [] }
+      const res  = await fetch(NODES_API)
+      const json = await res.json() as any
+      let nodes: any[] = []
+      if (json && json.data) {
+        if (Array.isArray(json.data)) {
+          nodes = json.data
+        } else if (typeof json.data === 'object' && Array.isArray((json.data as any).nodes)) {
+          nodes = (json.data as any).nodes
+        }
+      }
+      return { success: true, nodes }
     } catch (err: unknown) { return { success: false, error: String(err), nodes: [] } }
   })
 
@@ -2479,14 +2488,18 @@ function withTimeout<T>(promise: Promise<T> | undefined, ms: number, msg: string
 // logic errors (those are returned verbatim so callers see the real cause).
 
 function isTransientNetworkError(err: unknown): boolean {
-  const e = err as { code?: string; message?: string; status?: number; response?: { status?: number } }
-  const status = e?.status ?? e?.response?.status
+  const e = err as any
+  const status = e?.status ?? e?.response?.status ?? e?.cause?.status ?? e?.cause?.response?.status
   if (status === 429 || (typeof status === 'number' && status >= 500)) return true
   const code = e?.code
   if (code && ['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EAI_AGAIN', 'ENOTFOUND', 'EPIPE'].includes(code)) return true
   const msg = String(e?.message ?? err ?? '').toLowerCase()
   return (
     msg.includes('429') ||
+    msg.includes('500') ||
+    msg.includes('502') ||
+    msg.includes('503') ||
+    msg.includes('504') ||
     msg.includes('too many requests') ||
     msg.includes('rate limit') ||
     msg.includes('socket hang up') ||
@@ -2495,6 +2508,44 @@ function isTransientNetworkError(err: unknown): boolean {
     msg.includes('service unavailable') ||
     msg.includes('bad gateway')
   )
+}
+
+function getNextRpc(currentUrl: string): string {
+  const urls = RPC_LIST.map(r => r.url)
+  const idx = urls.indexOf(currentUrl)
+  if (idx === -1) {
+    return urls[Math.floor(Math.random() * urls.length)]
+  }
+  return urls[(idx + 1) % urls.length]
+}
+
+async function switchToRpc(newRpc: string): Promise<boolean> {
+  try {
+    console.log(`[RPC] Attempting connection switch to fallback RPC: ${newRpc}`)
+    const readonlyClient = await withTimeout(SentinelClient.connect(newRpc), RPC_TIMEOUT_MS, 'RPC timeout')
+    
+    let client = walletState.client
+    const mn = getActiveMnemonic()
+    if (mn && walletState.address) {
+      const wallet = await DirectSecp256k1HdWallet.fromMnemonic(mn.trim(), { prefix: 'sent' })
+      client = await withTimeout(SigningSentinelClient.connectWithSigner(newRpc, wallet, { gasPrice: GasPrice.fromString('0.2udvpn') }), RPC_TIMEOUT_MS, 'RPC timeout')
+    }
+    
+    walletState = {
+      ...walletState,
+      readonlyClient,
+      client,
+      rpc: newRpc
+    }
+    store.set(STORE_KEY_RPC, newRpc)
+    // Notify UI immediately of the new RPC
+    mainWindow?.webContents.send('wallet-changed', { address: walletState.address, label: walletState.label, rpc: newRpc })
+    console.log(`[RPC] Successfully switched to fallback RPC: ${newRpc}`)
+    return true
+  } catch (err) {
+    console.error(`[RPC] Failed to connect to fallback RPC ${newRpc}:`, err)
+    return false
+  }
 }
 
 /**
@@ -2510,8 +2561,12 @@ async function rpcWithRetry<T>(fn: () => Promise<T>, label = 'rpc', maxRetries =
     } catch (err) {
       lastErr = err
       if (!isTransientNetworkError(err) || attempt === maxRetries - 1) throw err
+      
+      const nextRpc = getNextRpc(walletState.rpc)
       const backoff = 400 * 2 ** attempt + Math.floor(Math.random() * 200)
-      console.warn(`[rpc:retry] ${label} transient failure (attempt ${attempt + 1}/${maxRetries}), retrying in ${backoff}ms:`, extractError(err))
+      console.warn(`[rpc:retry] ${label} transient failure (attempt ${attempt + 1}/${maxRetries}), switching RPC to ${nextRpc}, retrying in ${backoff}ms:`, extractError(err))
+      
+      await switchToRpc(nextRpc).catch(() => {})
       await new Promise((r) => setTimeout(r, backoff))
     }
   }
