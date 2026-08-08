@@ -691,11 +691,13 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('nodes:fetch', async () => {
     try {
+      const startTime = Date.now()
       let page = 1
       let hasMore = true
       let allNodes: any[] = []
       
       while (hasMore) {
+        const pageStart = Date.now()
         const url = page === 1 ? NODES_API : `${NODES_API}?page=${page}`
         const res = await fetch(url)
         if (!res.ok) {
@@ -721,6 +723,8 @@ function registerIpcHandlers(): void {
           }
         }
         
+        console.log(`[nodes:fetch] Page ${page} loaded in ${Date.now() - pageStart}ms (nodes: ${nodes.length})`)
+        
         if (nodes.length === 0) {
           break
         }
@@ -734,6 +738,7 @@ function registerIpcHandlers(): void {
         }
       }
       
+      console.log(`[nodes:fetch] Complete. Loaded ${allNodes.length} nodes across ${page - 1} pages in ${Date.now() - startTime}ms`)
       return { success: true, nodes: allNodes }
     } catch (err: unknown) { return { success: false, error: String(err), nodes: [] } }
   })

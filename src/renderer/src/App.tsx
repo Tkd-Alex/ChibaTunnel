@@ -262,20 +262,23 @@ export default function App() {
           window.api.clearDeepLinkPending()
           // Run the rest of the fetches in the background (non-blocking)
           fetchAllBackground()
-        }, Math.max(0, 800 - elapsed)) // keep splash visible for at least 800ms
+        }, Math.max(0, 800 - elapsed)) 
         return
       }
 
       // ── NORMAL BOOT PATH ─────────────────────────────────────────────────────
+      console.log('[Boot] Starting boot sequence...')
       setBootStatus(t('boot.verifying_environment'))
       const rpcPromise  = window.api.getCurrentRpc()
       const binsPromise = window.api.checkBinaries()
       const bmsPromise  = window.api.listBookmarks()
       const hasMnemonicPromise = window.api.hasMnemonic()
 
+      const startTimeRef = performance.now()
       const [rpc, bins, bms, hasMnemonic] = await Promise.all([
         rpcPromise, binsPromise, bmsPromise, hasMnemonicPromise
       ])
+      console.log(`[Boot] Env verified in ${Math.round(performance.now() - startTimeRef)}ms`)
 
       setCurrentRpc(rpc as string)
       setBinaries(bins as BinaryStatus)
@@ -286,19 +289,26 @@ export default function App() {
       
       if (hasMnemonic) {
         setBootStatus(t('boot.loading_wallet'))
+        const tWallet = performance.now()
         const res = await window.api.loadStoredWallet()
+        console.log(`[Boot] Wallet loaded in ${Math.round(performance.now() - tWallet)}ms`)
         if (res.success) {
           setCurrentRpc((res as { rpc?: string }).rpc ?? (rpc as string))
           
           setBootStatus(t('boot.fetching_nodes'))
+          const tNodes = performance.now()
           const nRes = await window.api.fetchNodes()
+          console.log(`[Boot] Fetched nodes in ${Math.round(performance.now() - tNodes)}ms (Count: ${((nRes as any).nodes ?? []).length})`)
           if ((nRes as any).success) setNodes((nRes as any).nodes)
 
           setBootStatus(t('boot.fetching_plans'))
+          const tPlans = performance.now()
           const pRes = await window.api.fetchPlans()
+          console.log(`[Boot] Fetched plans in ${Math.round(performance.now() - tPlans)}ms`)
           if ((pRes as any).success) {
             setPlans((pRes as any).plans)
             setBootStatus(t('boot.analyzing_plans'))
+            const tAnalyze = performance.now()
             const planIds = (pRes as any).plans.map((p: any) => p.id)
             const uniqueProviders = Array.from(new Set((pRes as any).plans.map((p: any) => p.provAddress))) as string[]
             try {
@@ -306,6 +316,7 @@ export default function App() {
                 window.api.fetchProvidersBatch(uniqueProviders),
                 window.api.scanPlanNodes(planIds)
               ])
+              console.log(`[Boot] Analyzed plans in ${Math.round(performance.now() - tAnalyze)}ms`)
               if (provRes.success) setProviderNamesCache(prev => ({ ...prev, ...provRes.providers }))
               if (nodesRes.success) {
                 setPlanNodesCache(prev => ({ ...prev, ...nodesRes.nodesMap }))
@@ -317,11 +328,15 @@ export default function App() {
           }
 
           setBootStatus(t('boot.fetching_subs'))
+          const tSubs = performance.now()
           const sRes = await window.api.fetchSubscriptions()
+          console.log(`[Boot] Fetched subs in ${Math.round(performance.now() - tSubs)}ms`)
           if ((sRes as any).success) setSubscriptions((sRes as any).subscriptions)
 
           setBootStatus(t('boot.fetching_sessions'))
+          const tSess = performance.now()
           const sessRes = await window.api.fetchSessions()
+          console.log(`[Boot] Fetched sessions in ${Math.round(performance.now() - tSess)}ms`)
           if ((sessRes as any).success) setSessions(((sessRes as any).sessions ?? []).filter((s: any) => typeof s.id === 'number'))
 
           nextScreen = 'main'
