@@ -691,17 +691,55 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('nodes:fetch', async () => {
     try {
-      const res  = await fetch(NODES_API)
-      const json = await res.json() as any
-      let nodes: any[] = []
-      if (json && json.data) {
-        if (Array.isArray(json.data)) {
-          nodes = json.data
-        } else if (typeof json.data === 'object' && Array.isArray((json.data as any).nodes)) {
-          nodes = (json.data as any).nodes
+      const startTime = Date.now()
+      let page = 1
+      let hasMore = true
+      let allNodes: any[] = []
+      
+      while (hasMore) {
+        const pageStart = Date.now()
+        const url = page === 1 ? NODES_API : `${NODES_API}?page=${page}`
+        const res = await fetch(url)
+        if (!res.ok) {
+          throw new Error(`Failed to fetch page ${page}: HTTP ${res.status}`)
+        }
+        const json = await res.json() as any
+        
+        let nodes: any[] = []
+        let hasMorePages = false
+        
+        if (json && json.data) {
+          if (Array.isArray(json.data)) {
+            nodes = json.data
+            hasMorePages = false
+          } else if (typeof json.data === 'object') {
+            if (Array.isArray((json.data as any).nodes)) {
+              nodes = (json.data as any).nodes
+            }
+            if ((json.data as any).pagination) {
+              const pag = (json.data as any).pagination
+              hasMorePages = pag.hasMorePages ?? (pag.currentPage < pag.lastPage)
+            }
+          }
+        }
+        
+        console.log(`[nodes:fetch] Page ${page} loaded in ${Date.now() - pageStart}ms (nodes: ${nodes.length})`)
+        
+        if (nodes.length === 0) {
+          break
+        }
+        
+        allNodes.push(...nodes)
+        hasMore = hasMorePages
+        page++
+        
+        if (page > 50) {
+          break
         }
       }
-      return { success: true, nodes }
+      
+      console.log(`[nodes:fetch] Complete. Loaded ${allNodes.length} nodes across ${page - 1} pages in ${Date.now() - startTime}ms`)
+      return { success: true, nodes: allNodes }
     } catch (err: unknown) { return { success: false, error: String(err), nodes: [] } }
   })
 
