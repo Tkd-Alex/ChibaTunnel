@@ -16,7 +16,7 @@ concurrency:
 # build/binary-manifest.json. The workflow intentionally has no duplicate pins.
 
 jobs:
-  build-and-release:
+  build:
     strategy:
       fail-fast: false
       matrix:
@@ -25,12 +25,10 @@ jobs:
             platform: linux
             pkg_target: node18-linux-x64
             helper_output: dist-helper/chibatunnel-helper
-
           - os: windows-latest
             platform: win
             pkg_target: node18-win-x64
             helper_output: dist-helper/chibatunnel-helper.exe
-
           - os: macos-latest
             platform: mac
             pkg_target: node18-macos-x64
@@ -61,9 +59,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # -----------------------------------------------------------------------
-      # Linux build dependencies (rpm, AppImage tools, fakeroot)
-      # -----------------------------------------------------------------------
       - name: Install Linux build dependencies
         if: matrix.platform == 'linux'
         run: |
@@ -76,14 +71,6 @@ jobs:
       - name: Verify bundled runtime package inputs
         run: node scripts/materialize-binary-runtimes.mjs ${{ matrix.platform }} --verify
 
-      # -----------------------------------------------------------------------
-      # Build the privileged helper binary with pkg.
-      #
-      # pkg compiles chibatunnel-helper.ts (via the pre-compiled JS in dist-helper/)
-      # into a self-contained native executable — no Node.js needed on the user's
-      # machine. The output lands in dist-helper/ where electron-builder picks it
-      # up via extraResources.
-      # -----------------------------------------------------------------------
       - name: Build privileged helper (Windows)
         if: matrix.platform == 'win'
         run: npm run build:helper:win
@@ -101,22 +88,47 @@ jobs:
         run: |
           ls -lh ${{ matrix.helper_output }} || (echo "Helper binary missing!" && exit 1)
 
-      # -----------------------------------------------------------------------
-      # Build the main Electron JS bundles (Vite / webpack / tsc, whatever
-      # your existing "build" script does).
-      # -----------------------------------------------------------------------
       - name: Build JS bundles
         run: npm run build
 
-      # -----------------------------------------------------------------------
-      # Package and publish.
-      # electron-builder copies build/bins/<platform>/ → resources/bin/ via
-      # extraResources. Runtime strategies come from the manifest; Linux system
-      # dependencies such as WireGuard and OpenVPN are declared by the
-      # electron-builder package metadata rather than copied into resources/bin.
-      # -----------------------------------------------------------------------
-      - name: Build & Publish
+      - name: Build App Packages
+        run: npx electron-builder --${{ matrix.platform }} --x64 --publish never
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: chibatunnel-${{ matrix.platform }}-artifacts
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
+            dist/*.pacman
+            dist/*.zip
+            dist/*.blockmap
+            dist/*.yml
+            dist/*.yaml
+          if-no-files-found: warn
+          retention-days: 1
+
+  publish-release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          prerelease: false
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          files: release-artifacts/*
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npx electron-builder --${{ matrix.platform }} --x64 --publish always
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
